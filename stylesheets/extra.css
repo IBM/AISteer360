@@ -1,0 +1,26 @@
+
+[data-md-color-scheme="default"] .md-banner a {
+    color: #5e8bde;
+}
+
+.md-header__button.md-logo img {
+    width:3rem;
+    height:3rem;
+}
+[dir=ltr] .md-header__title{
+    margin-left: 0;
+}
+
+.md-typeset .control-grid > ul > li > p:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 1em;
+  margin-bottom: 1.25em;
+}
+
+.md-typeset .control-grid .katex,
+.md-typeset .control-grid .MathJax {
+  margin-left: auto;
+}
