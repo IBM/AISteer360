@@ -180,7 +180,7 @@ inference time, e.g., increasing attention weights on specific prompt tokens cor
 [PASTA](../notebooks/controls/pasta.ipynb).
 
 The `Benchmark` class allows these arguments to be passed in to each control via the specification of
-`runtime_overrides`. We briefly illustrate how this is done for the `InstructionFollowing` use case. 
+`runtime_overrides`. We briefly illustrate how this is done for the `InstructionFollowing` use case.
 
 As before, we initialize the use case and the controls that we wish to use. The `InstructionFollowing` use case is
 initialized as follows:
@@ -220,8 +220,8 @@ thinking_intervention = ThinkingIntervention(
     intervention=instruction_following_intervention
 )
 ```
-Note that both `PASTA` and `ThinkingIntervention` require the specific instructions within a given prompt to be passed 
-to the control. This is facilitated through the `runtime_overrides` argument in the `Benchmark` class, i.e., a 
+Note that both `PASTA` and `ThinkingIntervention` require the specific instructions within a given prompt to be passed
+to the control. This is facilitated through the `runtime_overrides` argument in the `Benchmark` class, i.e., a
 dictionary of dictionaries each which is keyed by the control name and take values mapping the control's variable, e.g.,
 `substrings` in `PASTA`, to the relevant column of the evaluation dataset, e.g., `instructions`. The full benchmark call
 is as follows:
@@ -245,5 +245,5 @@ benchmark = Benchmark(
     },
 )
 ```
-The benchmark can then be run as usual to generate the profiles. We direct the reader to the 
+The benchmark can then be run as usual to generate the profiles. We direct the reader to the
 [notebook](../notebooks/benchmarks/instruction_following/instruction_following.ipynb) for the full implementation.

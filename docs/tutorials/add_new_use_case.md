@@ -1,7 +1,7 @@
 # Adding your own use case
 
 Use cases define tasks for a model and specify how performance on that task (via the model's generations) is
-measured. A use case instance is intended to be consumed by a [benchmark](../concepts/benchmarks.md). Please see the
+measured. A use case instance is intended to be consumed by a benchmark. Please see the
 [tutorial for adding your own benchmark](add_new_benchmark.md) for instructions on how to run a use case.
 
 For the purposes of this tutorial, we will focus on a simple multiple-choice QA task, which we term `CommonsenseMCQA`,
