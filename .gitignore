@@ -1,0 +1,14 @@
+.env
+*.pyc
+*.lock
+.DS_Store
+**/.DS_Store
+**/__pycache__/
+/notes
+/scripts
+/backend/venv
+.ipynb_checkpoints/
+/.venv/
+**/.idea
+/notebooks/controls/mergekit_models/*
+/notebooks/benchmarks/commonsense_mcqa/profiles/profiles.json
