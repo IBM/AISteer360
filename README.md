@@ -28,6 +28,7 @@ the toolkit by running:
 ```commandline
 uv venv --python 3.11 && uv pip install .
 ```
+Activate by running `source .venv/bin/activate`.
 
 Inference is facilitated by Hugging Face. Before steering, create a `.env` file in the root directory for your Hugging
 Face API key in the following format:
@@ -81,7 +82,7 @@ To make contributing easier, we have prepared the following tutorials.
 
 If there is an existing steering method that is not yet in the toolkit, or you have developed a new steering method of
 your own, the toolkit has been designed to enable relatively easy contribution of new steering methods. Please see the
-tutorial on [adding your own steering method](./docs/tutorials/add_new_steering_method.md) for a detailed guide.
+tutorial on [adding your own steering method](./docs/tutorials/add_new_steering_method.md) for a detailed guide
 
 
 ### Adding a new use case / benchmark
