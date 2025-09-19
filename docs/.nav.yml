@@ -1,0 +1,89 @@
+
+preserve_directory_names: true
+
+flatten_single_child_sections: true
+
+ignore:
+  - "*.hidden.md"
+  - "*.py"
+
+sort:
+  direction: asc
+  type: natural
+  by: filename
+  sections: last
+  ignore_case: true
+
+nav:
+  - Home:
+      - Welcome: index.md
+      - Installation: home/installation.md
+      - Quickstart: home/quickstart.md
+  - Concepts:
+    - Concepts: concepts/index.md
+    - Controls: concepts/controls.md
+    - Steering pipelines: concepts/steering_pipelines.md
+#    - Use cases & benchmarking: concepts/benchmarks.md
+  - Tutorials:
+    - Tutorials: tutorials/index.md
+    - Add a steering method: "tutorials/add_new_steering_method.md"
+    - Add a metric: "tutorials/add_new_metric.md"
+    - Add a use case: "tutorials/add_new_use_case.md"
+    - Add a benchmark: "tutorials/add_new_benchmark.md"
+  - Notebooks:
+    - Notebooks: notebooks/index.md
+    - Controls:
+      - Input control:
+        - FewShot: "notebooks/controls/few_shot.ipynb"
+      - Structural control:
+        - MergeKit wrapper: "notebooks/controls/mergekit_wrapper.ipynb"
+        - TRL wrapper: "notebooks/controls/trl_wrapper.ipynb"
+      - State control:
+        - CAST: "notebooks/controls/cast.ipynb"
+        - PASTA: "notebooks/controls/pasta.ipynb"
+      - Output control:
+        - DeAL: "notebooks/controls/deal.ipynb"
+        - RAD: "notebooks/controls/rad.ipynb"
+        - SASA: "notebooks/controls/sasa.ipynb"
+        - ThinkingIntervention: "notebooks/controls/thinking_intervention.ipynb"
+    - Benchmarks:
+      - Commonsense MCQA: "notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb"
+      - Instruction following: "notebooks/benchmarks/instruction_following/instruction_following.ipynb"
+    - "notebooks/images/"
+#  - Developer notes:
+#      - Developer notes: dev_notes/index.md
+#      - "dev_notes/steering_lifecycle.md"
+#      - "dev_notes/benchmark_lifecycle.md"
+  - API Reference:
+    - Overview: reference/index.md
+    - Algorithms:
+        - Core: reference/algorithms/core.md
+        - Input control:
+            - Base classes: reference/algorithms/input_control/base_input_control.md
+            - FewShot: reference/algorithms/input_control/few_shot.md
+        - Structural control:
+            - Base classes: reference/algorithms/structural_control/base_structural_control.md
+            - MergeKit wrapper: reference/algorithms/structural_control/mergekit_wrapper.md
+            - TRL wrapper: reference/algorithms/structural_control/trl_wrapper.md
+        - State control:
+            - Base classes: reference/algorithms/state_control/base_state_control.md
+            - CAST: reference/algorithms/state_control/cast.md
+            - PASTA: reference/algorithms/state_control/pasta.md
+        - Output control:
+            - Base classes: reference/algorithms/output_control/base_output_control.md
+            - DeAL: reference/algorithms/output_control/deal.md
+            - RAD: reference/algorithms/output_control/rad.md
+            - SASA: reference/algorithms/output_control/sasa.md
+            - ThinkingIntervention: reference/algorithms/output_control/thinking_intervention.md
+    - Evaluation:
+        - Metrics:
+          - Base classes: reference/evaluation/metrics/base_metrics.md
+          - Generic: reference/evaluation/metrics/generic.md
+          - Custom:
+            - Commonsense MCQA: reference/evaluation/metrics/custom/commonsense_mcqa_metrics.md
+            - Instruction following: reference/evaluation/metrics/custom/instruction_following_metrics.md
+        - Use cases:
+          - Base class: reference/evaluation/use_cases/base_use_case.md
+          - Commonsense MCQA: reference/evaluation/use_cases/commonsense_mcqa_use_case.md
+          - Instruction following: reference/evaluation/use_cases/instruction_following_use_case.md
+        - Benchmark: reference/evaluation/benchmark.md
