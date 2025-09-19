@@ -1,0 +1,105 @@
+site_name: AISteer360
+site_url: https://ibm.github.io/AISteer360/
+repo_name: IBM/AISteer360
+repo_url: https://github.com/IBM/AISteer360
+
+theme:
+  name: material
+  docs_dir: docs
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+  logo: assets/logo_darkmode.png
+  favicon: assets/favicon.png
+  features:
+    - content.tabs.link
+    - content.code.annotate
+    - content.code.copy
+    - announce.dismiss
+    - navigation.footer
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - toc.follow
+
+extra:
+  announcement:
+    type: info          # info | warning | success | danger
+    text: |
+      **Aug 2025:** Initial release of **AI Steerability 360**!
+
+markdown_extensions:
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - footnotes
+  - mkdocs-click
+  - md_in_html
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - awesome-nav:
+      filename: .nav.yml
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            extensions:
+            - griffe_inherited_docstrings
+            preload_modules:
+              - aisteer360
+  - mkdocs-jupyter
+  - search
+  - include-markdown
+  - bibtex:
+      bib_file: "docs/assets/references.bib"
+
+extra_css:
+  - stylesheets/extra.css

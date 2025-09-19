@@ -1,0 +1,34 @@
+NOTICE
+
+This distribution contains code licensed under multiple open source licenses.
+
+1. Original Toolkit Code
+   Name: aisteer360 — AI Steerability 360 Toolkit
+   Version: 0.1.0
+   Copyright © 2025 IBM Research
+   Licensed under the Apache License, Version 2.0
+   https://www.apache.org/licenses/LICENSE-2.0
+
+2. Third-Party Component: MergeKit
+   Version: 0.0.5.1
+   License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
+   License text: https://www.gnu.org/licenses/lgpl-3.0.html
+   Source: https://pypi.org/project/mergekit/0.0.5.1/
+
+   MergeKit is distributed as an independent Python package dependency and is not
+   modified or redistributed by this project. This project specifically depends on
+   the LGPL-licensed version 0.0.5.1. Versions after 0.0.5.1 (starting with v0.1)
+   use the Business Source License (BSL), which cannot be distributed under
+   Apache 2.0 terms and are therefore excluded from this toolkit.
+
+3. Third-Party Component: TRL (Hugging Face)
+   Version: 0.16.1
+   License: Apache License, Version 2.0
+   License text: https://www.apache.org/licenses/LICENSE-2.0
+   Source: https://github.com/huggingface/trl
+
+License Summary:
+- The original aisteer360 toolkit code is licensed under Apache 2.0.
+- MergeKit v0.0.5.1 is licensed under LGPL-3.0-or-later and included as an unmodified dependency.
+- TRL v0.16.1 is licensed under Apache 2.0 and included as an unmodified dependency.
+- MergeKit versions after 0.0.5.1 use the BSL and are not included in this distribution.
