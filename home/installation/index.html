@@ -1121,7 +1121,7 @@
   
   
   <span class="md-ellipsis">
-    SFT with LoRA
+    TRL wrapper
     
   </span>
   
@@ -2706,9 +2706,9 @@
 <div class="highlight"><pre><span></span><code>uv venv --python 3.11 &amp;&amp; uv pip install .
 </code></pre></div>
 <p>The above creates a <code>.venv</code> (if missing), installs <code>aisteer360</code> (in non-editable mode), and installs all dependencies
-listed under <code>[project.dependencies]</code> in the <code>pyproject.toml</code> file. To install an optional dependency group from
-<code>[project.optional-dependencies]</code>, e.g., <code>docs</code>, append it in quotes and square brackets to the <code>install</code> command as
-follows:</p>
+listed under <code>[project.dependencies]</code> in the <code>pyproject.toml</code> file. Activate by running <code>source .venv/bin/activate</code>.
+To install an optional dependency group from <code>[project.optional-dependencies]</code>, e.g., <code>docs</code>, append it in quotes and
+square brackets to the <code>install</code> command as follows:</p>
 <div class="highlight"><pre><span></span><code>uv venv --python 3.11 &amp;&amp; uv pip install &#39;.[docs]&#39;
 </code></pre></div>
 <h2 id="accessing-hugging-face-models">Accessing Hugging Face models</h2>

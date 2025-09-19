@@ -1121,7 +1121,7 @@
   
   
   <span class="md-ellipsis">
-    SFT with LoRA
+    TRL wrapper
     
   </span>
   
@@ -2840,7 +2840,7 @@ additional inference-time arguments. In some cases, controls in a pipeline rely 
 inference time, e.g., increasing attention weights on specific prompt tokens corresponding to instructions as in
 <a href="../../notebooks/controls/pasta/">PASTA</a>.</p>
 <p>The <code>Benchmark</code> class allows these arguments to be passed in to each control via the specification of
-<code>runtime_overrides</code>. We briefly illustrate how this is done for the <code>InstructionFollowing</code> use case. </p>
+<code>runtime_overrides</code>. We briefly illustrate how this is done for the <code>InstructionFollowing</code> use case.</p>
 <p>As before, we initialize the use case and the controls that we wish to use. The <code>InstructionFollowing</code> use case is
 initialized as follows:
 <div class="highlight"><pre><span></span><code><span class="n">instruction_following</span> <span class="o">=</span> <span class="n">InstructionFollowing</span><span class="p">(</span>
@@ -2874,8 +2874,8 @@ which is then used when instantiating the control:
     <span class="n">intervention</span><span class="o">=</span><span class="n">instruction_following_intervention</span>
 <span class="p">)</span>
 </code></pre></div>
-Note that both <code>PASTA</code> and <code>ThinkingIntervention</code> require the specific instructions within a given prompt to be passed 
-to the control. This is facilitated through the <code>runtime_overrides</code> argument in the <code>Benchmark</code> class, i.e., a 
+Note that both <code>PASTA</code> and <code>ThinkingIntervention</code> require the specific instructions within a given prompt to be passed
+to the control. This is facilitated through the <code>runtime_overrides</code> argument in the <code>Benchmark</code> class, i.e., a
 dictionary of dictionaries each which is keyed by the control name and take values mapping the control's variable, e.g.,
 <code>substrings</code> in <code>PASTA</code>, to the relevant column of the evaluation dataset, e.g., <code>instructions</code>. The full benchmark call
 is as follows:
@@ -2898,7 +2898,7 @@ is as follows:
     <span class="p">},</span>
 <span class="p">)</span>
 </code></pre></div>
-The benchmark can then be run as usual to generate the profiles. We direct the reader to the 
+The benchmark can then be run as usual to generate the profiles. We direct the reader to the
 <a href="../../notebooks/benchmarks/instruction_following/instruction_following/">notebook</a> for the full implementation.</p>
 
 
