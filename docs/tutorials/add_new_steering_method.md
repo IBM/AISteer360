@@ -4,12 +4,6 @@ Steering methods span four categories of controls: *input*, *structural*, *state
 steering method is dictated by what aspects of the model the method influences. Please refer to the conceptual guide on
 [model steering](../concepts/steering.md) for information on choosing the appropriate category for your method.
 
-
-!!! note
-    This tutorial describes how to contribute a new steering method to the toolkit. For details on how the toolkit
-    steers model behavior please see the [steering lifecycle](../dev_notes/steering_lifecycle.md) documentation.
-
-
 ## Required files
 
 Once you have determined the steering category, create the following files in `aisteer360/algorithms`:
