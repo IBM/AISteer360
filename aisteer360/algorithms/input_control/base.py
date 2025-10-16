@@ -65,7 +65,7 @@ class InputControl(ABC):
         self,
         runtime_kwargs: dict | None = None
     ) -> Callable[[list[int] | torch.Tensor, dict[str, Any]], list[int] | torch.Tensor]:
-        """Receives (input_ids, runtime_kwargs) and returns modified input_ids.."""
+        """Receives (input_ids, runtime_kwargs) and returns modified input_ids."""
         pass
 
     def steer(self,
