@@ -96,18 +96,10 @@ class RAD(OutputControl):
         self.rm_tokenizer.max_length = 1024
         import os
         if (self.reward_path is None) or not os.path.exists(os.path.join(self.reward_path, "pytorch_model.bin")):
-            print(f"Reward model not found in: {self.reward_path}. Downloading from https://github.com/r-three/RAD......")
-            import zipfile
-            try:
-                import gdown
-            except ImportError:
-                import subprocess
-                import sys
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
-                import gdown
-            gdown.download('https://storage.googleapis.com/rad_release/saved_models.zip', output='./tmp/rad_saved_models.zip', quiet=False)
-            with zipfile.ZipFile("./tmp/rad_saved_models.zip","r") as f:
-                f.extractall('./tmp/rad_saved_models')
+            print(f"Reward model not found in: {self.reward_path}. Downloading from https://huggingface.co/hk/rad_rms/tree/main/gpt2_toxicity...")
+            from huggingface_hub import hf_hub_download
+            hf_hub_download(repo_id="hk/rad_rms", filename="gpt2_toxicity/pytorch_model.bin",
+                            local_dir='./tmp/rad_saved_models/saved_models/')
             print("Reward model downloaded. Please set reward_path='./tmp/rad_saved_models/saved_models/gpt2_toxicity' in the future.")
         else:
             print(f"Reward model found in: {self.reward_path}")
