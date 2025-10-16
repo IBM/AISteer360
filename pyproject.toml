@@ -1,6 +1,6 @@
 [project]
 name            = "aisteer360"
-version         = "0.1.0"
+version         = "0.0.1"
 description     = "AI Steerability 360 Toolkit"
 readme          = "README.md"
 license         = { text = "Apache-2.0" }
