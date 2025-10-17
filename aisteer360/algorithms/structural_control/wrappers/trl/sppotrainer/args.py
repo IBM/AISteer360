@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from aisteer360.algorithms.structural_control.wrappers.trl.dpotrainer.args import DPOArgs
+from aisteer360.algorithms.structural_control.wrappers.trl.dpotrainer.args import (
+    DPOArgs,
+)
 
 
 @dataclass

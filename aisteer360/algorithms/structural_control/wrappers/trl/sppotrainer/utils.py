@@ -296,4 +296,3 @@ def prepare_dataset_from_prompts(
     train = Dataset.from_parquet(f"{out_path}/train.parquet")
     processed_train = process_dataset(train, tokenizer)
     return processed_train
-

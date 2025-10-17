@@ -9,7 +9,10 @@ from transformers import PreTrainedTokenizerBase
 from aisteer360.algorithms.input_control.base import InputControl, NoInputControl
 from aisteer360.algorithms.output_control.base import NoOutputControl, OutputControl
 from aisteer360.algorithms.state_control.base import NoStateControl, StateControl
-from aisteer360.algorithms.structural_control.base import NoStructuralControl, StructuralControl
+from aisteer360.algorithms.structural_control.base import (
+    NoStructuralControl,
+    StructuralControl,
+)
 
 _DEFAULT_FACTORIES: dict[Type, callable] = {
     InputControl: NoInputControl,

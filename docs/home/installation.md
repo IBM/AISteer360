@@ -30,7 +30,7 @@ uv venv --python 3.11 && uv pip install .
 ```
 
 The above creates a `.venv` (if missing), installs `aisteer360` (in non-editable mode), and installs all dependencies
-listed under `[project.dependencies]` in the `pyproject.toml` file. Activate the environment by running `source .venv/bin/activate`. 
+listed under `[project.dependencies]` in the `pyproject.toml` file. Activate the environment by running `source .venv/bin/activate`.
 Note that on Windows, you may need to split the installation script into two separate commands (instead of chained via `&&`).
 To install an optional dependency group from `[project.optional-dependencies]`, e.g., `docs`, append it in quotes and
 square brackets to the `install` command as follows:

@@ -2,7 +2,12 @@ import inspect
 from dataclasses import fields, is_dataclass
 from typing import Any
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+)
 
 
 class TRLMixin:

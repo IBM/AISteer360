@@ -4,12 +4,18 @@ from peft import LoraConfig, PeftType
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import DPOConfig
 
-from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
-from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.trainer import SPPOTrainer
-from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.utils import prepare_dataset_from_prompts
-from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import standardize_prompt_dataset
+from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.trainer import (
+    SPPOTrainer,
+)
+from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.utils import (
+    prepare_dataset_from_prompts,
+)
+from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import (
+    standardize_prompt_dataset,
+)
 
 
 class SPPOTrainerMixin(TRLMixin, StructuralControl):

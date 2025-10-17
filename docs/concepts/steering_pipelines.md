@@ -11,7 +11,7 @@ single steering operation on a model. This allows for individual controls to be 
 interventions.
 
 Steering pipelines are created using the `SteeringPipeline` class. The most common pattern is to specify a Hugging Face
-model name via `base_model_or_path` along with instantiated controls, e.g., 
+model name via `base_model_or_path` along with instantiated controls, e.g.,
 [`few_shot`](../notebooks/controls/few_shot.ipynb) and [`dpo`](../notebooks/controls/trl_wrapper.ipynb), as follows:
 
 ```python

@@ -1,11 +1,13 @@
+import torch
 from peft import LoraConfig, PeftType
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import DPOConfig, DPOTrainer
-import torch
 
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
-from aisteer360.algorithms.structural_control.wrappers.trl.utils.preference_schema import standardize_preference_dataset
+from aisteer360.algorithms.structural_control.wrappers.trl.utils.preference_schema import (
+    standardize_preference_dataset,
+)
 
 
 class DPOTrainerMixin(TRLMixin, StructuralControl):
