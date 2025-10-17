@@ -610,6 +610,10 @@ class SPPOTrainer(Trainer):
         chosen = feature["chosen"]
         rejected = feature["rejected"]
         if not self.is_encoder_decoder:
+
+            bos_id = getattr(self.processing_class, "bos_token_id", None)
+            eos_id = getattr(self.processing_class, "eos_token_id", None)
+
             # Check issues below for more details
             #  1. https://github.com/huggingface/trl/issues/907
             #  2. https://github.com/EleutherAI/lm-evaluation-harness/pull/531#issuecomment-1595586257
@@ -652,20 +656,22 @@ class SPPOTrainer(Trainer):
                 )
 
             # add BOS token to head of prompt
-            prompt_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + prompt_tokens["prompt_input_ids"]
-            chosen_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + chosen_tokens["prompt_input_ids"]
-            rejected_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + rejected_tokens["prompt_input_ids"]
+            if bos_id is not None:
+                prompt_tokens["prompt_input_ids"] = [bos_id] + prompt_tokens["prompt_input_ids"]
+                chosen_tokens["prompt_input_ids"] = [bos_id] + chosen_tokens["prompt_input_ids"]
+                rejected_tokens["prompt_input_ids"] = [bos_id] + rejected_tokens["prompt_input_ids"]
 
-            prompt_tokens["prompt_attention_mask"] = [1] + prompt_tokens["prompt_attention_mask"]
-            chosen_tokens["prompt_attention_mask"] = [1] + chosen_tokens["prompt_attention_mask"]
-            rejected_tokens["prompt_attention_mask"] = [1] + rejected_tokens["prompt_attention_mask"]
+                prompt_tokens["prompt_attention_mask"] = [1] + prompt_tokens["prompt_attention_mask"]
+                chosen_tokens["prompt_attention_mask"] = [1] + chosen_tokens["prompt_attention_mask"]
+                rejected_tokens["prompt_attention_mask"] = [1] + rejected_tokens["prompt_attention_mask"]
 
             # add EOS token to end of answer
-            chosen_tokens["input_ids"].append(self.processing_class.eos_token_id)
-            chosen_tokens["attention_mask"].append(1)
+            if eos_id is not None:
+                chosen_tokens["input_ids"].append(eos_id)
+                chosen_tokens["attention_mask"].append(1)
 
-            rejected_tokens["input_ids"].append(self.processing_class.eos_token_id)
-            rejected_tokens["attention_mask"].append(1)
+                rejected_tokens["input_ids"].append(eos_id)
+                rejected_tokens["attention_mask"].append(1)
 
             longer_response_length = max(len(chosen_tokens["input_ids"]), len(rejected_tokens["input_ids"]))
 

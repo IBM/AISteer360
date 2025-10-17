@@ -251,7 +251,7 @@ def prepare_dataset_from_prompts(
                     temperature=0.7,
                     top_p=0.9,
                     max_new_tokens=gen_max_new_tokens,  # short outputs
-                    pad_token_id=getattr(tokenizer, "pad_token_id", None),
+                    pad_token_id=(getattr(tokenizer, "pad_token_id", None) or getattr(tokenizer, "eos_token_id", None)),
                     eos_token_id=getattr(tokenizer, "eos_token_id", None),
                 )
 

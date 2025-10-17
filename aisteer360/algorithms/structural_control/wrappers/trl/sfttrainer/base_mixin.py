@@ -33,7 +33,7 @@ class SFTTrainerMixin(TRLMixin, StructuralControl):
         training_config = SFTConfig(**config_kwargs)
 
         # build PEFT config
-        peft_config = Nonea
+        peft_config = None
         if self.use_peft and self.peft_type == PeftType.LORA:
             peft_config = LoraConfig(**self.lora_kwargs)
 

@@ -5,6 +5,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import DPOConfig
 
 from aisteer360.algorithms.structural_control.base import StructuralControl
+from aisteer360.algorithms.core.steering_utils import ensure_pad_token
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
 from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.trainer import SPPOTrainer
 from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.utils import prepare_dataset_from_prompts
@@ -41,17 +42,18 @@ class SPPOTrainerMixin(TRLMixin, StructuralControl):
     ref_model: PreTrainedModel | None = None
 
     def steer(
-        self,
-        model: PreTrainedModel | None,
-        tokenizer: PreTrainedTokenizer | None = None,
-        ref_model: PreTrainedModel | None = None,
-        **_,
+            self,
+            model: PreTrainedModel | None,
+            tokenizer: PreTrainedTokenizer | None = None,
+            ref_model: PreTrainedModel | None = None,
+            **_,
     ) -> PreTrainedModel:
 
         self.model = model
         self.tokenizer = tokenizer or (getattr(model, "tokenizer", None) if model is not None else None)
         self.ref_model = ref_model
         self._resolve_model_tokenizer(self.model, self.tokenizer)  # fills self.model/self.tokenizer/device
+        self.tokenizer = ensure_pad_token(self.tokenizer)
 
         # filter training args to the TRL config we pass to SPPOTrainer
         config_kwargs = self._filter_kwargs_for_class_or_callable(DPOConfig, self.training_args)
