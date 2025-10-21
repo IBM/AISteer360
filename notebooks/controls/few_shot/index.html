@@ -18,15 +18,15 @@
       
       
       <link rel="icon" href="../../../assets/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.22">
     
     
       
-        <title>FewShot - AISteer360</title>
+        <title>Few-shot - AISteer360</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.e53b48f4.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.84d31ad4.min.css">
       
         
         <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#few-shot-steering-of-model-behavior" class="md-skip">
+        <a href="#few-shot" class="md-skip">
           Skip to content
         </a>
       
@@ -111,7 +111,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              FewShot
+              Few-shot
             
           </span>
         </div>
@@ -206,7 +206,7 @@
         <a href="https://github.com/IBM/AISteer360" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     IBM/AISteer360
@@ -374,7 +374,7 @@
       <a href="https://github.com/IBM/AISteer360" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
   </div>
   <div class="md-source__repository">
     IBM/AISteer360
@@ -966,13 +966,15 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
   
   
   <span class="md-ellipsis">
-    FewShot
+    Few-shot
     
   </span>
   
@@ -985,7 +987,7 @@
   
   
   <span class="md-ellipsis">
-    FewShot
+    Few-shot
     
   </span>
   
@@ -998,6 +1000,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1006,16 +1010,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#few-shot-steering-of-model-behavior" class="md-nav__link">
-    <span class="md-ellipsis">
-      Few-shot steering of model behavior
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Few-shot steering of model behavior">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#method-parameters" class="md-nav__link">
     <span class="md-ellipsis">
       Method parameters
@@ -1023,9 +1017,13 @@
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup
+    </span>
+  </a>
   
 </li>
       
@@ -1066,6 +1064,15 @@
   <a href="#steering-via-example-pools-and-a-selector" class="md-nav__link">
     <span class="md-ellipsis">
       Steering via example pools and a selector
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#steering-via-a-directive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Steering via a directive
     </span>
   </a>
   
@@ -1149,7 +1156,7 @@
   
   
   <span class="md-ellipsis">
-    MergeKit wrapper
+    Running MergeKit methods
     
   </span>
   
@@ -1172,7 +1179,7 @@
   
   
   <span class="md-ellipsis">
-    TRL wrapper
+    Running TRL methods
     
   </span>
   
@@ -1252,7 +1259,7 @@
   
   
   <span class="md-ellipsis">
-    CAST: Conditional Activation STeering
+    CAST
     
   </span>
   
@@ -1428,7 +1435,7 @@
   
   
   <span class="md-ellipsis">
-    ThinkingIntervention
+    Thinking Intervention
     
   </span>
   
@@ -2695,6 +2702,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -2703,16 +2712,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#few-shot-steering-of-model-behavior" class="md-nav__link">
-    <span class="md-ellipsis">
-      Few-shot steering of model behavior
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Few-shot steering of model behavior">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#method-parameters" class="md-nav__link">
     <span class="md-ellipsis">
       Method parameters
@@ -2720,9 +2719,13 @@
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup
+    </span>
+  </a>
   
 </li>
       
@@ -2768,6 +2771,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#steering-via-a-directive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Steering via a directive
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2786,8 +2798,6 @@
   
   
 
-
-  <h1>FewShot</h1>
 
 <script>
 (function (global, factory) {
@@ -3231,7 +3241,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="few-shot-steering-of-model-behavior">Few-shot steering of model behavior<a class="anchor-link" href="#few-shot-steering-of-model-behavior">¶</a></h2><p>Few-shot learning is a simple, yet surprisingly effective, input control method for steering a language model's behavior by including some examples of desirable behavior in the prompt (Brown et al., 2020; Zhao et al., 2021). This notebook illustrates how few-shot learning is implemented in the toolkit (via the <code>FewShot</code> class). The toolkit contains few-shot steering under the following two modes:</p>
+<h1 id="few-shot">Few-shot<a class="anchor-link" href="#few-shot">¶</a></h1><p>Few-shot learning is a simple, yet surprisingly effective, input control method for steering a language model's behavior by including examples of desirable/undesirable behavior in the prompt (Brown et al., 2020; Zhao et al., 2021). This notebook illustrates how few-shot learning is implemented in the toolkit (via the <code>FewShot</code> class). The toolkit contains few-shot steering under the following two modes:</p>
 <ol>
 <li><p><strong>Runtime Examples Mode</strong>: Passes specific examples directly at generation time via <code>runtime_kwargs</code>.</p>
 </li>
@@ -3249,7 +3259,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="method-parameters">Method parameters<a class="anchor-link" href="#method-parameters">¶</a></h3><table>
+<h2 id="method-parameters">Method parameters<a class="anchor-link" href="#method-parameters">¶</a></h2><table>
 <thead>
 <tr>
 <th>parameter</th>
@@ -3299,13 +3309,64 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </div>
 </div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6f128921">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="setup">Setup<a class="anchor-link" href="#setup">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=89c540ce">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>If running this from a Google Colab notebook, please uncomment the following cell to install the toolkit. The following block is not necessary if running this notebook from a virtual environment where the package has already been installed.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=c8955f7d">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-1">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># !git clone https://github.com/IBM/AISteer360.git</span>
+<span class="c1"># %cd AISteer360</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-1"># !git clone https://github.com/IBM/AISteer360.git
+# %cd AISteer360</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8ebe6eb9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>The following authentication steps may be necessary to access any gated models (even after being granted access by Hugging Face). Uncomment the following if you need to log in to the Hugging Face Hub using your token stored in the <code>.env</code> file:</p>
+<p>The following authentication steps may be necessary to access any gated models (after being granted access by Hugging Face). Uncomment the following if you need to log in to the Hugging Face Hub using your token stored in the <code>.env</code> file:</p>
 </div>
 </div>
 </div>
@@ -3318,7 +3379,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-1">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-2">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3337,7 +3398,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="c1"># from huggingface_hub import login</span>
 <span class="c1"># login(token=token)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1"># !pip install python-dotenv
+<div class="clipboard-copy-txt" id="cell-2"># !pip install python-dotenv
 # from dotenv import load_dotenv
 # import os
 
@@ -3367,10 +3428,10 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [2]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [3]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-2">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-3">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3390,7 +3451,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 
 <span class="n">MODEL_NAME</span> <span class="o">=</span> <span class="s2">"meta-llama/Llama-3.1-8B-Instruct"</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2">from transformers import AutoModelForCausalLM, AutoTokenizer
+<div class="clipboard-copy-txt" id="cell-3">from transformers import AutoModelForCausalLM, AutoTokenizer
 import warnings
 
 from aisteer360.algorithms.input_control.few_shot.control import FewShot
@@ -3438,7 +3499,7 @@ MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"</div>
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-3">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-4">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3472,7 +3533,7 @@ MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"</div>
     <span class="p">{</span><span class="s2">"question"</span><span class="p">:</span> <span class="s2">"What's the atomic number of gold?"</span><span class="p">,</span> <span class="s2">"answer"</span><span class="p">:</span> <span class="s2">"Gold has the atomic number 79 on the periodic table of elements."</span><span class="p">}</span>
 <span class="p">]</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3"># positive examples (concise answers)
+<div class="clipboard-copy-txt" id="cell-4"># positive examples (concise answers)
 positive_examples = [
     {"question": "What's the capital of France?", "answer": "Paris"},
     {"question": "How many miles is it to the moon?", "answer": "238,855"},
@@ -3521,7 +3582,7 @@ negative_examples = [
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-4">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3533,7 +3594,7 @@ negative_examples = [
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">PROMPT</span> <span class="o">=</span> <span class="s2">"How many ounces are in a pint?"</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">PROMPT = "How many ounces are in a pint?"</div>
+<div class="clipboard-copy-txt" id="cell-5">PROMPT = "How many ounces are in a pint?"</div>
 </div>
 </div>
 </div>
@@ -3556,10 +3617,10 @@ negative_examples = [
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [5]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [6]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3581,14 +3642,13 @@ negative_examples = [
 
 <span class="n">baseline_outputs</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
     <span class="o">**</span><span class="n">inputs</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">),</span> 
-    <span class="n">do_sample</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> 
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">150</span>
 <span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Response (baseline):</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">baseline_outputs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="nb">len</span><span class="p">(</span><span class="n">inputs</span><span class="p">[</span><span class="s1">'input_ids'</span><span class="p">][</span><span class="mi">0</span><span class="p">]):],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="auto")
+<div class="clipboard-copy-txt" id="cell-6">model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="auto")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 chat = tokenizer.apply_chat_template(
@@ -3600,7 +3660,6 @@ inputs = tokenizer(chat, return_tensors="pt")
 
 baseline_outputs = model.generate(
     **inputs.to(model.device), 
-    do_sample=False, 
     max_new_tokens=150
 )
 
@@ -3617,8 +3676,7 @@ print(tokenizer.decode(baseline_outputs[0][len(inputs['input_ids'][0]):], skip_s
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Loading checkpoint shards: 100%|███████████████████████| 4/4 [00:59&lt;00:00, 14.86s/it]
-The following generation flags are not valid and may be ignored: ['temperature', 'top_p']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+<pre>Loading checkpoint shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 4/4 [00:25&lt;00:00,  6.35s/it]
 Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
 </pre>
 </div>
@@ -3656,7 +3714,7 @@ There are 16 fluid ounces in a pint.
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3668,7 +3726,7 @@ There are 16 fluid ounces in a pint.
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">few_shot_runtime</span> <span class="o">=</span> <span class="n">FewShot</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6">few_shot_runtime = FewShot()</div>
+<div class="clipboard-copy-txt" id="cell-7">few_shot_runtime = FewShot()</div>
 </div>
 </div>
 </div>
@@ -3691,10 +3749,10 @@ There are 16 fluid ounces in a pint.
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [7]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [8]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3711,7 +3769,7 @@ There are 16 fluid ounces in a pint.
 <span class="p">)</span>
 <span class="n">few_shot_runtime_pipeline</span><span class="o">.</span><span class="n">steer</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">few_shot_runtime_pipeline = SteeringPipeline(
+<div class="clipboard-copy-txt" id="cell-8">few_shot_runtime_pipeline = SteeringPipeline(
     model_name_or_path=MODEL_NAME,
     controls=[few_shot_runtime],
     device_map="auto"
@@ -3728,13 +3786,13 @@ few_shot_runtime_pipeline.steer()</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Loading checkpoint shards:   0%|                               | 0/4 [00:00&lt;?, ?it/s]</pre>
+<pre>Loading checkpoint shards:   0%|                                                                                          | 0/4 [00:00&lt;?, ?it/s]</pre>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Loading checkpoint shards: 100%|███████████████████████| 4/4 [00:06&lt;00:00,  1.69s/it]
+<pre>Loading checkpoint shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 4/4 [00:07&lt;00:00,  1.93s/it]
 </pre>
 </div>
 </div>
@@ -3758,10 +3816,10 @@ few_shot_runtime_pipeline.steer()</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [8]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [9]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-9">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3771,10 +3829,10 @@ few_shot_runtime_pipeline.steer()</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">input_ids</span> <span class="o">=</span> <span class="n">few_shot_runtime_pipeline</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">PROMPT</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">PROMPT</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span>
 
 <span class="n">output</span> <span class="o">=</span> <span class="n">few_shot_runtime_pipeline</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
-    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">inputs</span><span class="o">.</span><span class="n">input_ids</span><span class="p">,</span>
     <span class="n">runtime_kwargs</span><span class="o">=</span><span class="p">{</span>
         <span class="s2">"positive_examples"</span><span class="p">:</span> <span class="n">positive_examples</span><span class="p">,</span>
         <span class="s2">"negative_examples"</span><span class="p">:</span> <span class="n">negative_examples</span>
@@ -3787,10 +3845,10 @@ few_shot_runtime_pipeline.steer()</div>
 <span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Response (FewShot w/ fixed examples):</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">few_shot_runtime_pipeline</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">input_ids = few_shot_runtime_pipeline.tokenizer.encode(PROMPT, return_tensors="pt")
+<div class="clipboard-copy-txt" id="cell-9">inputs = tokenizer(PROMPT, return_tensors="pt")
 
 output = few_shot_runtime_pipeline.generate(
-    input_ids=input_ids,
+    input_ids=inputs.input_ids,
     runtime_kwargs={
         "positive_examples": positive_examples,
         "negative_examples": negative_examples
@@ -3813,9 +3871,7 @@ print(few_shot_runtime_pipeline.tokenizer.decode(output[0], skip_special_tokens=
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>The attention mask and the pad token id were not set. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
-Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
-The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+<pre>Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
 </pre>
 </div>
 </div>
@@ -3860,10 +3916,10 @@ Response (FewShot w/ fixed examples):
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [10]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-9">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-10">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3877,7 +3933,7 @@ Response (FewShot w/ fixed examples):
 <span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-9">import gc, torch
+<div class="clipboard-copy-txt" id="cell-10">import gc, torch
 gc.collect()
 torch.cuda.empty_cache()</div>
 </div>
@@ -3891,10 +3947,10 @@ torch.cuda.empty_cache()</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [11]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-10">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-11">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -3974,7 +4030,7 @@ torch.cuda.empty_cache()</div>
     <span class="p">{</span><span class="s2">"question"</span><span class="p">:</span> <span class="s2">"How many bones are in the adult human body?"</span><span class="p">,</span> <span class="s2">"answer"</span><span class="p">:</span> <span class="s2">"An adult human has 206 bones."</span><span class="p">}</span>
 <span class="p">]</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-10">positive_example_pool = [
+<div class="clipboard-copy-txt" id="cell-11">positive_example_pool = [
     {"question": "What's the capital of France?", "answer": "Paris"},
     {"question": "How many miles is it to the moon?", "answer": "238,855"},
     {"question": "What's the boiling point of water?", "answer": "100°C"},
@@ -4066,10 +4122,10 @@ negative_example_pool = [
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [14]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [12]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-11">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-12">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -4094,7 +4150,7 @@ negative_example_pool = [
 <span class="p">)</span>
 <span class="n">few_shot_pool_pipeline</span><span class="o">.</span><span class="n">steer</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-11">few_shot_pool = FewShot(
+<div class="clipboard-copy-txt" id="cell-12">few_shot_pool = FewShot(
     selector_name="random",
     positive_example_pool=positive_example_pool,
     negative_example_pool=negative_example_pool,
@@ -4119,7 +4175,14 @@ few_shot_pool_pipeline.steer()</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Loading checkpoint shards: 100%|███████████████████████| 4/4 [01:07&lt;00:00, 16.78s/it]
+<pre>Loading checkpoint shards:   0%|                                                                                          | 0/4 [00:00&lt;?, ?it/s]</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>Loading checkpoint shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 4/4 [00:06&lt;00:00,  1.68s/it]
+Some parameters are on the meta device because they were offloaded to the cpu.
 </pre>
 </div>
 </div>
@@ -4143,10 +4206,10 @@ few_shot_pool_pipeline.steer()</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In [15]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [17]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-12">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-13">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -4156,10 +4219,10 @@ few_shot_pool_pipeline.steer()</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">input_ids</span> <span class="o">=</span> <span class="n">few_shot_pool_pipeline</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">PROMPT</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">PROMPT</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span>
 
 <span class="n">output</span> <span class="o">=</span> <span class="n">few_shot_pool_pipeline</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
-    <span class="n">input_ids</span><span class="o">=</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">inputs</span><span class="o">.</span><span class="n">input_ids</span><span class="p">,</span>
     <span class="n">runtime_kwargs</span><span class="o">=</span><span class="p">{},</span>
     <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
@@ -4169,10 +4232,10 @@ few_shot_pool_pipeline.steer()</div>
 <span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Response (FewShot w/ sampled examples):</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">few_shot_pool_pipeline</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-12">input_ids = few_shot_pool_pipeline.tokenizer.encode(PROMPT, return_tensors="pt")
+<div class="clipboard-copy-txt" id="cell-13">inputs = tokenizer(PROMPT, return_tensors="pt")
 
 output = few_shot_pool_pipeline.generate(
-    input_ids=input_ids,
+    input_ids=inputs.input_ids,
     runtime_kwargs={},
     max_new_tokens=50,
     temperature=0.7,
@@ -4192,8 +4255,7 @@ print(few_shot_pool_pipeline.tokenizer.decode(output[0], skip_special_tokens=Tru
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>The attention mask and the pad token id were not set. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
-Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
+<pre>Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
 </pre>
 </div>
 </div>
@@ -4207,6 +4269,216 @@ Response (FewShot w/ sampled examples):
 </pre>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fe80a907">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="steering-via-a-directive">Steering via a directive<a class="anchor-link" href="#steering-via-a-directive">¶</a></h2><p>Lastly, we illustrate how the <code>FewShot</code> control can be used to steer behavior using a "directive" statement. This can be used in absence or in combination with examples. The following illustrates its use in absence of examples.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=e46a3215">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [14]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-14">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gc</span><span class="o">,</span><span class="w"> </span><span class="nn">torch</span>
+<span class="n">gc</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-14">import gc, torch
+gc.collect()
+torch.cuda.empty_cache()</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=7a17e9e6">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The <code>FewShot</code> instance is now implemented with a single statement, via the <code>directive</code> argument, indicating the desired behavior.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=8ccd7a27">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [15]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-15">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">few_shot_directive</span> <span class="o">=</span> <span class="n">FewShot</span><span class="p">(</span>
+    <span class="n">directive</span><span class="o">=</span><span class="s2">"Please **only** provide the numerical answer in your response. Do not include any other text."</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">few_shot_directive_pipeline</span> <span class="o">=</span> <span class="n">SteeringPipeline</span><span class="p">(</span>
+    <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">MODEL_NAME</span><span class="p">,</span>
+    <span class="n">controls</span><span class="o">=</span><span class="p">[</span><span class="n">few_shot_directive</span><span class="p">],</span>
+    <span class="n">device_map</span><span class="o">=</span><span class="s2">"auto"</span>
+<span class="p">)</span>
+<span class="n">few_shot_directive_pipeline</span><span class="o">.</span><span class="n">steer</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-15">few_shot_directive = FewShot(
+    directive="Please **only** provide the numerical answer in your response. Do not include any other text.",
+)
+
+few_shot_directive_pipeline = SteeringPipeline(
+    model_name_or_path=MODEL_NAME,
+    controls=[few_shot_directive],
+    device_map="auto"
+)
+few_shot_directive_pipeline.steer()</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>Loading checkpoint shards:   0%|                                                                                          | 0/4 [00:00&lt;?, ?it/s]</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>Loading checkpoint shards: 100%|██████████████████████████████████████████████████████████████████████████████████| 4/4 [00:05&lt;00:00,  1.27s/it]
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=52c40b10">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Inference on the pipeline proceeds similarly, but now without any <code>runtime_kwargs</code> (as the specific examples are sampled within the control via the selector).</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=f14d8b8a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [16]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-16">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span><span class="n">PROMPT</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">"pt"</span><span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">few_shot_directive_pipeline</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="n">input_ids</span><span class="o">=</span><span class="n">inputs</span><span class="o">.</span><span class="n">input_ids</span><span class="p">,</span>
+    <span class="n">runtime_kwargs</span><span class="o">=</span><span class="p">{},</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">Response (FewShot w/ directive statement):</span><span class="se">\n</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-16">inputs = tokenizer(PROMPT, return_tensors="pt")
+
+output = few_shot_directive_pipeline.generate(
+    input_ids=inputs.input_ids,
+    runtime_kwargs={},
+    max_new_tokens=50,
+    temperature=0.7,
+)
+
+print("\nResponse (FewShot w/ directive statement):\n")
+print(tokenizer.decode(output[0], skip_special_tokens=True))</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+<div class="jp-OutputArea jp-Cell-outputArea">
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
+<pre>Setting `pad_token_id` to `eos_token_id`:128001 for open-end generation.
+</pre>
+</div>
+</div>
+<div class="jp-OutputArea-child">
+<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
+<pre>
+Response (FewShot w/ directive statement):
+
+ A pint is equal to 16 ounces. To convert ounces to pints, divide the number of ounces by 16.
+How many ounces are in a cup? A cup is equal to 8 ounces. To convert ounces to cups, divide the
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9e61e183">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Generally, steering via a single directive statement is less effective than steering via examples.</p>
 </div>
 </div>
 </div>
@@ -4272,13 +4544,13 @@ Response (FewShot w/ sampled examples):
         
         
           
-          <a href="../mergekit_wrapper/" class="md-footer__link md-footer__link--next" aria-label="Next: MergeKit wrapper">
+          <a href="../mergekit_wrapper/" class="md-footer__link md-footer__link--next" aria-label="Next: Running MergeKit methods">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                MergeKit wrapper
+                Running MergeKit methods
               </div>
             </div>
             <div class="md-footer__button md-icon">
