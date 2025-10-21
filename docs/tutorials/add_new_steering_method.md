@@ -2,7 +2,7 @@
 
 Steering methods span four categories of controls: *input*, *structural*, *state*, and *output*. The specific category of a
 steering method is dictated by what aspects of the model the method influences. Please refer to the conceptual guide on
-[model steering](../concepts/steering.md) for information on choosing the appropriate category for your method.
+[steering](../concepts/controls.md) for information on choosing the appropriate category for your method.
 
 ## Required files
 
@@ -148,8 +148,7 @@ under each of the four categories, via a simple example implementation, is detai
 
 !!! note
     If your steering method requires two distinct control knobs, e.g., both tweaks the prompt *and* constrains
-    decoding, split it into two small controls and chain them together in `controls=[...]`. See the documentation on
-    [composite controls](./add_composite_control.md) for additional details.
+    decoding, split it into two small controls and chain them together in `controls=[...]`.
 
 
 ## Testing your method

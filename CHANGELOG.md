@@ -1,18 +1,10 @@
 # Changelog
 
-## Version 0.1.0 (2025-08-25)
+## Version 0.0.1 (2025-10-17)
 
 ## What's Changed
 
-⚠️ Some alert
-
-### :tada: New Features / Improvements
-* chore: Add read me
-
-### :bug: Fixes
-
-### :package: Dependency updates
-
-### :wrench: Maintenance
-
-### :heavy_plus_sign: Other Changes
+Initial release with core functionality:
+- steering method implementations across input, state, structural, output
+- steering pipeline class
+- use case and benchmark classes

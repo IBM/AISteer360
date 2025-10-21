@@ -137,11 +137,6 @@ class StateControl(ABC):
         pass
 
 
-    def reset(self):
-        """Optional reset call for state control"""
-        pass
-
-
 class NoStateControl(StateControl):
     """Identity state control.
 

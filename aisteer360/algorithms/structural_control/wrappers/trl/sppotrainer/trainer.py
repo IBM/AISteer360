@@ -1,5 +1,21 @@
-#!/usr/bin/env python
-#
+"""
+SPDX-License-Identifier: Apache-2.0
+Copyright (c) 2025 The SPPO Authors and contributors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+except in compliance with the License. You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the
+License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing permissions
+and limitations under the License.
+
+This file includes adapted portions of code from https://github.com/uclaml/SPPO (Apache License 2.0).
+Modifications by IBM Research, 2025: refactoring, integration, bug fixes, and comments.
+"""
+
 # Adapted from https://github.com/huggingface/alignment-handbook
 
 # From https://github.com/uclaml/SPPO/blob/main/sppo/trainer.py
@@ -594,6 +610,10 @@ class SPPOTrainer(Trainer):
         chosen = feature["chosen"]
         rejected = feature["rejected"]
         if not self.is_encoder_decoder:
+
+            bos_id = getattr(self.processing_class, "bos_token_id", None)
+            eos_id = getattr(self.processing_class, "eos_token_id", None)
+
             # Check issues below for more details
             #  1. https://github.com/huggingface/trl/issues/907
             #  2. https://github.com/EleutherAI/lm-evaluation-harness/pull/531#issuecomment-1595586257
@@ -636,20 +656,22 @@ class SPPOTrainer(Trainer):
                 )
 
             # add BOS token to head of prompt
-            prompt_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + prompt_tokens["prompt_input_ids"]
-            chosen_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + chosen_tokens["prompt_input_ids"]
-            rejected_tokens["prompt_input_ids"] = [self.processing_class.bos_token_id] + rejected_tokens["prompt_input_ids"]
+            if bos_id is not None:
+                prompt_tokens["prompt_input_ids"] = [bos_id] + prompt_tokens["prompt_input_ids"]
+                chosen_tokens["prompt_input_ids"] = [bos_id] + chosen_tokens["prompt_input_ids"]
+                rejected_tokens["prompt_input_ids"] = [bos_id] + rejected_tokens["prompt_input_ids"]
 
-            prompt_tokens["prompt_attention_mask"] = [1] + prompt_tokens["prompt_attention_mask"]
-            chosen_tokens["prompt_attention_mask"] = [1] + chosen_tokens["prompt_attention_mask"]
-            rejected_tokens["prompt_attention_mask"] = [1] + rejected_tokens["prompt_attention_mask"]
+                prompt_tokens["prompt_attention_mask"] = [1] + prompt_tokens["prompt_attention_mask"]
+                chosen_tokens["prompt_attention_mask"] = [1] + chosen_tokens["prompt_attention_mask"]
+                rejected_tokens["prompt_attention_mask"] = [1] + rejected_tokens["prompt_attention_mask"]
 
             # add EOS token to end of answer
-            chosen_tokens["input_ids"].append(self.processing_class.eos_token_id)
-            chosen_tokens["attention_mask"].append(1)
+            if eos_id is not None:
+                chosen_tokens["input_ids"].append(eos_id)
+                chosen_tokens["attention_mask"].append(1)
 
-            rejected_tokens["input_ids"].append(self.processing_class.eos_token_id)
-            rejected_tokens["attention_mask"].append(1)
+                rejected_tokens["input_ids"].append(eos_id)
+                rejected_tokens["attention_mask"].append(1)
 
             longer_response_length = max(len(chosen_tokens["input_ids"]), len(rejected_tokens["input_ids"]))
 

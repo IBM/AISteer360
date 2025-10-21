@@ -28,7 +28,7 @@ the toolkit by running:
 ```commandline
 uv venv --python 3.11 && uv pip install .
 ```
-Activate by running `source .venv/bin/activate`.
+Activate by running `source .venv/bin/activate`. Note that on Windows, you may need to split the above script into two separate commands (instead of chained via `&&`).
 
 Inference is facilitated by Hugging Face. Before steering, create a `.env` file in the root directory for your Hugging
 Face API key in the following format:

@@ -1,65 +1,79 @@
-from typing import Type
-
-from peft import LoraConfig, PeftType, get_peft_model
+import torch
+from peft import LoraConfig, PeftType
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import DPOConfig, DPOTrainer
 
 from aisteer360.algorithms.structural_control.base import StructuralControl
+from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
+from aisteer360.algorithms.structural_control.wrappers.trl.utils.preference_schema import (
+    standardize_preference_dataset,
+)
 
 
-class DPOTrainerMixin(StructuralControl):
+class DPOTrainerMixin(TRLMixin, StructuralControl):
     """
-
+    DPO structural control backed by TRL's DPOTrainer.
     """
-    Config: Type  # set by subclass
-    model: PreTrainedModel | None = None
-    tokenizer: PreTrainedTokenizer | None = None
-    ref_model: PreTrainedModel | None = None
 
     train_dataset = None
     eval_dataset = None
-    training_args: dict = None
-    use_peft: bool = False
-    peft_type = None
-    lora_kwargs: dict = None
+    ref_model: PreTrainedModel | None = None
 
-    def steer(self, model: PreTrainedModel, tokenizer=None, ref_model=None, **_) -> PreTrainedModel:
+    # optional
+    precompute_ref_log_probs: bool | None = True
+    disable_dropout: bool | None = True
+
+    def steer(
+        self,
+        model: PreTrainedModel | None,
+        tokenizer: PreTrainedTokenizer | None = None,
+        ref_model: PreTrainedModel | None = None,
+        **_,
+    ) -> torch.nn.Module:
+
         self.model = model
-        self.tokenizer = tokenizer
-        self.ref_model = ref_model
+        self.tokenizer = tokenizer or (getattr(model, "tokenizer", None) if model is not None else None)
+        self.device = next(model.parameters()).device if model is not None else None
+
+        # resolve or load model/tokenizer
+        self._resolve_model_tokenizer(self.model, self.tokenizer)
+
+        # clean
         if self.train_dataset is not None:
-            training_args = DPOConfig(
-                **{
-                    **self.training_args
-                }
-            )
+            self.train_dataset = standardize_preference_dataset(self.train_dataset)
+        if self.eval_dataset is not None:
+            self.eval_dataset = standardize_preference_dataset(self.eval_dataset)
 
-            peft_config = None
-            if self.use_peft and self.peft_type == PeftType.LORA:
-                peft_config = LoraConfig(
-                    **{
-                        **self.lora_kwargs
-                    }
-                )
-                self.ref_model = None
+        # compose config kwargs (optional DPO fields)
+        config_kwargs = dict(self.training_args)
+        if self.precompute_ref_log_probs is not None:
+            config_kwargs["precompute_ref_log_probs"] = self.precompute_ref_log_probs
+        if self.disable_dropout is not None:
+            config_kwargs["disable_dropout"] = self.disable_dropout
 
+        config_kwargs = self._filter_kwargs_for_class_or_callable(DPOConfig, config_kwargs)
+        training_config = DPOConfig(**config_kwargs)
+
+        # build PEFT config
+        peft_config = None
+        if self.use_peft and self.peft_type == PeftType.LORA:
+            peft_config = LoraConfig(**self.lora_kwargs)
+            ref_model = None  # TRL constructs frozen ref from base weights
+
+        # train if a dataset is provided
+        if self.train_dataset is not None:
             trainer = DPOTrainer(
                 model=self.model,
-                ref_model=self.ref_model,
-                args=training_args,
+                ref_model=ref_model,
+                args=training_config,
                 train_dataset=self.train_dataset,
                 eval_dataset=self.eval_dataset,
                 processing_class=self.tokenizer,
-                peft_config=peft_config
+                peft_config=peft_config,
             )
-            trainer.train()
-
+            trainer.train(resume_from_checkpoint=self.training_args.get("resume_from_checkpoint"))
             self.model = trainer.model
+            self._maybe_save_trained_artifacts(trainer)
+            self._maybe_merge_lora_in_place()
 
-            if training_args.output_dir:
-                trainer.save_model(training_args.output_dir)
-
-        self.model.eval()
-        for p in self.model.parameters():
-            p.requires_grad_(False)
-        return self.model
+        return self._post_train_freeze()

@@ -8,6 +8,6 @@ from aisteer360.algorithms.structural_control.wrappers.trl.sppotrainer.base_mixi
 
 class SPPO(SPPOTrainerMixin):
     """
-
+    SPPO controller.
     """
     Args = SPPOArgs

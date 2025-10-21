@@ -11,7 +11,7 @@ class APOArgs(DPOArgs):
     loss_type: str = field(
         default="apo_zero",
         metadata={
-            "help": "Type of loss to use: apo_zero or apo_down",
+            "help": "Type of loss to use: 'apo_zero' or 'apo_down'.",
             "choices": ["apo_zero", "apo_down"],
         },
     )

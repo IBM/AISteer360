@@ -109,7 +109,7 @@ class SASA(OutputControl):
             print("Creating SASA steer (wv)......")
             self._setup_wv()
             # self.wv =  {k: v.cpu() for k, v in self.wv.item().items()}
-            torch.save(self.wv, 'steer_wv.pt')
+            torch.save(self.wv, 'tmp/steer_wv.pt')
         self.wv = {key: value.to(self.device) for key, value in self.wv.items()}
         return model
 
@@ -184,7 +184,7 @@ class SASA(OutputControl):
                     To use jigsaw_unintended_bias you have to download it manually from Kaggle: https://www.kaggle.com/c/jigsaw-unintended-bias-in-toxicity-classification/data
                     You can manually download the data from it's homepage or use the Kaggle CLI tool (follow the instructions here: https://www.kaggle.com/docs/api)
                     Please extract all files in one folder and then load the dataset with:
-                    dataset = pd.read_csv('/Jigsaw_data/all_data.csv')
+                    dataset = pd.read_csv('/tmp/Jigsaw_data/all_data.csv')
                     """
             )
 

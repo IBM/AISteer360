@@ -8,6 +8,6 @@ from aisteer360.algorithms.structural_control.wrappers.trl.sfttrainer.base_mixin
 
 class SFT(SFTTrainerMixin):
     """
-    Structural control that applies a LoRA adapter.
+    SFT controller.
     """
     Args = SFTArgs

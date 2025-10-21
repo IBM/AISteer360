@@ -66,7 +66,7 @@ Examples of structural control methods include: fine-tuning methods (full, param
 tuning, p-tuning), and model merging. Many of the structural control methods in the toolkit are implemented using
 wrappers around existing libraries, e.g., Hugging Face's PEFT library. Some implementations of structural control
 methods can be found in the notebooks: [MergeKit](../notebooks/controls/mergekit_wrapper.ipynb)[@goddard-etal-2024-arcees],
-[TRL](../notebooks/controls/TRL_wrapper.ipynb)[@vonwerra2022trl].
+[TRL](../notebooks/controls/trl_wrapper.ipynb)[@vonwerra2022trl].
 
 
 ## State control

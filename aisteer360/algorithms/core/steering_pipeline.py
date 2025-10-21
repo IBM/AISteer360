@@ -1,14 +1,12 @@
 """
 Core steering pipeline for composing and applying multiple LLM control methods.
 """
-"""
-Core steering pipeline for composing and applying multiple LLM control methods.
-"""
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
 import torch
+import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 from aisteer360.algorithms.core.steering_utils import ensure_pad_token, merge_controls
@@ -119,7 +117,7 @@ class SteeringPipeline:
             )
             self.tokenizer = ensure_pad_token(self.tokenizer)
         else:
-            if isinstance(self.tokenizer_name_or_path, str | Path):
+            if isinstance(self.tokenizer_name_or_path, (str, Path)):
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     self.tokenizer_name_or_path,
                     trust_remote_code=True
@@ -155,7 +153,7 @@ class SteeringPipeline:
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
                 maybe_new_model = steer_fn(self.model, tokenizer=self.tokenizer, **steer_kwargs)
-                if isinstance(maybe_new_model, PreTrainedModel):
+                if isinstance(maybe_new_model, nn.Module):
                     self.model = maybe_new_model
 
         # safety checks
@@ -177,9 +175,9 @@ class SteeringPipeline:
             except Exception as exception:
                 raise RuntimeError("Failed to resolve tokenizer post‑steer.") from exception
 
-        # for control in (self.input_control, self.structural_control, self.state_control, self.output_control):
-        #     if hasattr(control, "tokenizer") and getattr(control, "tokenizer") is None:
-        #         setattr(control, "tokenizer", self.tokenizer)
+        for control in (self.input_control, self.structural_control, self.state_control, self.output_control):
+            if hasattr(control, "tokenizer") and getattr(control, "tokenizer", None) is None:
+                setattr(control, "tokenizer", self.tokenizer)
 
         # return steered steerer
         self._is_steered = True
@@ -219,7 +217,8 @@ class SteeringPipeline:
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
         # input control
-        steered_input_ids = self.input_control.get_prompt_adapter()(input_ids, runtime_kwargs)
+        adapter = self.input_control.get_prompt_adapter()
+        steered_input_ids = adapter(input_ids, runtime_kwargs)
         if isinstance(steered_input_ids, list):
             steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
         if steered_input_ids.ndim == 1:
@@ -232,9 +231,17 @@ class SteeringPipeline:
                 attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
             if attention_mask.ndim == 1:
                 attention_mask = attention_mask.unsqueeze(0)
-            attention_mask = attention_mask.to(
-                dtype=steered_input_ids.dtype, device=steered_input_ids.device
-            )
+            # if lengths mismatch, rebuild
+            if attention_mask.shape[-1] != steered_input_ids.shape[-1]:
+                attention_mask = None  # force rebuild below
+
+        if attention_mask is None:
+            if self.tokenizer is not None and self.tokenizer.pad_token_id is not None:
+                attention_mask = (steered_input_ids != self.tokenizer.pad_token_id).long()
+            else:
+                attention_mask = torch.ones_like(steered_input_ids, dtype=torch.long)
+
+        attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=steered_input_ids.device)
 
         # state control
         hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **gen_kwargs)
