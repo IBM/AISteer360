@@ -41,6 +41,8 @@ class ThinkingIntervention(OutputControl):
 
     Args = ThinkingInterventionArgs
 
+    supports_batching: bool = True
+
     model: PreTrainedModel | None = None
     tokenizer: PreTrainedTokenizer | None = None
     base_generate: Callable | None = None
@@ -64,40 +66,109 @@ class ThinkingIntervention(OutputControl):
         model: PreTrainedModel,
         **gen_kwargs,
     ) -> torch.Tensor:
+        if self.tokenizer is None or self.model is None:
+            raise RuntimeError("ThinkingIntervention requires .steer() first.")
+
         runtime_kwargs = runtime_kwargs or {}
-        self.tag_ids = self.tokenizer("</think>", add_special_tokens=False).input_ids
-        # Paper says interventions are best at the beginning
-        intervention = self.intervention
-        input_params = {**runtime_kwargs.get('params', {})}
-
         base_generate = runtime_kwargs.get("base_generate", self.base_generate)
+        if base_generate is None:
+            raise RuntimeError("ThinkingIntervention: base_generate is not set.")
 
-        original_prompt_ids = input_ids[0]
-        original_input_len = original_prompt_ids.size(0)
+        intervention = self.intervention
 
-        prompt_str = self.tokenizer.decode(
-            original_prompt_ids, skip_special_tokens=True
+        # self.tag_ids = self.tokenizer("</think>", add_special_tokens=False).input_ids
+
+        # normalize to [batch, seq_len]
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+            if attention_mask is not None and attention_mask.dim() == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+
+        batch_size = input_ids.size(0)
+
+        # params handling
+        params_agg = runtime_kwargs.get("params", None)
+        if params_agg is None:
+            params_per_example = [{} for _ in range(batch_size)]
+        elif isinstance(params_agg, dict) and any(
+                isinstance(v, (list, tuple)) for v in params_agg.values()
+        ):
+            # aggregated dict-of-lists; slice each list per example
+            params_per_example: list[dict] = []
+            for i in range(batch_size):
+                p_i = {}
+                for k, v in params_agg.items():
+                    if isinstance(v, (list, tuple)):
+                        if len(v) != batch_size:
+                            raise ValueError(
+                                f"ThinkingIntervention: params['{k}'] has length {len(v)}, but batch size is {batch_size}."
+                            )
+                        p_i[k] = v[i]
+                    else:
+                        p_i[k] = v
+                params_per_example.append(p_i)
+        else:
+            # Simple case: same params dict for every example
+            params_per_example = [params_agg] * batch_size
+
+        # build modified prompts
+        original_lengths = [ids.size(0) for ids in input_ids]
+        original_prompts = self.tokenizer.batch_decode(
+            input_ids, skip_special_tokens=True
         )
-        modified_prompt_str = intervention(prompt_str, input_params)
 
-        new_input = self.tokenizer(modified_prompt_str, return_tensors="pt").to(self.model.device)
+        modified_prompts = [
+            intervention(prompt, params_per_example[i])
+            for i, prompt in enumerate(original_prompts)
+        ]
 
+        new_input = self.tokenizer(
+            modified_prompts,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.model.device)
+
+        gen_kwargs = dict(gen_kwargs)
         gen_kwargs["return_dict_in_generate"] = False
-        output_ids = base_generate(**new_input, **gen_kwargs)[0]
-        keep_prefix = output_ids[: original_input_len]
 
-        decoded   = self.tokenizer.decode(output_ids, skip_special_tokens=False)
-        remainder_txt = decoded.rsplit("</think>", 1)[-1].lstrip()
-
-        remainder = (
-            self.tokenizer(
-                remainder_txt,
-                add_special_tokens=False,
-                return_tensors="pt"
-            )["input_ids"]
-            .to(output_ids.device)
-            .squeeze(0)
+        outputs = base_generate(
+            input_ids=new_input["input_ids"],
+            attention_mask=new_input.get("attention_mask", None),
+            **gen_kwargs,
         )
 
-        final_ids = torch.cat([keep_prefix, remainder], dim=0)
-        return final_ids.unsqueeze(0) if final_ids.dim() == 1 else final_ids
+        if isinstance(outputs, torch.Tensor):
+            output_ids = outputs
+        else:
+            output_ids = outputs[0] if isinstance(outputs, (list, tuple)) else outputs
+
+        final_sequences: list[torch.Tensor] = []
+
+        for i in range(batch_size):
+            out_ids = output_ids[i]
+            keep_prefix = out_ids[: original_lengths[i]]
+
+            decoded = self.tokenizer.decode(out_ids, skip_special_tokens=False)
+            remainder_txt = decoded.rsplit("</think>", 1)[-1].lstrip()
+
+            remainder_ids = (
+                self.tokenizer(
+                    remainder_txt,
+                    add_special_tokens=False,
+                    return_tensors="pt",
+                )["input_ids"]
+                .to(out_ids.device)
+                .squeeze(0)
+            )
+
+            final_ids = torch.cat([keep_prefix, remainder_ids], dim=0)
+            final_sequences.append(final_ids)
+
+        padded = self.tokenizer.pad(
+            {"input_ids": [seq.tolist() for seq in final_sequences]},
+            padding=True,
+            return_tensors="pt",
+        ).to(self.model.device)
+
+        # return [batch, max_len]
+        return padded["input_ids"]

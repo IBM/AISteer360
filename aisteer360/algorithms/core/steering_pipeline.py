@@ -130,6 +130,22 @@ class SteeringPipeline:
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer") is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
+    @property
+    def supports_batching(self) -> bool:
+        """Return True if all enabled controls in this pipeline are batch-safe.
+        """
+        controls = (
+            self.structural_control,
+            self.state_control,
+            self.input_control,
+            self.output_control,
+        )
+        return all(
+            getattr(control, "supports_batching", False)
+            for control in controls
+            if getattr(control, "enabled", True)
+        )
+
     def steer(self, **steer_kwargs) -> None:
         """Apply all steering controls to the model in place.
 

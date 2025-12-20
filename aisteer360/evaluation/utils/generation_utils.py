@@ -1,12 +1,9 @@
 from typing import Any, Callable, Sequence
 
-import pandas as pd
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-
-BATCH_SIZE = 64
 
 
 def apply_chat_template(tokenizer, batch, **kwargs) -> list:
@@ -59,6 +56,7 @@ def chat_generate_model(
     tokenizer,
     device: str | torch.device,
     gen_kwargs: dict[str, Any] | None = None,
+    batch_size: int = None
 ) -> list[str]:
     """
     Batch generate on model with chunking to prevent OOM.
@@ -70,8 +68,8 @@ def chat_generate_model(
     prompts = apply_chat_template(tokenizer, batch)
     decoded_outputs = []
 
-    for i in range(0, len(prompts), BATCH_SIZE):
-        batch_prompts = prompts[i:i + BATCH_SIZE]
+    for i in range(0, len(prompts), batch_size):
+        batch_prompts = prompts[i:i + batch_size]
 
         try:
             inputs = tokenizer(
@@ -89,7 +87,7 @@ def chat_generate_model(
             decoded_outputs.extend(batch_decoded)
 
         except Exception as e:
-            print(f"Issue with model generation at batch {i//BATCH_SIZE}: {e}")
+            print(f"Issue with model generation at batch {i//batch_size}: {e}")
             print("Hint - Do not apply chat template to your prompts.")
             raise
 
@@ -104,48 +102,54 @@ def chat_generate_pipeline(
     gen_kwargs: dict[str, Any] | None = None,
     runtime_overrides: dict[tuple[str, str], str] | None = None,
     evaluation_data: list[dict] | None = None,
+    batch_size: int = None,
 ) -> list[str]:
-    """Generate on pipeline."""
+    """Generate on pipeline.
+
+    If all enabled controls in the pipeline declare `supports_batching=True`, runs batched decoding; otherwise falls
+    back to per-example decoding.
+    """
 
     if runtime_overrides is not None and evaluation_data is None:
         raise ValueError(
             "evaluation_data must be provided when runtime_overrides are supplied."
         )
 
-    # create runtime_kwargs from runtime_overrides and evaluation_data
-    runtime_kwargs_flat = {}
+    # build per-variable runtime kwargs: var -> list[per-example values]
+    runtime_kwargs_by_var: dict[str, Any] | None = None
     if runtime_overrides:
-        runtime_kwargs = {}
+        runtime_kwargs_by_var = {}
+        runtime_kwargs_by_control: dict[str, dict[str, Any]] = {}
+
         for control in pipeline.controls:
             control_name = control.__class__.__name__
             if control_name in runtime_overrides:
-                runtime_kwargs[control_name] = _map_runtime_overrides(
+                runtime_kwargs_by_control[control_name] = _map_runtime_overrides(
                     overrides=runtime_overrides[control_name],
                     data=evaluation_data,
                 )
 
-        # flatten and convert to list of dicts; todo: maintain control names to avoid possible collisions
-        for kwargs in runtime_kwargs.values():
-            for var, arg in kwargs.items():
-                if var in runtime_kwargs_flat:
+        # flatten vars across controls; raise name collisions
+        for kwargs in runtime_kwargs_by_control.values():
+            for var, values in kwargs.items():
+                if var in runtime_kwargs_by_var:
                     raise ValueError(
                         f"Duplicate runtime_kwargs for: {var!r}; ensure controls have distinct variables."
                     )
-                runtime_kwargs_flat[var] = arg
-        runtime_kwargs_flat = _runtime_kwargs_to_list(runtime_kwargs_flat)
+                runtime_kwargs_by_var[var] = values
 
-    # Need to check for empty runtime_kwargs_flat since we may define runtime_overrides
-    # for a subset of steering methods, but the current method may not have any overrides.
-    # This will result in the above if block being executed with runtime_kwargs_flat = []
-    if not runtime_overrides or not runtime_kwargs_flat:
-        runtime_kwargs_flat = [None] * len(batch)
+        # no matching controls (behave as if no overrides)
+        if not runtime_kwargs_by_var:
+            runtime_kwargs_by_var = None
 
     prompts = apply_chat_template(tokenizer, batch)
-    decoded_outputs = []
+    decoded_outputs: list[str] = []
 
-    for i in range(0, len(prompts), BATCH_SIZE):
-        batch_prompts = prompts[i:i + BATCH_SIZE]
-        batch_runtime_kwargs = runtime_kwargs_flat[i:i + BATCH_SIZE]
+    pipeline_supports_batching: bool = getattr(pipeline, "supports_batching", False)
+
+    for i in range(0, len(prompts), batch_size):
+        batch_prompts = prompts[i : i + batch_size]
+        current_batch_size = len(batch_prompts)
 
         inputs = tokenizer(
             batch_prompts, padding=True, truncation=True, return_tensors="pt"
@@ -153,23 +157,57 @@ def chat_generate_pipeline(
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
 
-        # generate
-        # todo-future: run batch as dictated by availability of batch processing of controls in pipeline
-        generations = []
+        # slice runtime_kwargs for this chunk
+        if runtime_kwargs_by_var is None:
+            # no runtime kwargs
+            batch_runtime_kwargs_list: list[dict | None] = [None] * current_batch_size
+            batch_runtime_kwargs_agg: dict | None = None
+        else:
+            # per-variable lists -> per-chunk sublists
+            batch_runtime_kwargs_agg = {
+                var: values[i : i + current_batch_size]
+                for var, values in runtime_kwargs_by_var.items()
+            }
+
+            if pipeline_supports_batching:
+                batch_runtime_kwargs_list = []  # not used
+            else:
+                # convert to list[dict] for fallback
+                batch_runtime_kwargs_list = _runtime_kwargs_to_list(
+                    batch_runtime_kwargs_agg
+                )
+
         with torch.no_grad():
-            for j in range(len(batch_prompts)):
-                out = pipeline.generate(
-                    input_ids=input_ids[j].unsqueeze(0),
-                    attention_mask=attention_mask[j].unsqueeze(0),
-                    runtime_kwargs=batch_runtime_kwargs[j],
+            if pipeline_supports_batching:
+                # batched path: single pipeline.generate call per chunk
+                outputs = pipeline.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    runtime_kwargs=batch_runtime_kwargs_agg,
                     **(gen_kwargs or {}),
                 )
-                generations.append(out)
+                # outputs: [batch, gen_len] (new tokens only)
+                tokens = outputs
+            else:
+                # fallback: per-example generate
+                generations = []
+                for j in range(current_batch_size):
+                    out = pipeline.generate(
+                        input_ids=input_ids[j].unsqueeze(0),
+                        attention_mask=attention_mask[j].unsqueeze(0),
+                        runtime_kwargs=batch_runtime_kwargs_list[j],
+                        **(gen_kwargs or {}),
+                    )
+                    generations.append(out)
 
-        tokens = [generation.squeeze(0).tolist() for generation in generations]
-        padded = tokenizer.pad({"input_ids": tokens}, padding=True, return_tensors="pt")
-        outputs = padded["input_ids"]
-        batch_decoded = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+                # pad to rectangular tensor for batch_decode
+                token_lists = [generation.squeeze(0).tolist() for generation in generations]
+                padded = tokenizer.pad(
+                    {"input_ids": token_lists}, padding=True, return_tensors="pt"
+                )
+                tokens = padded["input_ids"]
+
+        batch_decoded = tokenizer.batch_decode(tokens, skip_special_tokens=True)
         decoded_outputs.extend(batch_decoded)
 
     return decoded_outputs
@@ -185,6 +223,7 @@ def batch_retry_generate(
     parse_fn: Callable[[str, dict[str, Any]], Any | None] | None = None,
     max_retries: int = 2,
     return_raw: bool = False,
+    batch_size: int = None,
 ) -> list[Any] | tuple[list[Any], list[str]]:
     """
     Generate chat completions with optional parsing/retry logic.
@@ -216,6 +255,7 @@ def batch_retry_generate(
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=evaluation_data,
+            batch_size=batch_size
         )
     else:
         responses = chat_generate_model(
@@ -224,6 +264,7 @@ def batch_retry_generate(
             tokenizer=tokenizer,
             device=device_obj,
             gen_kwargs=gen_kwargs,
+            batch_size=batch_size
         )
 
     if parse_fn is not None:
@@ -247,6 +288,7 @@ def batch_retry_generate(
                 gen_kwargs=gen_kwargs,
                 runtime_overrides=runtime_overrides,
                 evaluation_data=evaluation_data,
+                batch_size=batch_size
             )
         else:
             retry_raw = chat_generate_model(
@@ -255,6 +297,7 @@ def batch_retry_generate(
                 tokenizer=tokenizer,
                 device=device_obj,
                 gen_kwargs=gen_kwargs,
+                batch_size=batch_size
             )
 
         for local_i, global_i in enumerate(retry_indices):

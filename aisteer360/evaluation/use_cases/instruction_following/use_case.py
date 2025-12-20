@@ -35,6 +35,7 @@ class InstructionFollowing(UseCase):
         tokenizer,
         gen_kwargs: dict | None = None,
         runtime_overrides: dict[tuple[str, str], str] | None = None,
+        **kwargs
     ) -> list[dict[str, Any]]:
         """Generates model responses for instruction following prompts.
 
@@ -60,6 +61,8 @@ class InstructionFollowing(UseCase):
             return []
 
         gen_kwargs = dict(gen_kwargs or {})
+        batch_size: int = int(kwargs["batch_size"])
+
         prompt_data = []
 
         for instance in self.evaluation_data:
@@ -73,6 +76,7 @@ class InstructionFollowing(UseCase):
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=self.evaluation_data,
+            batch_size=batch_size
         )
 
         generations = [

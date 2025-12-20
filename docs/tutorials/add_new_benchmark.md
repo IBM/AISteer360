@@ -118,26 +118,42 @@ from aisteer360.algorithms.structural_control.wrappers.trl.dpotrainer.control im
 
 dpo_lora = DPO(
     train_dataset=train_ds,
+
+    # DPO / TRL config
+    output_dir="trl_models/Qwen2.5-0.5B-DPO-Lora-Steer",
+    per_device_train_batch_size=4,
+    num_train_epochs=2,
+    learning_rate=1e-6,
+    beta=0.1,
+    loss_type="sigmoid",
+    max_length=1024,
+    max_prompt_length=512,
+    disable_dropout=True,
+    logging_steps=100,
+    save_strategy="no",
+    report_to="none",
+    seed=123,
+
+    # LoRA config
     use_peft=True,
     peft_type=PeftType.LORA,
-    **{
-        "per_device_train_batch_size": 4,
-        "num_train_epochs": 2,
-        "learning_rate": 2e-5,
-        "output_dir": "trl_models/Qwen2.5-0.5B-DPO-Lora-Steer",
-        "logging_steps": 100,
-        "save_strategy": "no",
-    },
+    r=16,
+    lora_alpha=16,
+    target_modules=["q_proj", "v_proj"],
+    adapter_name="dpo",
+    merge_lora_after_train=False,
 )
 ```
 
 Now that the controls have been instantiated, we are now ready to construct the benchmark. Instantiation of a benchmark
 requires specification of the following arguments:
+
 - `use_case` (`UseCase`): The instantiated use case object.
 - `base_model_name_or_path`: The base model to steer (as listed on Hugging Face).
 - `steering_pipelines` (`dict[str, Any]`): The steering pipelines/methods that we want to compare in the benchmark.
 
 A benchmark can also optionally accept
+
 - `runtime_overrides`: A dictionary that indicates which how the evaluation data map to control variables (not used in this example).
 - `hf_model_kwargs`: load-time options for configuration of the construction of the model.
 - `gen_kwargs`: generation-time options for configuration of the behavior of the model.

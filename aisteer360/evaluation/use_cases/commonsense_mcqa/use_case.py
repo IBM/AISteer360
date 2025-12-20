@@ -62,7 +62,8 @@ class CommonsenseMCQA(UseCase):
         model_or_pipeline,
         tokenizer,
         gen_kwargs: dict | None = None,
-        runtime_overrides: dict[tuple[str, str], str] | None = None
+        runtime_overrides: dict[tuple[str, str], str] | None = None,
+        **kwargs
     ) -> list[dict[str, Any]]:
         """Generates model responses for multiple-choice questions with shuffled answer orders.
 
@@ -93,6 +94,7 @@ class CommonsenseMCQA(UseCase):
             print('No evaluation data provided.')
             return []
         gen_kwargs = dict(gen_kwargs or {})
+        batch_size: int = int(kwargs["batch_size"])
 
         # form prompt data
         prompt_data = []
@@ -132,7 +134,8 @@ class CommonsenseMCQA(UseCase):
             parse_fn=self._parse_letter,
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
-            evaluation_data=self.evaluation_data
+            evaluation_data=self.evaluation_data,
+            batch_size=batch_size
         )
 
         # store

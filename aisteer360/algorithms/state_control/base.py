@@ -59,6 +59,7 @@ class StateControl(ABC):
     Args: Type[BaseArgs] | None = None
 
     enabled: bool = True
+    supports_batching: bool = False
     _model_ref: PreTrainedModel | None = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -143,6 +144,7 @@ class NoStateControl(StateControl):
     Used as the default when no state control is needed. Returns empty hook dictionaries and skips registration.
     """
     enabled: bool = False
+    supports_batching: bool = True
 
     def get_hooks(self, *_, **__) -> dict[str, list[HookSpec]]:
         """Return empty hooks."""
