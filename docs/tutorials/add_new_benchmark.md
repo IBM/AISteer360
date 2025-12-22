@@ -6,6 +6,10 @@ benchmark for two cases: 1) A simple benchmark for the `CommonsenseMCQA` use cas
 `InstructionFollowing` use case that contains steering methods which require specification of inference-time arguments
 (via `runtime_overrides`).
 
+Note that both of the described benchmarks use *fixed* controls, in the sense that all parameters are set upon
+initialization and remain fixed for the duration of the benchmark. Oftentimes we want to investigate how behavior
+changes as we sweep some subset of a control's variables over a range, i.e., *variable* controls. We describe how to
+construct a benchmark with such controls at the end of this tutorial.
 
 ## Simple benchmark
 
@@ -263,3 +267,56 @@ benchmark = Benchmark(
 ```
 The benchmark can then be run as usual to generate the profiles. We direct the reader to the
 [notebook](../notebooks/benchmarks/instruction_following/instruction_following.ipynb) for the full implementation.
+
+## Benchmark with variable controls
+
+To study model behavior as control parameters change, the toolkit uses the `ControlSpec` class. Static parameters are
+specified in the `params` dict, whereas variable parameters are specified in the `vars` dict.
+
+```python
+few_shot_spec = ControlSpec(
+    control_cls=FewShot,
+    params={
+        "selector_name": "random",
+        "positive_example_pool": positive_pool,
+        "negative_example_pool": negative_pool,
+        "k_negative": 0
+    },
+    vars={
+        "k_positive": [5, 10, 20],
+    },
+    name="few_shot",
+)
+```
+
+fixed pools, zero negative examples
+
+Sweep positive examples over 5, 10, 20
+
+The above can then be passed directly into the benchmark class and
+
+Additionally, num_trials
+
+
+```python
+bench = Benchmark(
+    use_case=commonsense_mcqa,
+    base_model_name_or_path="Qwen/Qwen2.5-1.5B-Instruct",
+    steering_pipelines={
+        "baseline": [],
+        "few_shot": [few_shot_spec],
+        "dpo_lora": [dpo_lora_spec],
+    },
+    gen_kwargs={
+        "max_new_tokens": 300,
+        "do_sample": True,
+        "temperature": 0.7
+    },
+    device_map="auto",
+    num_trials=5
+)
+
+profiles = bench.run()
+```
+
+Both types of benchmarks can accpted control specs
