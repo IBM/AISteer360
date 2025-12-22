@@ -295,6 +295,29 @@ Sweep positive examples over 5, 10, 20
 
 The above can then be passed directly into the benchmark class and
 
+```python
+vars={
+    "beta": [0.05, 0.10],
+    "r": [8, 16],
+}
+```
+As a more constrained collection:
+```python
+vars=[
+    {"beta": 0.05, "r": 8},
+    {"beta": 0.10, "r": 16},
+    {"beta": 0.10, "r": 32},
+]
+```
+Or as a functional relationship:
+```python
+vars=lambda context: (
+    {"beta": base_beta * scale, "r": int(8 * scale)}
+    for scale in [0.5, 1.0, 2.0]
+    for base_beta in [0.05]
+)
+```
+
 Additionally, num_trials
 
 
