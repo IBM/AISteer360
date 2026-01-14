@@ -1,5 +1,7 @@
 from typing import Any, Mapping
 
+import numpy as np
+
 
 def to_jsonable(obj: Any) -> Any:
     """Conversion to json-safe format.
@@ -13,23 +15,16 @@ def to_jsonable(obj: Any) -> Any:
     """
     from pathlib import Path as _Path
 
-    try:
-        import numpy as np  # optional
-        has_np = True
-    except Exception:
-        has_np = False
-        np = None
-
     if isinstance(obj, (str, int, float, bool)) or obj is None:
         return obj
 
     if isinstance(obj, _Path):
         return str(obj)
 
-    if has_np and isinstance(obj, np.generic):
+    if isinstance(obj, np.generic):
         return obj.item()
 
-    if has_np and isinstance(obj, np.ndarray):
+    if isinstance(obj, np.ndarray):
         return obj.tolist()
 
     if isinstance(obj, Mapping):

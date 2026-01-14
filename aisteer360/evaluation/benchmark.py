@@ -1,3 +1,8 @@
+"""
+Benchmark runner for steering pipelines.
+
+Provides a `Benchmark` class for evaluating one or more steering pipeline configurations on a single `UseCase`.
+"""
 import gc
 from pathlib import Path
 from typing import Any, Sequence
@@ -14,7 +19,7 @@ from aisteer360.evaluation.utils.data_utils import to_jsonable
 
 
 class Benchmark:
-    """Benchmark framework for comparing steering pipelines on a use case.
+    """Benchmark functionality for comparing steering pipelines on a use case.
 
     A Benchmark runs one or more steering pipeline configurations on a given use case, optionally with multiple trials
     per configuration. Each trial reuses the same steered model and re-samples any generate-time randomness (e.g.,
@@ -23,8 +28,8 @@ class Benchmark:
     Attributes:
         use_case: Use case that defines prompt construction, generation logic, and evaluation metrics.
         base_model_name_or_path: Hugging Face model ID or local path for the base causal language model.
-        steering_pipelines: Mapping from pipeline name to a list of controls or ControlSpec objects; empty list denotes
-            a baseline (no steering).
+        steering_pipelines: Mapping from pipeline name to a list of controls or `ControlSpec` objects; empty list
+            denotes a baseline (no steering).
         runtime_overrides: Optional overrides passed through to `UseCase.generate` for runtime control parameters.
         hf_model_kwargs: Extra kwargs forwarded to `AutoModelForCausalLM.from_pretrained`.
         gen_kwargs: Generation kwargs forwarded to :meth:`UseCase.generate`.
@@ -82,8 +87,8 @@ class Benchmark:
     def run(self) -> dict[str, list[dict[str, Any]]]:
         """Run the benchmark on all configured steering pipelines.
 
-        Each pipeline configuration is expanded into one or more concrete control settings (via ControlSpecs when
-        present). For each concrete configuration, the model is steered once and evaluated over `num_trials` trials.
+        Each pipeline configuration is expanded into one or more control settings (via `ControlSpecs` when present).
+        For each configuration, the model is steered once and evaluated over `num_trials` trials.
 
         Returns:
             A mapping from pipeline name to a list of run dictionaries. Each run dictionary has keys:
@@ -104,8 +109,8 @@ class Benchmark:
             has_specs = any(isinstance(control, ControlSpec) for control in pipeline)
             if has_specs and not all(isinstance(control, ControlSpec) for control in pipeline):
                 raise TypeError(
-                    f"Pipeline '{pipeline_name}' mixes ControlSpec and concrete controls. Either use only concrete "
-                    "controls or only ControlSpecs. Wrap fixed configs in ControlSpec(vars=None) if needed."
+                    f"Pipeline '{pipeline_name}' mixes ControlSpec and fixed controls. Either use only fixed controls "
+                    "or only ControlSpecs. Wrap fixed configs in ControlSpec(vars=None) if needed."
                 )
 
             if not pipeline:  # baseline (no steering)
@@ -128,15 +133,14 @@ class Benchmark:
         """Run a concrete steering pipeline configuration for all trials.
 
         This helper handles both baseline (no controls) and fixed-control pipelines. Structural steering is applied
-        once; the use case is evaluated `num_trials` times to capture generate-time variability.
+        once; the use case is evaluated `num_trials` times (to capture generate-time variability).
 
         Args:
             controls: List of instantiated steering controls, or an empty list for the baseline (unsteered) model.
             params: Optional mapping from spec name to full constructor kwargs used to build the controls.
 
         Returns:
-            A list of run dictionaries, one per trial. Each dict includes `"trial_id"`, `"generations"`, `"evaluations"`
-             and `"params"`.
+            A list of run dictionaries, one per trial.
         """
         pipeline: SteeringPipeline | None = None
         tokenizer = None
@@ -155,6 +159,7 @@ class Benchmark:
                         device_map=self.device_map,
                         hf_model_kwargs=self.hf_model_kwargs,
                     )
+
                     pipeline.steer()
                     tokenizer = pipeline.tokenizer
                     model_or_pipeline: Any = pipeline
@@ -168,11 +173,13 @@ class Benchmark:
                         hf_model_kwargs=self.hf_model_kwargs,
                         lazy_init=True,
                     )
+
                     # inject shared base model/tokenizer
                     pipeline.model = self._base_model
                     pipeline.tokenizer = self._base_tokenizer
                     if self._base_model is not None:
                         pipeline.device = self._base_model.device
+
                     pipeline.steer()
                     tokenizer = pipeline.tokenizer
                     model_or_pipeline = pipeline
@@ -218,27 +225,26 @@ class Benchmark:
         pipeline_name: str,
         control_specs: list[ControlSpec],
     ) -> list[dict[str, Any]]:
-        """Run a pipeline whose controls are defined by ControlSpecs.
+        """Run a pipeline whose controls are defined by `ControlSpec`s.
 
-        This expands each ControlSpec into one or more local parameter choices, takes the cartesian product across specs
-        to form concrete configurations, and evaluates each configuration using `_run_pipeline`.
+        This method:
 
-        For each configuration, full constructor kwargs are resolved for every spec, controls are instantiated once to
-        form a steering pipeline, and the steering pipeline is evaluated for `num_trials` trials
+        - Expands each `ControlSpec` into one or more local parameter choices
+        - Takes the cartesian product across specs to form pipeline configurations
+        - Evaluates each configuration using `_run_pipeline`
 
         Args:
-            pipeline_name: Name of the pipeline being evaluated; passed into the context for ControlSpecs.
-            control_specs: ControlSpec objects describing the controls used in
-                this pipeline.
+            pipeline_name: Name of the pipeline being evaluated; passed into the context for `ControlSpec`s.
+            control_specs: `ControlSpec` objects describing the controls used in the given pipeline.
 
         Returns:
             A flat list of run dictionaries across all configurations and trials.
             Each run dictionary includes:
 
                 - "trial_id": Integer trial index
-                - "generations": Model outputs for that trial
-                - "evaluations": Metric results for that trial
-                - "params": Mapping from spec name to full constructor kwargs for that configuration
+                - "generations": Model outputs for the given trial
+                - "evaluations": Metric results for the given trial
+                - "params": Mapping from spec name to full constructor kwargs for the given configuration
         """
         import itertools
 
@@ -269,8 +275,8 @@ class Benchmark:
                 f"Running configuration {combo_id + 1}...",
                 flush=True,
             )
-            params_by_spec: dict[str, dict[str, Any]] = {}
-            controls_for_combo: list[Any] = []
+            params: dict[str, dict[str, Any]] = {}
+            controls: list[Any] = []
 
             global_context = {
                 "pipeline_name": pipeline_name,
@@ -282,12 +288,12 @@ class Benchmark:
                 spec_name = spec.name or spec.control_cls.__name__
                 kwargs = spec.resolve_params(chosen=local_point, context=global_context)
                 control = spec.control_cls(**kwargs)
-                controls_for_combo.append(control)
-                params_by_spec[spec_name] = kwargs
+                controls.append(control)
+                params[spec_name] = kwargs
 
             run = self._run_pipeline(
-                controls=controls_for_combo,
-                params=params_by_spec,
+                controls=controls,
+                params=params,
             )
             runs.extend(run)
 

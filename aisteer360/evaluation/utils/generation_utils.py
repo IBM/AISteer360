@@ -148,7 +148,7 @@ def chat_generate_pipeline(
     pipeline_supports_batching: bool = getattr(pipeline, "supports_batching", False)
 
     for i in range(0, len(prompts), batch_size):
-        batch_prompts = prompts[i : i + batch_size]
+        batch_prompts = prompts[i: i + batch_size]
         current_batch_size = len(batch_prompts)
 
         inputs = tokenizer(
@@ -240,6 +240,12 @@ def batch_retry_generate(
 
     gen_kwargs = dict(gen_kwargs or {})
     is_pipeline = isinstance(model_or_pipeline, SteeringPipeline)
+
+    config = getattr(model_or_pipeline, "config", None)
+    if config is not None and not getattr(config, "is_encoder_decoder", False):
+        # decoder-only architecture; left-pad
+        if getattr(tokenizer, "padding_side", None) != "left":
+            tokenizer.padding_side = "left"
 
     try:
         device_obj = model_or_pipeline.device

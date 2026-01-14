@@ -1,28 +1,29 @@
 """
 Specification utilities for steering controls.
 
-Provides `ControlSpec`, a description of a steering control plus a hyper-parameter search space.
+Provides:
+
+- `ControlSpec`: a description of a steering control plus a hyperparameter search space.
 """
+import itertools
+import math
+import random
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, Type
 
-# The type of the "search space" for a ControlSpec:
+# The type of the search space for a ControlSpec:
 #   - Mapping[str, Sequence[Any]]: intervals (cartesian product)
 #   - Sequence[Mapping[str, Any]]: list of parameter dicts
 #   - Callable[[dict], Iterable[Mapping[str, Any]]]: generates dicts given a context
-Space = (
-    Mapping[str, Sequence[Any]]
-    | Sequence[Mapping[str, Any]]
-    | Callable[[dict], Iterable[Mapping[str, Any]]]
-)
+Space = Mapping[str, Sequence[Any]] | Sequence[Mapping[str, Any]] | Callable[[dict], Iterable[Mapping[str, Any]]]
 
 
 @dataclass(slots=True)
 class ControlSpec:
     """Specification for a parameterized steering control.
 
-    A ControlSpec describes a control class plus a search space over its constructor arguments. It is used by the
-    benchmark to instantiate control instances for different hyper-parameter settings.
+    A `ControlSpec` describes a control class plus a search space over its constructor arguments. It is used by a
+    benchmark object to instantiate control instances for different hyperparameter settings.
 
     Attributes:
         control_cls: The steering control class to instantiate.
@@ -58,10 +59,6 @@ class ControlSpec:
             Parameter dictionaries (possibly empty) that will be merged into `params` when constructing a concrete
             control instance.
         """
-        import itertools
-        import math
-        import random
-
         search_space = self.vars
 
         # no search space
@@ -85,7 +82,7 @@ class ControlSpec:
             sizes = [len(vals) for vals in param_values]
             n_points = math.prod(sizes)
 
-            # GRID SEARCH: iterate over the full cartesian product lazily
+            # GRID SEARCH: iterate over the cartesian product
             if (
                 self.search_strategy == "grid"
                 or self.num_samples is None
@@ -95,7 +92,7 @@ class ControlSpec:
                     yield dict(zip(param_names, combo))
                 return
 
-            # RANDOM SEARCH: sample indices into the grid without materializing all dicts
+            # RANDOM SEARCH: sample indices
             rng = random.Random(self.seed)
             k = min(self.num_samples, n_points)
             index_samples = rng.sample(range(n_points), k)
@@ -109,10 +106,7 @@ class ControlSpec:
                     idx //= size
                 indices_per_dim.reverse()
 
-                values = [
-                    param_values[dim][indices_per_dim[dim]]
-                    for dim in range(len(param_names))
-                ]
+                values = [param_values[dim][indices_per_dim[dim]] for dim in range(len(param_names))]
                 yield dict(zip(param_names, values))
             return
 
