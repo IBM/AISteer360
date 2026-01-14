@@ -32,7 +32,7 @@ given \( x \), control for each category is exerted as follows.
     - Methods that modify the model’s internal states (e.g., activations, attentions) at inference time.
     - Facilitated through hooks that are inserted into the model to manipulate internal variables during the forward pass.
 
-- **Output control:** \( y \overset d\sim p_\theta(x) \)
+- **Output control:** \( y \sim d(p_\theta)(x) \)
     - Methods that modify model outputs or constrain/transform what leaves the decoder.
     - Facilitated through decoding-time algorithms/filters that override the `generate` method.
 

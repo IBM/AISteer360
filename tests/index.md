@@ -18,9 +18,9 @@ Tests for single controls are executed by specifying the file name, e.g.,:
 pytest tests/controls/test_pasta.py
 ```
 
-## Adding your own test
+## Adding your own control test
 
-To add your own test, please follow the pattern in the existing test files. Specifically:
+To add your own test for a steering method, please follow the pattern in the existing test files. Specifically:
 
 1. Create a test file named `test_your_control.py` in the `tests/controls/` directory
 

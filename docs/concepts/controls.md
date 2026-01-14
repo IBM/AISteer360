@@ -97,7 +97,7 @@ patching. Example implementations of state control methods can be found in the f
 
 **Baseline model**: $y \sim p_\theta(x)$
 
-**Steered model**: $y \sim^d p_{\theta}(x)$
+**Steered model**: $y \sim d(p_{\theta})(x)$
 
 Output control methods modify model outputs or constrain/transform what leaves the decoder. The base distribution
 $p_\theta$ is left intact; only the path through the distribution changes.

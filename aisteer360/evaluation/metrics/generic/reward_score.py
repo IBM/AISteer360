@@ -38,9 +38,10 @@ class RewardScore(Metric):
 
     Notes:
 
-        - If your reward model was trained to take both prompt and response, pass `prompts=[...]`. If not, omit `prompts` and only responses are encoded.
-        - To add pairwise comparisons, compute two calls (candidate vs. baseline) and take the difference externally, or extend this class to accept a
-          `reference_responses` kwarg and return margins.
+        - If your reward model was trained to take both prompt and response, pass `prompts=[...]`. If not, omit
+        `prompts` and only responses are encoded.
+        - To add pairwise comparisons, compute two calls (candidate vs. baseline) and take the difference externally,
+        or extend this class to accept a `reference_responses` kwarg and return margins.
     """
 
     def __init__(

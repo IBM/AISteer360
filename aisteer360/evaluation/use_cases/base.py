@@ -58,7 +58,8 @@ class UseCase(ABC):
             model_or_pipeline,
             tokenizer,
             gen_kwargs=None,
-            runtime_overrides: dict[tuple[str, str], str] | None = None
+            runtime_overrides: dict[tuple[str, str], str] | None = None,
+            **kwargs
     ) -> list[dict[str, Any]]:
         """
         Required generation logic for the current use case.

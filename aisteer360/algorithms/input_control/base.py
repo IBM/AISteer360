@@ -47,6 +47,7 @@ class InputControl(ABC):
     Args: Type[BaseArgs] | None = None
 
     enabled: bool = True
+    supports_batching: bool = False
 
     def __init__(self, *args, **kwargs) -> None:
         if self.Args is None:  # null control
@@ -82,6 +83,7 @@ class NoInputControl(InputControl):
     Used as the default when no input control is needed. Returns input_ids.
     """
     enabled: bool = False
+    supports_batching: bool = True
     tokenizer: PreTrainedTokenizerBase | None = None
 
     def get_prompt_adapter(

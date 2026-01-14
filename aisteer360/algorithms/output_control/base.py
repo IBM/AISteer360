@@ -48,6 +48,7 @@ class OutputControl(ABC):
     Args: Type[BaseArgs] | None = None
 
     enabled: bool = True
+    supports_batching: bool = False
 
     def __init__(self, *args, **kwargs) -> None:
         if self.Args is None:  # null control
@@ -87,6 +88,7 @@ class NoOutputControl(OutputControl):
     Used as the default when no output control is needed. Calls (unsteered) model's generate.
     """
     enabled: bool = False
+    supports_batching: bool = True
 
     def generate(
         self,

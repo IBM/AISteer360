@@ -6,6 +6,10 @@ benchmark for two cases: 1) A simple benchmark for the `CommonsenseMCQA` use cas
 `InstructionFollowing` use case that contains steering methods which require specification of inference-time arguments
 (via `runtime_overrides`).
 
+Note that both of the described benchmarks use *fixed* controls, in the sense that all parameters are set upon
+initialization and remain fixed for the duration of the benchmark. Oftentimes we want to investigate how behavior
+changes as we sweep some subset of a control's variables over a range, i.e., *variable* controls. We describe how to
+construct a benchmark with such controls at the end of this tutorial.
 
 ## Simple benchmark
 
@@ -118,26 +122,42 @@ from aisteer360.algorithms.structural_control.wrappers.trl.dpotrainer.control im
 
 dpo_lora = DPO(
     train_dataset=train_ds,
+
+    # DPO / TRL config
+    output_dir="trl_models/Qwen2.5-0.5B-DPO-Lora-Steer",
+    per_device_train_batch_size=4,
+    num_train_epochs=2,
+    learning_rate=1e-6,
+    beta=0.1,
+    loss_type="sigmoid",
+    max_length=1024,
+    max_prompt_length=512,
+    disable_dropout=True,
+    logging_steps=100,
+    save_strategy="no",
+    report_to="none",
+    seed=123,
+
+    # LoRA config
     use_peft=True,
     peft_type=PeftType.LORA,
-    **{
-        "per_device_train_batch_size": 4,
-        "num_train_epochs": 2,
-        "learning_rate": 2e-5,
-        "output_dir": "trl_models/Qwen2.5-0.5B-DPO-Lora-Steer",
-        "logging_steps": 100,
-        "save_strategy": "no",
-    },
+    r=16,
+    lora_alpha=16,
+    target_modules=["q_proj", "v_proj"],
+    adapter_name="dpo",
+    merge_lora_after_train=False,
 )
 ```
 
 Now that the controls have been instantiated, we are now ready to construct the benchmark. Instantiation of a benchmark
 requires specification of the following arguments:
+
 - `use_case` (`UseCase`): The instantiated use case object.
 - `base_model_name_or_path`: The base model to steer (as listed on Hugging Face).
 - `steering_pipelines` (`dict[str, Any]`): The steering pipelines/methods that we want to compare in the benchmark.
 
 A benchmark can also optionally accept
+
 - `runtime_overrides`: A dictionary that indicates which how the evaluation data map to control variables (not used in this example).
 - `hf_model_kwargs`: load-time options for configuration of the construction of the model.
 - `gen_kwargs`: generation-time options for configuration of the behavior of the model.
@@ -247,3 +267,82 @@ benchmark = Benchmark(
 ```
 The benchmark can then be run as usual to generate the profiles. We direct the reader to the
 [notebook](../notebooks/benchmarks/instruction_following/instruction_following.ipynb) for the full implementation.
+
+## Benchmark with variable controls
+
+Both of the above benchmark modalities are run using fixed steering controls, i.e., controls that are initialized with
+fixed parameters outside of the benchmark object. To study model behavior as control parameters change, the toolkit
+allows for specification of variable controls via the `ControlSpec` class. Static parameters are specified in the
+`params` dict, whereas variable parameters are specified in the `vars` dict. An example for the few-shot control is
+below.
+
+```python
+few_shot_spec = ControlSpec(
+    control_cls=FewShot,
+    params={
+        "selector_name": "random",
+        "positive_example_pool": positive_pool,
+        "negative_example_pool": negative_pool,
+    },
+    vars={
+        "k_negative": [5, 10, 20],
+        "k_positive": [5, 10, 20],
+    },
+    name="few_shot",
+)
+```
+The above specifies a fixed example selector and example pools (in `params`) but allows for the number of positive and
+negative examples to be swept across a range (as specified in `vars`). A steering pipeline can then be defined using
+the `ControlSpec` instance.
+```python
+bench = Benchmark(
+    use_case=commonsense_mcqa,
+    base_model_name_or_path="Qwen/Qwen2.5-1.5B-Instruct",
+    steering_pipelines={
+        "baseline": [],
+        "few_shot_spec": [few_shot_spec],
+    },
+    gen_kwargs={
+        "max_new_tokens": 300,
+        "do_sample": True,
+        "temperature": 0.7
+    },
+    device_map="auto",
+    num_trials=5
+)
+
+profiles = bench.run()
+```
+Behind the scenes, the benchmark enumerates over the elements of `vars` and constructs individual controls for the
+evaluation. The optional `num_trials` parameters in the benchmark allows for multiple trials to be run per
+configuration. Each trial reuses the same steered model and re-samples any generate-time randomness (e.g., few-shot
+selection, sampling-based decoding, etc.).
+
+Lastly, note that the `ControlSpec` method allows for `vars` to be specified in three ways. First, individual ranges for
+each control parameter (as done above) enumerates all combinations of parameters. Second, specific parameter
+combinations can be specified via a list of dicts.
+```python
+vars=[
+    {"k_negative": 5, "k_positive": 5},
+    {"k_negative": 10, "k_positive": 10},
+    {"k_negative": 20, "k_positive": 20},
+]
+```
+Lastly, more complex (functional) relationships can be encoded via a lambda function.
+```python
+vars=lambda context: (
+    {
+        "k_negative": kn,
+        "k_positive": kp,
+    }
+    for total in [0, 2, 4, 8, 16, 32]  # regimes
+    if total <= context["budget"]
+    for kn, kp in [(total // 2, total - total // 2)]
+)
+```
+where the above specifies example counts across a small set of log-scaled regimes (including zero-shot), filtered by a
+total example budget, and split evenly between positive and negative examples.
+
+To deal with the potentially large number of elements in `vars`, the `ControlSpec` class also allows for specification
+of `search_strategy="random"`, along with `num_samples`, to subsample configurations from the `vars` space. This is an
+alternative to the default enumeration behavior via `search_strategy="grid"`.

@@ -45,6 +45,7 @@ class StructuralControl(ABC):
     Args: Type[BaseArgs] | None = None
 
     enabled: bool = True
+    supports_batching: bool = True
 
     def __init__(self, *args, **kwargs) -> None:
         if self.Args is None:  # null control

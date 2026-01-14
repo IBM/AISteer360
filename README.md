@@ -1,24 +1,21 @@
-![AISteer360](docs/assets/logo_wide_darkmode.png#gh-dark-mode-only)
-![AISteer360](docs/assets/logo_wide_lightmode.png#gh-light-mode-only)
+![AISteer360](https://github.com/IBM/AISteer360/raw/main/docs/assets/logo_wide_darkmode.png#gh-dark-mode-only)
+![AISteer360](https://github.com/IBM/AISteer360/raw/main/docs/assets/logo_wide_darkmode.png#gh-light-mode-only)
 
 [//]: # (to add: arxiv; pypi; ci)
 [![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://ibm.github.io/AISteer360/)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-![Python 3.11](https://img.shields.io/badge/python-3.11-blue)
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)
 [![GitHub License](https://img.shields.io/github/license/generative-computing/mellea)](https://img.shields.io/github/license/generative-computing/mellea)
 
 ---
 
-The AI Steerability 360 toolkit (AISteer360) is an extensible library for general purpose steering of LLMs. Primary
-features of the toolkit include:
+The AI Steerability 360 toolkit is an extensible library for general purpose steering of LLMs. The toolkit allows for
+the implementation of steering methods across a range of model control surfaces (input, structural, state, and output),
+functionality to compose steering methods (into a `SteeringPipeline`), and the ability to compare steering methods
+(and pipelines) on custom tasks/metrics.
 
-- Implementations of steering methods across a range of model control surfaces (input, structural, state, and output).
-
-- Functionality to construct composite steering methods via a `SteeringPipeline`.
-
-- Ability to compare steering pipelines on a given task (e.g., instruction following) via the `UseCase` and `Benchmark` classes.
-
+To get started, please see the [documentation](https://ibm.github.io/AISteer360/).
 
 ## Installation
 

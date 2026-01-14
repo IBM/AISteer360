@@ -53,6 +53,8 @@ class PASTA(StateControl):
 
     Args = PASTAArgs
 
+    supports_batching: bool = True
+
     # placeholders
     model: PreTrainedModel | None = None
     tokenizer: PreTrainedTokenizer | None = None

@@ -99,7 +99,10 @@ class FewShot(InputControl):
             else:
                 self.selector = RandomSelector()
 
-    def get_prompt_adapter(self) -> Callable[[list[int] | torch.Tensor, dict[str, Any]], list[int] | torch.Tensor]:
+    def get_prompt_adapter(
+        self,
+        runtime_kwargs: dict | None = None
+    ) -> Callable[[list[int] | torch.Tensor, dict[str, Any]], list[int] | torch.Tensor]:
         """Return a prompt adapter function that adds few-shot examples to the model's system prompt. Creates and
         returns a closure that modifies input token sequences by prepending few-shot examples.
 

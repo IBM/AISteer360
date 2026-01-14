@@ -1,12 +1,13 @@
 [project]
 name            = "aisteer360"
-version         = "0.0.1"
+version         = "0.1.0"
 description     = "AI Steerability 360 Toolkit"
 readme          = "README.md"
 license         = { text = "Apache-2.0" }
 authors         = [{ name = "IBM Research" }]
 maintainers     = [
-    { name = "Erik Miehling", email = "erik.miehling@ibm.com" }
+    { name = "Erik Miehling", email = "erik.miehling@ibm.com" },
+    { name = "Praveen Venkateswaran", email = "praveen.venkateswaran@ibm.com" }
 ]
 keywords = [
     "language models",
@@ -17,7 +18,7 @@ keywords = [
     "decoding-time alignment"
 ]
 
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11.0"
 
 classifiers = [
     "Intended Audience :: Developers",

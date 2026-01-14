@@ -1,33 +1,47 @@
-from __future__ import annotations
-
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from aisteer360.evaluation.use_cases.base import UseCase
 from aisteer360.evaluation.utils.generation_utils import batch_retry_generate
 
+_EVALUATION_REQ_KEYS = [
+    "prompt",
+    "instructions",
+    "instruction_id_list",
+    "kwargs",
+]
+
 
 class InstructionFollowing(UseCase):
-    """
-    Instruction following use case using the IFEval dataset.
+    """Instruction following evaluation use case using the IFEval dataset.
 
-    Evaluates model ability to follow specific instructions by testing adherence to
-    various formatting, content, and structural constraints. Uses the IFEval dataset
-    which contains prompts with explicit instructions that models must follow precisely.
+    Evaluates model ability to follow specific instructions by testing adherence to various formatting, content, and
+    structural constraints. Uses the IFEval dataset which contains prompts with explicit instructions that models must
+    follow precisely.
 
-    The evaluation focuses on whether models can follow instructions like:
+    The evaluation focuses on whether models can follow instructions like formatting requirements (e.g., "respond in
+    exactly 3 sentences"), content constraints (e.g., "include the word 'fantastic' twice"), and structural
+    requirements (e.g., "use bullet points", "write in JSON format").
 
-    - Formatting requirements (e.g., "respond in exactly 3 sentences")
-    - Content constraints (e.g., "include the word 'fantastic' twice")
-    - Structural requirements (e.g., "use bullet points", "write in JSON format")
-
-    Expected evaluation data format should include fields like 'prompt', 'instructions',
-    'instruction_id_list', and 'kwargs' for comprehensive instruction following assessment.
+    Attributes:
+        evaluation_data: List of instances containing prompts and instruction metadata.
     """
 
     def validate_evaluation_data(self, evaluation_data: dict[str, Any]) -> None:
-        pass
+        """Validates that evaluation data contains required fields for instruction following evaluation.
+
+        Ensures each data instance has the necessary keys for the evaluation.
+
+        Args:
+            evaluation_data: Dictionary containing a single evaluation instance with prompt, instructions, and metadata.
+
+        Raises:
+            ValueError: If required keys ('prompt', 'instructions', 'instruction_id_list', 'kwargs') are missing.
+        """
+        missing_keys = [key for key in _EVALUATION_REQ_KEYS if key not in evaluation_data]
+        if missing_keys:
+            raise ValueError(f"Missing required keys: {missing_keys}")
 
     def generate(
         self,
@@ -35,6 +49,7 @@ class InstructionFollowing(UseCase):
         tokenizer,
         gen_kwargs: dict | None = None,
         runtime_overrides: dict[tuple[str, str], str] | None = None,
+        **__
     ) -> list[dict[str, Any]]:
         """Generates model responses for instruction following prompts.
 
@@ -89,28 +104,34 @@ class InstructionFollowing(UseCase):
         return generations
 
     def evaluate(self, generations: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Evaluates generated responses against instruction requirements using configured metrics.
+
+        Passes generation dictionaries to all evaluation metrics specified during initialization.
+
+        Args:
+            generations: List of generation dictionaries returned by the `generate()` method, each containing
+                response, prompt, instructions, instruction_id_list, and kwargs fields.
+
+        Returns:
+            Dictionary of scores keyed by `metric_name`.
+        """
         results = {}
         for metric in self.evaluation_metrics:
             results[metric.name] = metric(responses=generations)
         return results
 
-    def export(
-        self,
-        profiles: dict[str, Any],
-        save_dir: str,
-    ) -> None:
+    def export(self, profiles: dict[str, Any], save_dir: str) -> None:
         """Exports instruction following evaluation results to structured JSON files.
 
         Creates two output files:
 
-        1. `responses.json`: Contains model responses for each steering method
-        2. `scores.json`: Contains strict metric scores for each steering method
+            1. `responses.json`: Contains model responses for each steering method
+            2. `scores.json`: Contains strict metric scores for each steering method
 
         Args:
             profiles: Dictionary containing evaluation results from all tested pipelines.
             save_dir: Directory path where results should be saved.
         """
-
         folder_path = Path(save_dir)
         folder_path.mkdir(parents=True, exist_ok=True)
         steering_methods, predictions, follow_instructions = [], {}, {}

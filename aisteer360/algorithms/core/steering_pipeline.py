@@ -3,7 +3,7 @@ Core steering pipeline for composing and applying multiple LLM control methods.
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import torch
 import torch.nn as nn
@@ -26,7 +26,7 @@ class SteeringPipeline:
     Workflow:
 
     1. Instantiate with a base model checkpoint and/or control objects
-    2. Call `steer()` once to apply all controls in order (structural → state → input → output)
+    2. Call `steer()` once to apply all controls in order (structural → input → state → output)
     3. Use `generate()` or `generate_text()` for inference with steering applied
 
     Args:
@@ -73,8 +73,8 @@ class SteeringPipeline:
     tokenizer: AutoTokenizer | None = field(init=False, default=None)
 
     structural_control: StructuralControl = field(init=False)
-    state_control: StateControl = field(init=False)
     input_control: InputControl = field(init=False)
+    state_control: StateControl = field(init=False)
     output_control: OutputControl = field(init=False)
 
     _is_steered: bool = field(default=False, init=False, repr=False)
@@ -84,8 +84,8 @@ class SteeringPipeline:
         # sort/validate the supplied steering methods
         controls_merged = merge_controls(self.controls)
         self.structural_control = controls_merged["structural_control"]
-        self.state_control = controls_merged["state_control"]
         self.input_control = controls_merged["input_control"]
+        self.state_control = controls_merged["state_control"]
         self.output_control = controls_merged["output_control"]
 
         # load HF artifacts
@@ -125,15 +125,31 @@ class SteeringPipeline:
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
         # late‑inject tokenizer into controls that accept it
-        controls_iter = (self.structural_control, self.state_control, self.input_control, self.output_control)
+        controls_iter = (self.structural_control, self.input_control, self.state_control, self.output_control)
         for control in controls_iter:
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer") is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
+    @property
+    def supports_batching(self) -> bool:
+        """Return True if all enabled controls in this pipeline are batch-safe.
+        """
+        controls = (
+            self.structural_control,
+            self.input_control,
+            self.state_control,
+            self.output_control,
+        )
+        return all(
+            getattr(control, "supports_batching", False)
+            for control in controls
+            if getattr(control, "enabled", True)
+        )
+
     def steer(self, **steer_kwargs) -> None:
         """Apply all steering controls to the model in place.
 
-        Executes each control's steer() method in a fixed bottom-up order: structural -> state -> input -> output.
+        Executes each control's steer() method in a fixed bottom-up order: structural -> input -> state -> output.
         This ensures that higher-level controls always see the final configured model from lower levels.
 
         If any control's steer() method returns a PreTrainedModel instance, it replaces the current model for subsequent
@@ -148,8 +164,8 @@ class SteeringPipeline:
         if self._is_steered:
             return
 
-        # steer each control (bottom-up order)
-        for control in (self.structural_control, self.state_control, self.input_control, self.output_control):
+        # steer each control (bottom-up order: structural -> input -> state -> output)
+        for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
                 maybe_new_model = steer_fn(self.model, tokenizer=self.tokenizer, **steer_kwargs)
@@ -175,12 +191,86 @@ class SteeringPipeline:
             except Exception as exception:
                 raise RuntimeError("Failed to resolve tokenizer post‑steer.") from exception
 
-        for control in (self.input_control, self.structural_control, self.state_control, self.output_control):
+        for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer", None) is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
-        # return steered steerer
+        # return steered pipeline
         self._is_steered = True
+
+    def _prepare_inputs(
+            self,
+            input_ids: list[int] | torch.LongTensor,
+            attention_mask: torch.Tensor | None,
+            runtime_kwargs: dict | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Apply input control and normalize input tensors.
+
+        Transforms the prompt via the input control's adapter and ensures both input_ids and attention_mask are
+        properly shaped tensors on the correct device.
+
+        Args:
+            input_ids: Input token IDs as list or tensor [seq_len] or [batch, seq_len]
+            attention_mask: Optional attention mask matching input_ids shape
+            runtime_kwargs: Per-call parameters for input control
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: (steered_input_ids, attention_mask), both as 2D tensors on model device
+        """
+        runtime_kwargs = runtime_kwargs or {}
+        device = self.model.device
+
+        # apply input control adapter
+        adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
+        steered_input_ids = adapter(input_ids, runtime_kwargs)
+
+        # normalize input_ids to 2D tensor
+        if isinstance(steered_input_ids, list):
+            steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
+        if steered_input_ids.ndim == 1:
+            steered_input_ids = steered_input_ids.unsqueeze(0)
+        steered_input_ids = steered_input_ids.to(device)
+
+        # normalize attention_mask
+        if attention_mask is not None:
+            if isinstance(attention_mask, list):
+                attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
+            if attention_mask.ndim == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+            # rebuild if length mismatch after input control transformation
+            if attention_mask.shape[-1] != steered_input_ids.shape[-1]:
+                attention_mask = None
+
+        if attention_mask is None:
+            if self.tokenizer is not None and self.tokenizer.pad_token_id is not None:
+                attention_mask = (steered_input_ids != self.tokenizer.pad_token_id).long()
+            else:
+                attention_mask = torch.ones_like(steered_input_ids, dtype=torch.long)
+
+        attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=device)
+
+        return steered_input_ids, attention_mask
+
+    def _setup_state_control(
+            self,
+            steered_input_ids: torch.Tensor,
+            runtime_kwargs: dict | None,
+            **kwargs,
+    ) -> None:
+        """Configure state control hooks for the current forward/generate call.
+
+        Prepares the state control by computing hooks based on the (already transformed) input and setting up the model
+        reference for the context manager.
+
+        Args:
+            steered_input_ids: Input token IDs after input control transformation
+            runtime_kwargs: Per-call parameters for state control
+            **kwargs: Additional arguments passed to get_hooks()
+        """
+        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **kwargs)
+        self.state_control.set_hooks(hooks)
+        self.state_control._model_ref = self.model
+        self.state_control.reset()
 
     def generate(
             self,
@@ -213,43 +303,19 @@ class SteeringPipeline:
             raise RuntimeError("Must call `.steer()` before `.generate()`.")
 
         runtime_kwargs = runtime_kwargs or {}
-
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
         # input control
-        adapter = self.input_control.get_prompt_adapter()
-        steered_input_ids = adapter(input_ids, runtime_kwargs)
-        if isinstance(steered_input_ids, list):
-            steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
-        if steered_input_ids.ndim == 1:
-            steered_input_ids = steered_input_ids.unsqueeze(0)
-        steered_input_ids = steered_input_ids.to(self.model.device)
-
-        # attention_mask (reshape and move to device)
-        if attention_mask is not None:
-            if isinstance(attention_mask, list):
-                attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
-            if attention_mask.ndim == 1:
-                attention_mask = attention_mask.unsqueeze(0)
-            # if lengths mismatch, rebuild
-            if attention_mask.shape[-1] != steered_input_ids.shape[-1]:
-                attention_mask = None  # force rebuild below
-
-        if attention_mask is None:
-            if self.tokenizer is not None and self.tokenizer.pad_token_id is not None:
-                attention_mask = (steered_input_ids != self.tokenizer.pad_token_id).long()
-            else:
-                attention_mask = torch.ones_like(steered_input_ids, dtype=torch.long)
-
-        attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=steered_input_ids.device)
+        steered_input_ids, attention_mask = self._prepare_inputs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            runtime_kwargs=runtime_kwargs,
+        )
 
         # state control
-        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **gen_kwargs)
-        self.state_control.set_hooks(hooks)
-        self.state_control._model_ref = self.model
+        self._setup_state_control(steered_input_ids, runtime_kwargs, **gen_kwargs)
 
         # output control
-        self.state_control.reset()
         with self.state_control:  # hooks live only for duration of decoding
             output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
@@ -280,3 +346,112 @@ class SteeringPipeline:
         if ids.ndim == 1:
             return self.tokenizer.decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         return self.tokenizer.batch_decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+
+    def compute_logprobs(
+            self,
+            input_ids: list[int] | torch.LongTensor,
+            attention_mask: torch.Tensor | None = None,
+            ref_output_ids: list[int] | torch.LongTensor = None,
+            runtime_kwargs: dict | None = None,
+            **forward_kwargs: Any,
+    ) -> torch.Tensor:
+        """Compute per-token log-probabilities of ref_output_ids with structural, input, and state steering controls
+        applied. Note that output controls are *not* applied since they concern scoring, not generation.
+
+        The strategy below uses teacher forcing, computes log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
+        token in the reference sequence.
+
+        Args:
+            input_ids: Input token IDs as list or tensor [seq_len] or [batch, seq_len]
+            attention_mask: Optional attention mask matching input_ids shape
+            ref_output_ids: Reference tokens to score [ref_len] or [batch, ref_len]
+            runtime_kwargs: Per-call parameters for controls (e.g., {"substrings": [...]})
+            **forward_kwargs: Additional arguments passed to model forward pass
+
+        Returns:
+            torch.Tensor: Log probabilities of shape [batch, ref_len] for decoder-only models,
+                or [batch, ref_len - 1] for encoder-decoder models (excludes first decoder token)
+
+        Raises:
+            RuntimeError: If steer() has not been called
+            ValueError: If ref_output_ids is None
+        """
+        if not self._is_steered:
+            raise RuntimeError("Must call `.steer()` before `.compute_logprobs()`.")
+        if ref_output_ids is None:
+            raise ValueError("`ref_output_ids` is required for `compute_logprobs()`.")
+
+        runtime_kwargs = runtime_kwargs or {}
+        device = self.model.device
+
+        # input control
+        steered_input_ids, attention_mask = self._prepare_inputs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            runtime_kwargs=runtime_kwargs,
+        )
+
+        # normalize ref_output_ids
+        if isinstance(ref_output_ids, list):
+            ref_output_ids = torch.tensor(ref_output_ids, dtype=torch.long)
+        if ref_output_ids.ndim == 1:
+            ref_output_ids = ref_output_ids.unsqueeze(0)
+        ref_output_ids = ref_output_ids.to(device)
+
+        batch_size = steered_input_ids.size(0)
+        ref_len = ref_output_ids.size(1)
+
+        # broadcast single ref sequence across batch
+        if ref_output_ids.size(0) == 1 and batch_size > 1:
+            ref_output_ids = ref_output_ids.expand(batch_size, -1)
+
+        if ref_len == 0:
+            return torch.zeros((batch_size, 0), device=device, dtype=torch.float32)
+
+        # state control
+        self._setup_state_control(steered_input_ids, runtime_kwargs, **forward_kwargs)
+
+        # forward pass under state control context
+        is_encoder_decoder = getattr(self.model.config, "is_encoder_decoder", False)
+
+        with self.state_control:
+            with torch.no_grad():
+                if is_encoder_decoder:
+                    outputs = self.model(
+                        input_ids=steered_input_ids,
+                        attention_mask=attention_mask,
+                        decoder_input_ids=ref_output_ids,
+                        **forward_kwargs,
+                    )
+                    # predicts ref[t+1] from ref[0:t]; logits[:, t, :] -> ref[t+1]
+                    # logits[:, :-1, :] aligns with targets ref[:, 1:]
+                    logits = outputs.logits[:, :-1, :]
+                    target_ids = ref_output_ids[:, 1:]
+                else:
+                    # concatenate input + ref for causal teacher forcing
+                    combined_ids = torch.cat([steered_input_ids, ref_output_ids], dim=1)
+                    combined_mask = torch.cat([
+                        attention_mask,
+                        torch.ones(batch_size, ref_len, device=device, dtype=attention_mask.dtype),
+                    ], dim=1)
+
+                    outputs = self.model(
+                        input_ids=combined_ids,
+                        attention_mask=combined_mask,
+                        **forward_kwargs,
+                    )
+
+                    # logits at [input_len - 1] predicts ref[0]
+                    # logits at [input_len + ref_len - 2] predicts ref[ref_len - 1]
+                    input_len = steered_input_ids.size(1)
+                    logits = outputs.logits[:, input_len - 1: input_len + ref_len - 1, :]
+                    target_ids = ref_output_ids
+
+        # compute logprobs
+        logprobs = torch.log_softmax(logits, dim=-1)
+        token_logprobs = logprobs.gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        ).squeeze(-1)
+
+        return token_logprobs
