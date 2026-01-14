@@ -270,8 +270,11 @@ The benchmark can then be run as usual to generate the profiles. We direct the r
 
 ## Benchmark with variable controls
 
-To study model behavior as control parameters change, the toolkit uses the `ControlSpec` class. Static parameters are
-specified in the `params` dict, whereas variable parameters are specified in the `vars` dict.
+Both of the above benchmark modalities are run using fixed steering controls, i.e., controls that are initialized with
+fixed parameters outside of the benchmark object. To study model behavior as control parameters change, the toolkit
+allows for specification of variable controls via the `ControlSpec` class. Static parameters are specified in the
+`params` dict, whereas variable parameters are specified in the `vars` dict. An example for the few-shot control is
+below.
 
 ```python
 few_shot_spec = ControlSpec(
@@ -280,55 +283,24 @@ few_shot_spec = ControlSpec(
         "selector_name": "random",
         "positive_example_pool": positive_pool,
         "negative_example_pool": negative_pool,
-        "k_negative": 0
     },
     vars={
+        "k_negative": [5, 10, 20],
         "k_positive": [5, 10, 20],
     },
     name="few_shot",
 )
 ```
-
-fixed pools, zero negative examples
-
-Sweep positive examples over 5, 10, 20
-
-The above can then be passed directly into the benchmark class and
-
-```python
-vars={
-    "beta": [0.05, 0.10],
-    "r": [8, 16],
-}
-```
-As a more constrained collection:
-```python
-vars=[
-    {"beta": 0.05, "r": 8},
-    {"beta": 0.10, "r": 16},
-    {"beta": 0.10, "r": 32},
-]
-```
-Or as a functional relationship:
-```python
-vars=lambda context: (
-    {"beta": base_beta * scale, "r": int(8 * scale)}
-    for scale in [0.5, 1.0, 2.0]
-    for base_beta in [0.05]
-)
-```
-
-Additionally, num_trials
-
-
+The above specifies a fixed example selector and example pools (in `params`) but allows for the number of positive and
+negative examples to be swept across a range (as specified in `vars`). A steering pipeline can then be defined using
+the `ControlSpec` instance.
 ```python
 bench = Benchmark(
     use_case=commonsense_mcqa,
     base_model_name_or_path="Qwen/Qwen2.5-1.5B-Instruct",
     steering_pipelines={
         "baseline": [],
-        "few_shot": [few_shot_spec],
-        "dpo_lora": [dpo_lora_spec],
+        "few_shot_spec": [few_shot_spec],
     },
     gen_kwargs={
         "max_new_tokens": 300,
@@ -341,5 +313,36 @@ bench = Benchmark(
 
 profiles = bench.run()
 ```
+Behind the scenes, the benchmark enumerates over the elements of `vars` and constructs individual controls for the
+evaluation. The optional `num_trials` parameters in the benchmark allows for multiple trials to be run per
+configuration. Each trial reuses the same steered model and re-samples any generate-time randomness (e.g., few-shot
+selection, sampling-based decoding, etc.).
 
-Both types of benchmarks can accpted control specs
+Lastly, note that the `ControlSpec` method allows for `vars` to be specified in three ways. First, individual ranges for
+each control parameter (as done above) enumerates all combinations of parameters. Second, specific parameter
+combinations can be specified via a list of dicts.
+```python
+vars=[
+    {"k_negative": 5, "k_positive": 5},
+    {"k_negative": 10, "k_positive": 10},
+    {"k_negative": 20, "k_positive": 20},
+]
+```
+Lastly, more complex (functional) relationships can be encoded via a lambda function.
+```python
+vars=lambda context: (
+    {
+        "k_negative": kn,
+        "k_positive": kp,
+    }
+    for total in [0, 2, 4, 8, 16, 32]  # regimes
+    if total <= context["budget"]
+    for kn, kp in [(total // 2, total - total // 2)]
+)
+```
+where the above specifies example counts across a small set of log-scaled regimes (including zero-shot), filtered by a
+total example budget, and split evenly between positive and negative examples.
+
+To deal with the potentially large number of elements in `vars`, the `ControlSpec` class also allows for specification
+of `search_strategy="random"`, along with `num_samples`, to subsample configurations from the `vars` space. This is an
+alternative to the default enumeration behavior via `search_strategy="grid"`.
