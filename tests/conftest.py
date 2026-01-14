@@ -255,11 +255,13 @@ class MockInputControl(InputControl):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._adapter_call_count = 0
+        self._runtime_kwargs_received = None
 
     def get_prompt_adapter(self, runtime_kwargs: dict | None = None):
+        self._runtime_kwargs_received = runtime_kwargs
+
         def adapter(input_ids, rt_kwargs):
             self._adapter_call_count += 1
-            # In real implementation, would modify input_ids based on prefix/suffix
             return input_ids
 
         return adapter
@@ -539,6 +541,8 @@ def create_mock_model(device: str = "cpu") -> MagicMock:
     model.config = MagicMock()
     model.config.num_attention_heads = 8
     model.config.num_hidden_layers = 12
+    model.config.is_encoder_decoder = False
+    model.config.vocab_size = 1000
 
     def mock_generate(input_ids, attention_mask=None, **kwargs):
         batch_size = input_ids.shape[0]
@@ -547,6 +551,21 @@ def create_mock_model(device: str = "cpu") -> MagicMock:
         return torch.randint(0, 1000, (batch_size, seq_len + new_tokens))
 
     model.generate = MagicMock(side_effect=mock_generate)
+
+    def mock_forward(*args, input_ids=None, attention_mask=None, **kwargs):
+        # Handle positional arg case
+        if args and input_ids is None:
+            input_ids = args[0]
+        batch_size = input_ids.size(0)
+        seq_len = input_ids.size(1)
+        vocab_size = model.config.vocab_size
+
+        outputs = MagicMock()
+        outputs.logits = torch.randn(batch_size, seq_len, vocab_size)
+        return outputs
+
+    model.side_effect = mock_forward
+
     model.parameters = MagicMock(return_value=iter([torch.tensor([1.0])]))
     return model
 

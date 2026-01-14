@@ -7,6 +7,7 @@ Tests cover:
 - Control merging and assignment
 - Steer method behavior
 - Generate method behavior
+- Compute logprobs method behavior
 - Runtime kwargs handling
 - Supports batching property
 - Error handling
@@ -57,8 +58,8 @@ class MockSteeringPipeline:
         # Merge controls
         controls_merged = merge_controls(self.controls)
         self.structural_control = controls_merged["structural_control"]
-        self.state_control = controls_merged["state_control"]
         self.input_control = controls_merged["input_control"]
+        self.state_control = controls_merged["state_control"]
         self.output_control = controls_merged["output_control"]
 
         # Mock model and tokenizer
@@ -75,8 +76,8 @@ class MockSteeringPipeline:
         """Return True if all enabled controls support batching."""
         controls = (
             self.structural_control,
-            self.state_control,
             self.input_control,
+            self.state_control,
             self.output_control,
         )
         return all(
@@ -92,8 +93,8 @@ class MockSteeringPipeline:
 
         for control in (
             self.structural_control,
-            self.state_control,
             self.input_control,
+            self.state_control,
             self.output_control
         ):
             steer_fn = getattr(control, "steer", None)
@@ -106,6 +107,58 @@ class MockSteeringPipeline:
             raise RuntimeError("No model available after steering.")
 
         self._is_steered = True
+
+    def _prepare_inputs(
+            self,
+            input_ids: list | torch.Tensor,
+            attention_mask: torch.Tensor | None,
+            runtime_kwargs: dict | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Apply input control and normalize input tensors."""
+        runtime_kwargs = runtime_kwargs or {}
+        device = self.model.device
+
+        # Apply input control adapter
+        adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
+        steered_input_ids = adapter(input_ids, runtime_kwargs)
+
+        # Normalize input_ids to 2D tensor
+        if isinstance(steered_input_ids, list):
+            steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
+        if steered_input_ids.ndim == 1:
+            steered_input_ids = steered_input_ids.unsqueeze(0)
+        steered_input_ids = steered_input_ids.to(device)
+
+        # Normalize attention_mask
+        if attention_mask is not None:
+            if isinstance(attention_mask, list):
+                attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
+            if attention_mask.ndim == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+            if attention_mask.shape[-1] != steered_input_ids.shape[-1]:
+                attention_mask = None
+
+        if attention_mask is None:
+            if self.tokenizer is not None and self.tokenizer.pad_token_id is not None:
+                attention_mask = (steered_input_ids != self.tokenizer.pad_token_id).long()
+            else:
+                attention_mask = torch.ones_like(steered_input_ids, dtype=torch.long)
+
+        attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=device)
+
+        return steered_input_ids, attention_mask
+
+    def _setup_state_control(
+            self,
+            steered_input_ids: torch.Tensor,
+            runtime_kwargs: dict | None,
+            **kwargs,
+    ) -> None:
+        """Configure state control hooks for the current forward/generate call."""
+        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **kwargs)
+        self.state_control.set_hooks(hooks)
+        self.state_control._model_ref = self.model
+        self.state_control.reset()
 
     def generate(
         self,
@@ -120,29 +173,17 @@ class MockSteeringPipeline:
 
         runtime_kwargs = runtime_kwargs or {}
 
-        # Ensure tensor format
-        if isinstance(input_ids, list):
-            input_ids = torch.tensor(input_ids, dtype=torch.long)
-        if input_ids.ndim == 1:
-            input_ids = input_ids.unsqueeze(0)
+        # Input control
+        steered_input_ids, attention_mask = self._prepare_inputs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            runtime_kwargs=runtime_kwargs,
+        )
 
-        # Build attention mask if needed
-        if attention_mask is None:
-            attention_mask = torch.ones_like(input_ids)
-        elif attention_mask.ndim == 1:
-            attention_mask = attention_mask.unsqueeze(0)
-
-        # Input control: adapt prompt
-        adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
-        steered_input_ids = adapter(input_ids, runtime_kwargs)
-
-        # State control: get and set hooks
-        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **gen_kwargs)
-        self.state_control.set_hooks(hooks)
-        self.state_control._model_ref = self.model
+        # State control
+        self._setup_state_control(steered_input_ids, runtime_kwargs, **gen_kwargs)
 
         # Output control: generate with hooks active
-        self.state_control.reset()
         with self.state_control:
             output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
@@ -158,6 +199,90 @@ class MockSteeringPipeline:
         """Generate text and decode to string(s)."""
         ids = self.generate(*args, **kwargs)
         return self.tokenizer.batch_decode(ids, skip_special_tokens=True)
+
+    def compute_logprobs(
+            self,
+            input_ids: list | torch.Tensor,
+            attention_mask: torch.Tensor | None = None,
+            ref_output_ids: list | torch.Tensor = None,
+            runtime_kwargs: dict | None = None,
+            **forward_kwargs,
+    ) -> torch.Tensor:
+        """Compute per-token log-probabilities of ref_output_ids."""
+        if not self._is_steered:
+            raise RuntimeError("Must call `.steer()` before `.compute_logprobs()`.")
+        if ref_output_ids is None:
+            raise ValueError("`ref_output_ids` is required for `compute_logprobs()`.")
+
+        runtime_kwargs = runtime_kwargs or {}
+        device = self.model.device
+
+        # Input Control: adapt the prompt
+        steered_input_ids, attention_mask = self._prepare_inputs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            runtime_kwargs=runtime_kwargs,
+        )
+
+        # Normalize ref_output_ids
+        if isinstance(ref_output_ids, list):
+            ref_output_ids = torch.tensor(ref_output_ids, dtype=torch.long)
+        if ref_output_ids.ndim == 1:
+            ref_output_ids = ref_output_ids.unsqueeze(0)
+        ref_output_ids = ref_output_ids.to(device)
+
+        batch_size = steered_input_ids.size(0)
+        ref_len = ref_output_ids.size(1)
+
+        # Broadcast single ref sequence across batch
+        if ref_output_ids.size(0) == 1 and batch_size > 1:
+            ref_output_ids = ref_output_ids.expand(batch_size, -1)
+
+        if ref_len == 0:
+            return torch.zeros((batch_size, 0), device=device, dtype=torch.float32)
+
+        # State Control: register hooks
+        self._setup_state_control(steered_input_ids, runtime_kwargs, **forward_kwargs)
+
+        # Forward pass under state control context
+        is_encoder_decoder = getattr(self.model.config, "is_encoder_decoder", False)
+
+        with self.state_control:
+            with torch.no_grad():
+                if is_encoder_decoder:
+                    outputs = self.model(
+                        input_ids=steered_input_ids,
+                        attention_mask=attention_mask,
+                        decoder_input_ids=ref_output_ids,
+                        **forward_kwargs,
+                    )
+                    logits = outputs.logits[:, :-1, :]
+                    target_ids = ref_output_ids[:, 1:]
+                else:
+                    combined_ids = torch.cat([steered_input_ids, ref_output_ids], dim=1)
+                    combined_mask = torch.cat([
+                        attention_mask,
+                        torch.ones(batch_size, ref_len, device=device, dtype=attention_mask.dtype),
+                    ], dim=1)
+
+                    outputs = self.model(
+                        input_ids=combined_ids,
+                        attention_mask=combined_mask,
+                        **forward_kwargs,
+                    )
+
+                    input_len = steered_input_ids.size(1)
+                    logits = outputs.logits[:, input_len - 1: input_len + ref_len - 1, :]
+                    target_ids = ref_output_ids
+
+        # Compute logprobs via gather
+        logprobs = torch.log_softmax(logits, dim=-1)
+        token_logprobs = logprobs.gather(
+            dim=-1,
+            index=target_ids.unsqueeze(-1),
+        ).squeeze(-1)
+
+        return token_logprobs
 
 
 # Pipeline Initialization Tests
@@ -311,8 +436,8 @@ class TestPipelineSteer:
 
         pipeline.steer()
 
-        # Order should be: structural -> state -> input -> output
-        assert call_order == ["structural", "state", "input", "output"]
+        # Order should be: structural -> input -> state -> output
+        assert call_order == ["structural", "input", "state", "output"]
 
     def test_steer_passes_kwargs(self):
         """Test that steer() passes kwargs to controls."""
@@ -452,6 +577,339 @@ class TestPipelineGenerate:
         pipeline.generate(torch.tensor([[1, 2, 3]]))
 
         assert output_ctrl._generate_called
+
+
+# Pipeline Compute Logprobs Tests
+class TestPipelineComputeLogprobs:
+    """Tests for SteeringPipeline.compute_logprobs() method."""
+
+    def test_compute_logprobs_requires_steer(self):
+        """Test that compute_logprobs() fails without prior steer()."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+
+        with pytest.raises(RuntimeError, match="steer"):
+            pipeline.compute_logprobs(
+                input_ids=torch.tensor([[1, 2, 3]]),
+                ref_output_ids=torch.tensor([[4, 5, 6]]),
+            )
+
+    def test_compute_logprobs_requires_ref_output_ids(self):
+        """Test that compute_logprobs() fails without ref_output_ids."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        with pytest.raises(ValueError, match="ref_output_ids"):
+            pipeline.compute_logprobs(
+                input_ids=torch.tensor([[1, 2, 3]]),
+                ref_output_ids=None,
+            )
+
+    def test_compute_logprobs_basic(self):
+        """Test basic log probability computation."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        input_ids = torch.tensor([[1, 2, 3]])
+        ref_output_ids = torch.tensor([[4, 5, 6]])
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=input_ids,
+            ref_output_ids=ref_output_ids,
+        )
+
+        assert logprobs is not None
+        assert isinstance(logprobs, torch.Tensor)
+        assert logprobs.shape == (1, 3)  # batch=1, ref_len=3
+
+    def test_compute_logprobs_with_list_input_ids(self):
+        """Test compute_logprobs with list input_ids."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=[1, 2, 3],
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        assert logprobs is not None
+        assert logprobs.shape == (1, 3)
+
+    def test_compute_logprobs_with_list_ref_output_ids(self):
+        """Test compute_logprobs with list ref_output_ids."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=[4, 5, 6],
+        )
+
+        assert logprobs is not None
+        assert logprobs.shape == (1, 3)
+
+    def test_compute_logprobs_with_1d_input_ids(self):
+        """Test compute_logprobs with 1D input_ids tensor."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([1, 2, 3]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        assert logprobs is not None
+        assert logprobs.shape == (1, 3)
+
+    def test_compute_logprobs_with_1d_ref_output_ids(self):
+        """Test compute_logprobs with 1D ref_output_ids tensor."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([4, 5, 6]),
+        )
+
+        assert logprobs is not None
+        assert logprobs.shape == (1, 3)
+
+    def test_compute_logprobs_empty_ref_output_ids(self):
+        """Test compute_logprobs with empty ref_output_ids."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[]]),
+        )
+
+        assert logprobs.shape == (1, 0)
+
+    def test_compute_logprobs_broadcasts_ref_output_ids(self):
+        """Test that single ref_output_ids broadcasts across batch."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        input_ids = torch.tensor([[1, 2, 3], [4, 5, 6]])  # batch=2
+        ref_output_ids = torch.tensor([[7, 8]])  # batch=1
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=input_ids,
+            ref_output_ids=ref_output_ids,
+        )
+
+        assert logprobs.shape == (2, 2)  # batch=2, ref_len=2
+
+    def test_compute_logprobs_uses_input_control(self):
+        """Test that compute_logprobs applies input control."""
+        input_ctrl = MockInputControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[input_ctrl],
+        )
+        pipeline.steer()
+
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        assert input_ctrl._adapter_call_count > 0
+
+    def test_compute_logprobs_uses_state_control(self):
+        """Test that compute_logprobs applies state control hooks."""
+        state_ctrl = MockStateControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[state_ctrl],
+        )
+        pipeline.steer()
+
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        assert state_ctrl._hooks_created
+
+    def test_compute_logprobs_passes_runtime_kwargs_to_input_control(self):
+        """Test that runtime_kwargs are passed to input control."""
+        input_ctrl = MockInputControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[input_ctrl],
+        )
+        pipeline.steer()
+
+        runtime_kwargs = {"key": "value"}
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+            runtime_kwargs=runtime_kwargs,
+        )
+
+        assert input_ctrl._runtime_kwargs_received == runtime_kwargs
+
+    def test_compute_logprobs_passes_runtime_kwargs_to_state_control(self):
+        """Test that runtime_kwargs are passed to state control."""
+        state_ctrl = MockStateControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[state_ctrl],
+        )
+        pipeline.steer()
+
+        runtime_kwargs = {"substrings": ["test"]}
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+            runtime_kwargs=runtime_kwargs,
+        )
+
+        assert state_ctrl._runtime_kwargs_received == runtime_kwargs
+
+    def test_compute_logprobs_output_shape_matches_ref_length(self):
+        """Test that output shape matches reference sequence length."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        # Various ref lengths
+        for ref_len in [1, 5, 10, 20]:
+            ref_output_ids = torch.tensor([[i for i in range(ref_len)]])
+            logprobs = pipeline.compute_logprobs(
+                input_ids=torch.tensor([[1, 2, 3]]),
+                ref_output_ids=ref_output_ids,
+            )
+            assert logprobs.shape == (1, ref_len)
+
+    def test_compute_logprobs_output_values_are_negative(self):
+        """Test that log probabilities are negative (or zero for perfect predictions)."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        # logprobs should be <= 0
+        assert (logprobs <= 0).all()
+
+    def test_compute_logprobs_with_attention_mask(self):
+        """Test compute_logprobs with explicit attention mask."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        input_ids = torch.tensor([[0, 1, 2, 3]])  # 0 might be pad
+        attention_mask = torch.tensor([[0, 1, 1, 1]])  # mask first token
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            ref_output_ids=torch.tensor([[4, 5]]),
+        )
+
+        assert logprobs is not None
+        assert logprobs.shape == (1, 2)
+
+    def test_compute_logprobs_with_batched_inputs(self):
+        """Test compute_logprobs with batched inputs."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        batch_size = 4
+        input_ids = torch.tensor([[1, 2, 3]] * batch_size)
+        ref_output_ids = torch.tensor([[4, 5, 6]] * batch_size)
+
+        logprobs = pipeline.compute_logprobs(
+            input_ids=input_ids,
+            ref_output_ids=ref_output_ids,
+        )
+
+        assert logprobs.shape == (batch_size, 3)
+
+    def test_compute_logprobs_does_not_call_output_control(self):
+        """Test that compute_logprobs does NOT use output control."""
+        output_ctrl = MockOutputControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[output_ctrl],
+        )
+        pipeline.steer()
+
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        # Output control's generate should NOT be called
+        assert not output_ctrl._generate_called
+
+    def test_compute_logprobs_passes_forward_kwargs(self):
+        """Test that forward_kwargs are passed to model forward."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[],
+        )
+        pipeline.steer()
+
+        # Track calls by wrapping the side_effect
+        forward_calls = []
+        original_side_effect = pipeline.model.side_effect
+
+        def tracking_call(*args, **kwargs):
+            forward_calls.append(kwargs)
+            return original_side_effect(*args, **kwargs)
+
+        pipeline.model.side_effect = tracking_call
+
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+            output_hidden_states=True,
+        )
+
+        assert len(forward_calls) > 0
+        assert forward_calls[0].get("output_hidden_states") is True
 
 
 # Supports Batching Property Tests
@@ -618,3 +1076,45 @@ class TestPipelineIntegration:
         # Second call with different kwargs
         pipeline.generate(torch.tensor([[2]]), runtime_kwargs={"call": 2})
         assert state_ctrl._runtime_kwargs_received == {"call": 2}
+
+    def test_generate_and_compute_logprobs_same_pipeline(self):
+        """Test using both generate and compute_logprobs on same pipeline."""
+        state_ctrl = MockStateControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[state_ctrl],
+        )
+        pipeline.steer()
+
+        # Generate first
+        output = pipeline.generate(
+            torch.tensor([[1, 2, 3]]),
+            runtime_kwargs={"mode": "generate"},
+        )
+        assert output is not None
+
+        # Then compute logprobs
+        logprobs = pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+            runtime_kwargs={"mode": "logprobs"},
+        )
+        assert logprobs is not None
+        assert state_ctrl._runtime_kwargs_received == {"mode": "logprobs"}
+
+    def test_multiple_compute_logprobs_calls(self):
+        """Test multiple compute_logprobs calls with same pipeline."""
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[MockStateControl()],
+        )
+        pipeline.steer()
+
+        for i in range(5):
+            logprobs = pipeline.compute_logprobs(
+                input_ids=torch.tensor([[1, 2, 3]]),
+                ref_output_ids=torch.tensor([[4, 5, 6]]),
+                runtime_kwargs={"iteration": i},
+            )
+            assert logprobs is not None
+            assert logprobs.shape == (1, 3)
