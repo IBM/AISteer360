@@ -189,7 +189,7 @@ profiles = benchmark.run()
 benchmark.export(profiles, save_dir="./profiles/")
 ```
 A complete working example of the `CommonsenseMCQA` benchmark can be found in the
-[example notebook](../notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb).
+[example notebook](../notebooks/benchmarks/commonsense_mcqa.ipynb).
 
 
 ## Benchmark with inference-time arguments
@@ -266,7 +266,7 @@ benchmark = Benchmark(
 )
 ```
 The benchmark can then be run as usual to generate the profiles. We direct the reader to the
-[notebook](../notebooks/benchmarks/instruction_following/instruction_following.ipynb) for the full implementation.
+[notebook](../notebooks/benchmarks/instruction_following.ipynb) for the full implementation.
 
 ## Benchmark with variable controls
 

@@ -30,6 +30,10 @@ nav:
     - Add a metric: "tutorials/add_new_metric.md"
     - Add a use case: "tutorials/add_new_use_case.md"
     - Add a benchmark: "tutorials/add_new_benchmark.md"
+    - Add a new input control: "tutorials/add_method_by_category/add_new_input_control.md"
+    - Add a new output control: "tutorials/add_method_by_category/add_new_output_control.md"
+    - Add a new state control: "tutorials/add_method_by_category/add_new_state_control.md"
+    - Add a new structural control: "tutorials/add_method_by_category/add_new_structural_control.md"
   - Notebooks:
     - Notebooks: notebooks/index.md
     - Controls:
@@ -47,8 +51,8 @@ nav:
         - SASA: "notebooks/controls/sasa.ipynb"
         - ThinkingIntervention: "notebooks/controls/thinking_intervention.ipynb"
     - Benchmarks:
-      - Commonsense MCQA: "notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb"
-      - Instruction following: "notebooks/benchmarks/instruction_following/instruction_following.ipynb"
+      - Commonsense MCQA: "notebooks/benchmarks/commonsense_mcqa.ipynb"
+      - Instruction following: "notebooks/benchmarks/instruction_following.ipynb"
     - "notebooks/images/"
 #  - Developer notes:
 #      - Developer notes: dev_notes/index.md

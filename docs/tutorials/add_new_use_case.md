@@ -208,7 +208,7 @@ steering pipeline, and thus the "model" object passed into `generate` is referen
 `model_or_pipeline`. In addition, the `generate` method requires an associated `tokenizer` and
 (optionally) any `gen_kwargs` and `runtime_overrides`. The current `CommonsenseMCQA` use case does not make use of any
 `runtime_overrides` (since none of the studied controls in the associated benchmark require inference time arguments);
-please see the [instruction following benchmark notebook](../notebooks/benchmarks/instruction_following/instruction_following.ipynb)
+please see the [instruction following benchmark notebook](../notebooks/benchmarks/instruction_following.ipynb)
 for an example of how these overrides are defined and used.
 
 The first step in defining the `generate` method is to construct the prompt data. For the example MCQA task, our goal is
@@ -274,4 +274,4 @@ def export(self, profiles: dict[str, Any], save_dir) -> None:
 
 For a complete example of the `CommonsenseMCQA` use case, please see the implementation located at
 `aisteer360/evaluation/use_cases/commonsense_mcqa/use_case.py`. For instructions on how to build an associated benchmark, please
-see the [tutorial](./add_new_benchmark.md) and the [notebook](../notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb).
+see the [tutorial](./add_new_benchmark.md) and the [notebook](../notebooks/benchmarks/commonsense_mcqa.ipynb).
