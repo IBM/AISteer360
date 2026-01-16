@@ -64,7 +64,7 @@ from wrappers), as well as implementations of benchmarks.
     This benchmark evaluates how well a steered model (under `FewShot` and `LoRA`) performs compared to a base model on
     answering commonsense multiple-choice questions.
 
-    [:octicons-arrow-right-24: See the benchmark](./benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb)
+    [:octicons-arrow-right-24: See the benchmark](./benchmarks/commonsense_mcqa.ipynb)
 
 -   :material-list-box-outline:  __Instruction following__
 
@@ -73,6 +73,6 @@ from wrappers), as well as implementations of benchmarks.
     This benchmark evaluates a steered model's ability to follow instructions. We compare the performance of the
     baseline model to the steered model under `PASTA`, `DeAL`, and `ThinkingIntervention`.
 
-    [:octicons-arrow-right-24: See the benchmark](./benchmarks/instruction_following/instruction_following.ipynb)
+    [:octicons-arrow-right-24: See the benchmark](./benchmarks/instruction_following.ipynb)
 
 </div>
