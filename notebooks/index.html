@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://ibm.github.io/AISteer360/notebooks/">
       
       
-        <link rel="prev" href="../tutorials/add_new_benchmark/">
+        <link rel="prev" href="../tutorials/add_method_by_category/add_new_structural_control/">
       
       
         <link rel="next" href="controls/few_shot/">
@@ -635,6 +635,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -762,6 +770,98 @@
   
   <span class="md-ellipsis">
     Add a benchmark
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/add_method_by_category/add_new_input_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new input control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/add_method_by_category/add_new_output_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new output control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/add_method_by_category/add_new_state_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new state control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/add_method_by_category/add_new_structural_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new structural control
     
   </span>
   
@@ -1406,7 +1506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb" class="md-nav__link">
+      <a href="benchmarks/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1429,7 +1529,7 @@
   
   
     <li class="md-nav__item">
-      <a href="benchmarks/instruction_following/instruction_following.ipynb" class="md-nav__link">
+      <a href="benchmarks/instruction_following/" class="md-nav__link">
         
   
   
@@ -2678,14 +2778,14 @@ from wrappers), as well as implementations of benchmarks.</p>
 <hr />
 <p>This benchmark evaluates how well a steered model (under <code>FewShot</code> and <code>LoRA</code>) performs compared to a base model on
 answering commonsense multiple-choice questions.</p>
-<p><a href="./benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> See the benchmark</a></p>
+<p><a href="benchmarks/commonsense_mcqa/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> See the benchmark</a></p>
 </li>
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 15h6v2h-6zM9 7H7v2h2zm2 6h6v-2h-6zm0-4h6V7h-6zm-2 2H7v2h2zm12-6v14c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2m-2 0H5v14h14zM9 15H7v2h2z"/></svg></span>  <strong>Instruction following</strong></p>
 <hr />
 <p>This benchmark evaluates a steered model's ability to follow instructions. We compare the performance of the
 baseline model to the steered model under <code>PASTA</code>, <code>DeAL</code>, and <code>ThinkingIntervention</code>.</p>
-<p><a href="./benchmarks/instruction_following/instruction_following.ipynb"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> See the benchmark</a></p>
+<p><a href="benchmarks/instruction_following/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> See the benchmark</a></p>
 </li>
 </ul>
 </div>
@@ -2726,7 +2826,7 @@ baseline model to the steered model under <code>PASTA</code>, <code>DeAL</code>,
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../tutorials/add_new_benchmark/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Add a benchmark">
+          <a href="../tutorials/add_method_by_category/add_new_structural_control/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Add a new structural control">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2736,7 +2836,7 @@ baseline model to the steered model under <code>PASTA</code>, <code>DeAL</code>,
                 Previous
               </span>
               <div class="md-ellipsis">
-                Add a benchmark
+                Add a new structural control
               </div>
             </div>
           </a>

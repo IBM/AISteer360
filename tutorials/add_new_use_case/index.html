@@ -637,6 +637,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -860,6 +868,98 @@
   
   <span class="md-ellipsis">
     Add a benchmark
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add_method_by_category/add_new_input_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new input control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add_method_by_category/add_new_output_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new output control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add_method_by_category/add_new_state_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new state control
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add_method_by_category/add_new_structural_control/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Add a new structural control
     
   </span>
   
@@ -1493,7 +1593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb" class="md-nav__link">
+      <a href="../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1516,7 +1616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/instruction_following/instruction_following.ipynb" class="md-nav__link">
+      <a href="../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
         
   
   
@@ -2938,7 +3038,7 @@ steering pipeline, and thus the "model" object passed into <code>generate</code>
 <code>model_or_pipeline</code>. In addition, the <code>generate</code> method requires an associated <code>tokenizer</code> and
 (optionally) any <code>gen_kwargs</code> and <code>runtime_overrides</code>. The current <code>CommonsenseMCQA</code> use case does not make use of any
 <code>runtime_overrides</code> (since none of the studied controls in the associated benchmark require inference time arguments);
-please see the <a href="../notebooks/benchmarks/instruction_following/instruction_following.ipynb">instruction following benchmark notebook</a>
+please see the <a href="../../notebooks/benchmarks/instruction_following/">instruction following benchmark notebook</a>
 for an example of how these overrides are defined and used.</p>
 <p>The first step in defining the <code>generate</code> method is to construct the prompt data. For the example MCQA task, our goal is
 to (robustly) evaluate a model's ability to accurately answer (common sense) multiple choice questions, and thus we
@@ -2986,7 +3086,7 @@ in the example use case:</p>
 <hr />
 <p>For a complete example of the <code>CommonsenseMCQA</code> use case, please see the implementation located at
 <code>aisteer360/evaluation/use_cases/commonsense_mcqa/use_case.py</code>. For instructions on how to build an associated benchmark, please
-see the <a href="../add_new_benchmark/">tutorial</a> and the <a href="../notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb">notebook</a>.</p>
+see the <a href="../add_new_benchmark/">tutorial</a> and the <a href="../../notebooks/benchmarks/commonsense_mcqa/">notebook</a>.</p>
 
 
 
