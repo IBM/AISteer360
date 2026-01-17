@@ -12,7 +12,7 @@ from aisteer360.algorithms.output_control.deal.args import DeALArgs
 
 class DeAL(OutputControl):
     """
-    Implementation of DeAL (Decoding-time Alignment) from Deng et al., 2024.
+    Implementation of DeAL (Decoding-time Alignment) from Huang et al., 2024.
 
     DeAL performs controlled text generation through iterative lookahead search and reward-guided beam selection. Unlike
     training-time alignment methods, DeAL operates purely at inference time to steer language model outputs toward
