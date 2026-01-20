@@ -76,6 +76,7 @@ class CommonsenseMCQA(UseCase):
             tokenizer: Tokenizer for encoding/decoding text.
             gen_kwargs: Optional generation parameters.
             runtime_overrides: Optional runtime parameter overrides for steering controls, structured as {(pipeline_name, param_name): value}.
+            kwargs: Optional keyword arguments.
 
         Returns:
             List of generation dictionaries, each containing:

@@ -49,7 +49,7 @@ class InstructionFollowing(UseCase):
         tokenizer,
         gen_kwargs: dict | None = None,
         runtime_overrides: dict[tuple[str, str], str] | None = None,
-        **__
+        **kwargs
     ) -> list[dict[str, Any]]:
         """Generates model responses for instruction following prompts.
 
@@ -71,12 +71,13 @@ class InstructionFollowing(UseCase):
                 - "kwargs": Additional metadata for instruction evaluation
         """
         if not self.evaluation_data:
-            print("No evaluation data provided.")
+            print('No evaluation data provided.')
             return []
-
         gen_kwargs = dict(gen_kwargs or {})
-        prompt_data = []
+        batch_size: int = int(kwargs["batch_size"])
 
+        # form prompt data
+        prompt_data = []
         for instance in self.evaluation_data:
             user_prompt = [{"role": "user", "content": instance["prompt"]}]
             prompt_data.append({"prompt": user_prompt})
@@ -88,6 +89,7 @@ class InstructionFollowing(UseCase):
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=self.evaluation_data,
+            batch_size=batch_size
         )
 
         generations = [
