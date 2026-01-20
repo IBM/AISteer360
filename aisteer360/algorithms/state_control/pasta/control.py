@@ -33,8 +33,9 @@ class PASTA(StateControl):
     mitigation, or content filtering without architectural changes.
 
     Args:
-        alpha (float): Scaling factor for attention modification. Positive values increase attention, negative values
-            decrease attention. Defaults to 1.0.
+        alpha (float): Multiplicative scaling factor applied to attention weights (implemented as adding log(alpha)
+            to attention logits via the attention mask). Values > 1 amplify attention to the targeted span; values in
+            (0, 1) suppress it. Must be > 0. Defaults to 1.0.
         head_config (dict | list): Configuration specifying which layers/heads to modify. If dict, maps layer indices
             to lists of head indices. If list, applies to all heads in specified layers.
         scale_position (str): Strategy for applying attention scaling. Options:
@@ -166,7 +167,7 @@ class PASTA(StateControl):
             self._scale_constant = torch.tensor(
                 [self.alpha],
                 device=self.device,
-                dtype=tokenized.input_ids.dtype,
+                dtype=torch.float32,
             ).log()
 
         hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
