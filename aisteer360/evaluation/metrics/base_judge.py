@@ -1,10 +1,10 @@
+import json
 import math
+import re
 import warnings
 from typing import Any, Iterable, Sequence
 
 import torch
-from langchain.output_parsers import ResponseSchema, StructuredOutputParser
-from langchain.schema import OutputParserException
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -16,45 +16,81 @@ from transformers import (
 from aisteer360.evaluation.metrics.base import Metric
 
 
-def build_structured_parser(scale):
-    """
-    Build a StructuredOutputParser and parsing function for rating predictions.
+_FORMAT_INSTRUCTIONS = (
+    'The output should be a markdown code snippet formatted in the following schema, '
+    'including the leading and trailing "```json" and "```":\n\n'
+    "```json\n"
+    "{{\n"
+    '\t"score": float  // A single float between {low} and {high} (inclusive) that rates the prediction.\n'
+    "}}\n"
+    "```"
+)
 
-    Constructs a `StructuredOutputParser` configured with a single `ResponseSchema` that expects a float score within
-    the specified scale range. It also returns a parsing function that extracts and validates the score from text,
-    ensuring the result is clamped between the provided bounds.
+_CODE_BLOCK_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+
+def _extract_json(text: str) -> dict:
+    """Extract a JSON object from text, handling optional markdown code fences.
+
+    Tries to find a fenced code block first; falls back to parsing the raw text.
 
     Args:
-        scale (tuple[float, float]): A `(low, high)` tuple specifying the valid inclusive range for the score.
+        text: Raw LLM response that should contain a JSON object.
+
+    Returns:
+        Parsed dictionary.
+
+    Raises:
+        ValueError: If no valid JSON object can be extracted.
+    """
+    match = _CODE_BLOCK_RE.search(text)
+    candidate = match.group(1).strip() if match else text.strip()
+    try:
+        result = json.loads(candidate)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Could not parse JSON from response: {e}")
+    if not isinstance(result, dict):
+        raise ValueError(f"Expected a JSON object, got {type(result).__name__}")
+    return result
+
+
+def build_structured_parser(scale):
+    """Build format instructions and a parsing function for rating predictions.
+
+    Returns a lightweight parser that extracts a ``{"score": <float>}`` JSON object
+    from the judge model's response and clamps the value to the given scale.
+
+    Args:
+        scale (tuple[float, float]): A ``(low, high)`` tuple specifying the valid inclusive range for the score.
+
+    Returns:
+        A tuple of ``(format_instructions: str, parse_fn)`` where *format_instructions*
+        is the instruction string to append to the judge prompt and *parse_fn(text, scale)*
+        returns a clamped float score.
     """
     low, high = scale
-    score_schema = ResponseSchema(
-        name="score",
-        description=f"A single float between {low} and {high} (inclusive) that rates the prediction."
-    )
-    output_parser = StructuredOutputParser.from_response_schemas([score_schema])
+    format_instructions = _FORMAT_INSTRUCTIONS.format(low=low, high=high)
 
     def parse_fn(text: str, _: tuple[float, float]) -> float:
-        """
-        Parse and validate a score from text using the structured output parser.
+        """Parse and validate a score from text.
+
+        Args:
+            text: Raw text response from the judge model.
+            _: Unused (scale is captured from the enclosing scope).
 
         Returns:
-            A tuple with elements:
-
-                - StructuredOutputParser: The parser configured with the score schema.
-                - Callable[[str, tuple[float, float]], float]: A function that takes a raw text response and the
-                  `(low, high)` scale, extracts the score, converts it to a float, and clamps it within the valid range.
+            A float score clamped to [low, high].
 
         Raises:
             ValueError: If the score cannot be parsed from the text.
         """
-        try:
-            score = float(output_parser.parse(text)["score"])
-        except OutputParserException as e:
-            raise ValueError(f"Could not parse score: {e}")
+        parsed = _extract_json(text)
+        if "score" not in parsed:
+            raise ValueError(f"JSON missing 'score' key, got keys: {list(parsed.keys())}")
+        score = float(parsed["score"])
         return max(low, min(high, score))
 
-    return output_parser, parse_fn
+    return format_instructions, parse_fn
 
 
 class LLMJudgeMetric(Metric):
@@ -132,9 +168,8 @@ class LLMJudgeMetric(Metric):
         )
 
         self.scale = scale
-        self.output_parser, self.parse_fn = build_structured_parser(scale)
+        self.format_instructions, self.parse_fn = build_structured_parser(scale)
         self.base_prompt_template = prompt_template.strip()
-        self.format_instructions = self.output_parser.get_format_instructions()
         self.batch_size = batch_size
         self.max_retries = max_retries
 
@@ -284,3 +319,4 @@ class LLMJudgeMetric(Metric):
             "scores": mean_per_prompt,  # one number per original prompt
             "raw_scores": prompt_scores  # n_samples scores per prompt
         }
+    

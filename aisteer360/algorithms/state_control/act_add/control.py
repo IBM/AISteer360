@@ -9,7 +9,11 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control.common.estimators import SinglePairEstimator
 from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control.common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control.common.hook_utils import (
+    get_model_layer_list,
+    extract_hidden_states,
+    replace_hidden_states,
+)
 from aisteer360.algorithms.state_control.common.selectors import FixedLayerSelector, FractionalDepthSelector
 from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
 from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform, NormPreservingTransform
@@ -33,7 +37,7 @@ class ActAdd(StateControl):
     """
 
     Args = ActAddArgs
-    supports_batching = True
+    supports_batching = False  # ActAdd uses positional alignment which breaks with left-padding
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -114,7 +118,11 @@ class ActAdd(StateControl):
         runtime_kwargs: dict | None = None,
         **__,
     ) -> dict[str, list]:
-        """Register a forward hook on the target layer.
+        """Register a pre-hook on the target layer.
+
+        The paper's Algorithm 1 specifies adding the steering vector to the
+        residual stream *before* the target layer processes it (h_l input),
+        not after (h_l output). Using a pre-hook ensures correct layer alignment.
 
         Args:
             input_ids: Input token IDs (used only for mask computation).
@@ -134,10 +142,10 @@ class ActAdd(StateControl):
 
         hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
 
-        hooks["forward"].append({
+        hooks["pre"].append({
             "module": self._layer_names[self._layer_id],
             "hook_func": partial(
-                self._forward_hook,
+                self._pre_hook,
                 layer_id=self._layer_id,
                 transform=self._transform,
                 gate=self._gate,
@@ -147,26 +155,21 @@ class ActAdd(StateControl):
 
         return hooks
 
-    def _forward_hook(
+    def _pre_hook(
         self,
         module,
         args,
         kwargs,
-        output,
         *,
         layer_id: int,
         transform,
         gate,
         token_mask: torch.BoolTensor,
     ):
-        """Apply positional activation addition to the layer output."""
-        if isinstance(output, tuple):
-            hidden = output[0]
-        else:
-            hidden = output
-
+        """Apply positional activation addition to the layer input (residual stream)."""
+        hidden = extract_hidden_states(args, kwargs)
         if hidden is None:
-            return output
+            return args, kwargs
 
         # during KV-cached generation, the mask from get_hooks() was sized
         # for the full prompt. Resize to current seq_len.
@@ -184,9 +187,7 @@ class ActAdd(StateControl):
                 token_mask=token_mask,
             )
 
-        if isinstance(output, tuple):
-            return (hidden,) + output[1:]
-        return hidden
+        return replace_hidden_states(args, kwargs, hidden)
 
     def reset(self):
         """Reset internal state between generation calls."""

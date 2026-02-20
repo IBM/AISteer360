@@ -50,7 +50,20 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
         device = next(model.parameters()).device
         model_type = getattr(model.config, "model_type", "unknown")
 
+        # prepend BOS token to ensure positional (not broadcast) injection mode
+        # (note: TransformerLens prepends BOS by default)
+        bos_token = tokenizer.bos_token
+        if bos_token is not None:
+            positive_prompt = bos_token + positive_prompt
+            negative_prompt = bos_token + negative_prompt
+
         logger.debug("Tokenizing prompt pair: positive=%r, negative=%r", positive_prompt, negative_prompt)
+
+        # use space token for padding
+        # GPT-2's default pad token is EOS which produces different activations
+        original_pad_token_id = tokenizer.pad_token_id
+        space_token_id = tokenizer.encode(" ", add_special_tokens=False)[0]
+        tokenizer.pad_token_id = space_token_id
 
         # tokenize both prompts together for consistent padding
         enc = tokenizer(
@@ -59,6 +72,10 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
             padding=True,
             truncation=True,
         )
+
+        # restore original pad token
+        tokenizer.pad_token_id = original_pad_token_id
+
         enc = {k: v.to(device) for k, v in enc.items()}
 
         logger.debug("Running forward pass to extract hidden states")
@@ -88,6 +105,12 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
             direction = (h_pos - h_neg).cpu().to(dtype=torch.float32)  # [T, H]
 
             directions[layer_idx] = direction
+
+        # verify positional mode (T >= 2) to catch BOS-related issues early
+        assert direction.size(0) >= 2, (
+            f"Steering vector has T={direction.size(0)}; expected T>=2. "
+            f"Check that BOS token is being prepended."
+        )
 
         logger.debug("Finished fitting single-pair directions with T=%d tokens", direction.size(0))
         return SteeringVector(

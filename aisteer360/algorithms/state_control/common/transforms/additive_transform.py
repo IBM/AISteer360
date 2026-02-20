@@ -72,7 +72,7 @@ class AdditiveTransform(BaseTransform):
         seq_len = hidden_states.size(1)
 
         if T_steer == 1:
-            # broadcast mode (CAA): same vector at all masked positions
+            # broadcast mode (e.g., CAA); same vector at all masked positions
             v = (self.strength * direction.squeeze(0)).to(
                 dtype=hidden_states.dtype,
                 device=hidden_states.device,
@@ -80,7 +80,7 @@ class AdditiveTransform(BaseTransform):
             delta = token_mask.unsqueeze(-1).to(hidden_states.dtype) * v.view(1, 1, -1)
             return hidden_states + delta
 
-        # positional mode (ActAdd): aligned injection
+        # positional mode (e.g., ActAdd); aligned injection
         a = self.alignment
         inject_start = max(a, 0)
         inject_end = min(a + T_steer, seq_len)

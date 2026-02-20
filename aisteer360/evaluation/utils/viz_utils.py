@@ -398,11 +398,22 @@ def plot_comparison_bars(
     return ax
 
 
+_FIXED_PIPELINE_STYLES = [
+    {"color": "#555555", "linestyle": "--"},   # baseline grey
+    {"color": "#E24A33", "linestyle": ":"},    # red
+    {"color": "#348ABD", "linestyle": "-."},   # blue
+    {"color": "#988ED5", "linestyle": ":"},    # purple
+    {"color": "#8EBA42", "linestyle": "-."},   # green
+    {"color": "#FBC15E", "linestyle": ":"},    # amber
+]
+
+
 def plot_sensitivity(
     swept: pd.DataFrame,
     metric: str,
     sweep_col: str,
     baseline: pd.DataFrame | None = None,
+    compare_to_pipelines: list[tuple[str, pd.DataFrame]] | None = None,
     per_trial_data: pd.DataFrame | None = None,
     ax: plt.Axes | None = None,
     metric_label: str | None = None,
@@ -414,11 +425,21 @@ def plot_sensitivity(
 ) -> plt.Axes:
     """Plot a single metric's sensitivity to a swept parameter.
 
+    Displays the swept configurations as connected points with error bars and
+    optional per-trial scatter. Fixed (non-swept) pipelines are overlaid as
+    horizontal reference lines with ±1 std shaded bands.
+
     Args:
         swept: DataFrame of swept configurations with {metric}_mean and {metric}_std columns.
         metric: Name of the metric (used to find {metric}_mean and {metric}_std columns).
         sweep_col: Column name for the swept parameter (x-axis).
-        baseline: Optional DataFrame with baseline row(s) for reference line.
+        baseline: Optional DataFrame with baseline row(s) for reference line. Deprecated in
+            favor of ``compare_to_pipelines``; if both are provided, baseline is prepended to
+            the list with label ``"baseline"``.
+        compare_to_pipelines: Optional list of ``(label, summary_df)`` tuples for fixed
+            (non-swept) pipelines to overlay as horizontal reference lines. Each ``summary_df``
+            should contain ``{metric}_mean`` and ``{metric}_std`` columns and must represent a
+            single pipeline configuration (not a ControlSpec sweep with multiple configs).
         per_trial_data: Optional DataFrame with per-trial values for scatter overlay. Should have
             columns for sweep_col and metric (the raw metric name, not _mean/_std).
         ax: Matplotlib axes to plot on. If None, a new figure is created.
@@ -431,6 +452,10 @@ def plot_sensitivity(
 
     Returns:
         The matplotlib axes with the plot.
+
+    Raises:
+        ValueError: If a ``compare_to_pipelines`` entry contains multiple configurations
+            (i.e. results from a ControlSpec sweep rather than a fixed pipeline).
     """
     if ax is None:
         _, ax = plt.subplots(figsize=(5, 4))
@@ -502,11 +527,30 @@ def plot_sensitivity(
         zorder=5,
     )
 
+    # build merged list of fixed reference pipelines (baseline first for backward compat)
+    all_refs: list[tuple[str, pd.DataFrame]] = []
     if baseline is not None and not baseline.empty:
-        base_val = baseline[f"{metric}_mean"].iloc[0]
-        base_std = baseline[f"{metric}_std"].iloc[0]
-        ax.axhline(base_val, color="#555555", linestyle="--", label="baseline")
-        ax.axhspan(base_val - base_std, base_val + base_std, color="#999999", alpha=0.1)
+        all_refs.append(("baseline", baseline))
+    if compare_to_pipelines:
+        for label, ref_df in compare_to_pipelines:
+            if ref_df is not None and not ref_df.empty and "config_id" in ref_df.columns:
+                n_configs = ref_df["config_id"].nunique()
+                if n_configs > 1:
+                    raise ValueError(
+                        f"compare_to_pipelines entry '{label}' contains {n_configs} configurations. "
+                        f"Only fixed (non-swept) pipelines are supported — ControlSpec sweeps with "
+                        f"multiple configurations should be plotted as a separate swept series."
+                    )
+            all_refs.append((label, ref_df))
+
+    for i, (label, ref_df) in enumerate(all_refs):
+        if ref_df is None or ref_df.empty:
+            continue
+        style = _FIXED_PIPELINE_STYLES[i % len(_FIXED_PIPELINE_STYLES)]
+        ref_val = ref_df[f"{metric}_mean"].iloc[0]
+        ref_std = ref_df[f"{metric}_std"].iloc[0]
+        ax.axhline(ref_val, linewidth=1.5, label=label, **style)
+        ax.axhspan(ref_val - ref_std, ref_val + ref_std, color=style["color"], alpha=0.1)
 
     ax.set_xlabel(sweep_label)
     ax.set_ylabel(metric_label)
@@ -518,11 +562,24 @@ def plot_sensitivity(
     if ylim is not None:
         ax.set_ylim(ylim)
 
+    if all_refs:
+        ax.legend(frameon=False, loc="best", fontsize=8)
+
     if save_path is not None:
         fig = ax.get_figure()
         fig.savefig(save_path, bbox_inches="tight", dpi=150)
 
     return ax
+
+
+_FIXED_PIPELINE_MARKERS = [
+    {"marker": "X",  "color": "black"},    # baseline
+    {"marker": "s",  "color": "#E24A33"},   # red square
+    {"marker": "D",  "color": "#348ABD"},   # blue diamond
+    {"marker": "^",  "color": "#988ED5"},   # purple triangle
+    {"marker": "P",  "color": "#8EBA42"},   # green plus
+    {"marker": "v",  "color": "#FBC15E"},   # amber down-triangle
+]
 
 
 def plot_tradeoff(
@@ -531,6 +588,7 @@ def plot_tradeoff(
     y_metric: str,
     sweep_col: str,
     baseline: pd.DataFrame | None = None,
+    compare_to_pipelines: list[tuple[str, pd.DataFrame]] | None = None,
     per_trial_data: pd.DataFrame | None = None,
     ax: plt.Axes | None = None,
     x_label: str | None = None,
@@ -547,12 +605,22 @@ def plot_tradeoff(
 ) -> plt.Axes:
     """Plot a tradeoff scatter with optional Pareto frontier overlay.
 
+    Displays swept configurations as color-coded scatter points with error bars.
+    Fixed (non-swept) pipelines are overlaid as distinct markers with error bars
+    and included in the Pareto frontier computation.
+
     Args:
         swept: DataFrame of swept configurations with metric columns.
         x_metric: Metric for x-axis (uses {x_metric}_mean and {x_metric}_std).
         y_metric: Metric for y-axis (uses {y_metric}_mean and {y_metric}_std).
         sweep_col: Column for color-coding points.
-        baseline: Optional DataFrame with baseline row(s) for reference marker (shown as X).
+        baseline: Optional DataFrame with baseline row(s) for reference marker.
+            Deprecated in favor of ``compare_to_pipelines``; if both are provided,
+            baseline is prepended to the list with label ``"baseline"``.
+        compare_to_pipelines: Optional list of ``(label, summary_df)`` tuples for fixed
+            (non-swept) pipelines to overlay as distinct markers. Each ``summary_df``
+            should contain metric mean/std columns and must represent a single pipeline
+            configuration (not a ControlSpec sweep with multiple configs).
         per_trial_data: Optional DataFrame with per-trial values for scatter overlay. Should have
             columns for sweep_col, x_metric, and y_metric (raw metric names, not _mean/_std).
         ax: Matplotlib axes to plot on. If None, a new figure is created.
@@ -570,6 +638,10 @@ def plot_tradeoff(
 
     Returns:
         The matplotlib axes with the plot.
+
+    Raises:
+        ValueError: If a ``compare_to_pipelines`` entry contains multiple configurations
+            (i.e. results from a ControlSpec sweep rather than a fixed pipeline).
     """
     if ax is None:
         _, ax = plt.subplots(figsize=(5, 5))
@@ -653,16 +725,32 @@ def plot_tradeoff(
         zorder=5,
     )
 
-    # baseline marker as X with error bars
+    # build merged list of fixed reference pipelines (baseline first for backward compat)
+    all_refs: list[tuple[str, pd.DataFrame]] = []
     if baseline is not None and not baseline.empty:
-        brow = baseline.iloc[0]
+        all_refs.append(("baseline", baseline))
+    if compare_to_pipelines:
+        for label, ref_df in compare_to_pipelines:
+            if ref_df is not None and not ref_df.empty and "config_id" in ref_df.columns:
+                n_configs = ref_df["config_id"].nunique()
+                if n_configs > 1:
+                    raise ValueError(
+                        f"compare_to_pipelines entry '{label}' contains {n_configs} configurations. "
+                        f"Only fixed (non-swept) pipelines are supported — ControlSpec sweeps with "
+                        f"multiple configurations should be plotted as a separate swept series."
+                    )
+            all_refs.append((label, ref_df))
+
+    for i, (label, ref_df) in enumerate(all_refs):
+        if ref_df is None or ref_df.empty:
+            continue
+        style = _FIXED_PIPELINE_MARKERS[i % len(_FIXED_PIPELINE_MARKERS)]
+        brow = ref_df.iloc[0]
         bx, by = brow[f"{x_metric}_mean"], brow[f"{y_metric}_mean"]
         bx_err, by_err = brow[f"{x_metric}_std"], brow[f"{y_metric}_std"]
-        # error bars for baseline
         ax.errorbar(
             bx, by,
-            xerr=bx_err,
-            yerr=by_err,
+            xerr=bx_err, yerr=by_err,
             fmt="none",
             ecolor="black",
             elinewidth=0.5,
@@ -670,8 +758,16 @@ def plot_tradeoff(
             capthick=0.5,
             zorder=6,
         )
-        # X marker for baseline
-        ax.scatter(bx, by, marker="X", s=100, c="black", linewidths=1.0, zorder=7)
+        ax.scatter(
+            bx, by,
+            marker=style["marker"],
+            s=100,
+            c=style["color"],
+            linewidths=1.0,
+            edgecolors="white",
+            zorder=7,
+            label=label,
+        )
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -696,9 +792,13 @@ def plot_tradeoff(
         cbar.set_ticks(unique_vals)
         cbar.set_ticklabels([str(int(v)) for v in unique_vals])
 
-    # Pareto frontier (include baseline if provided)
+    # Pareto frontier (include fixed pipelines)
     if show_pareto:
-        pareto_data = pd.concat([swept, baseline], ignore_index=True) if baseline is not None and not baseline.empty else swept
+        pareto_parts = [swept]
+        for _, ref_df in all_refs:
+            if ref_df is not None and not ref_df.empty:
+                pareto_parts.append(ref_df)
+        pareto_data = pd.concat(pareto_parts, ignore_index=True)
         _overlay_pareto_frontier(
             ax,
             pareto_data,
@@ -707,6 +807,9 @@ def plot_tradeoff(
             maximize_x=maximize_x,
             maximize_y=maximize_y,
         )
+
+    if all_refs:
+        ax.legend(frameon=False, loc="best", fontsize=8)
 
     if save_path is not None:
         fig = ax.get_figure()

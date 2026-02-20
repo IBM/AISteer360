@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 class HeadSteeringVector:
     """Per-head direction tensors for head-level activation steering.
 
-    Unlike SteeringVector which stores per-layer directions, this artifact stores
-    directions keyed by (layer_id, head_id) tuples and vectors of shape [head_dim].
+    Unlike SteeringVector (which stores per-layer directions), HeadSteeringVector
+    stores directions keyed by (layer_id, head_id) tuples and vectors of shape [head_dim].
 
-    The directions operate in pre-o_proj (pre-W_o) head space: each direction
+    The directions operate in pre-o_proj (pre-W_o) head space; each direction
     corresponds to an individual attention head's output before the output projection.
 
     Attributes:

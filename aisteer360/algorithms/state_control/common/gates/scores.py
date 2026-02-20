@@ -9,9 +9,9 @@ def projected_cosine_similarity(
 ) -> float:
     """Compute cosine similarity between a vector and its projection.
 
-    This is the scoring function used by CAST for condition detection:
-    project the hidden state through the condition subspace projector,
-    apply tanh, then compute cosine similarity with the original.
+    This function projects the hidden state through the condition subspace 
+    projector, applies tanh, then computes cosine similarity with the original.
+    The CAST method uses this scoring function.
 
     Args:
         hidden_state: Shape [H] - aggregated hidden state.

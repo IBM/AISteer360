@@ -672,6 +672,90 @@ class TestVizUtils:
         assert isinstance(points, list)
         plt.close("all")
 
+    def test_plot_tradeoff_with_fixed_pipelines(self):
+        """Test plot_tradeoff with fixed_pipelines parameter."""
+        import matplotlib.pyplot as plt
+
+        from aisteer360.evaluation.utils.viz_utils import plot_tradeoff
+
+        # Create test data
+        swept = pd.DataFrame({
+            "k_positive": [1, 5, 10],
+            "accuracy_mean": [0.4, 0.5, 0.55],
+            "accuracy_std": [0.02, 0.03, 0.02],
+            "positional_bias_mean": [0.1, 0.08, 0.07],
+            "positional_bias_std": [0.01, 0.01, 0.01],
+        })
+
+        baseline = pd.DataFrame({
+            "accuracy_mean": [0.35],
+            "accuracy_std": [0.02],
+            "positional_bias_mean": [0.12],
+            "positional_bias_std": [0.01],
+        })
+
+        dpo = pd.DataFrame({
+            "accuracy_mean": [0.7],
+            "accuracy_std": [0.03],
+            "positional_bias_mean": [0.05],
+            "positional_bias_std": [0.01],
+        })
+
+        # Test with fixed_pipelines as list of tuples
+        ax = plot_tradeoff(
+            swept=swept,
+            x_metric="accuracy",
+            y_metric="positional_bias",
+            sweep_col="k_positive",
+            fixed_pipelines=[
+                ("baseline", baseline),
+                ("DPO-LoRA", dpo),
+            ],
+        )
+
+        assert ax is not None
+        # Check that legend contains both fixed pipelines
+        legend_texts = [t.get_text() for t in ax.legend_.get_texts()]
+        assert "baseline" in legend_texts
+        assert "DPO-LoRA" in legend_texts
+        plt.close("all")
+
+    def test_plot_tradeoff_backward_compatible(self):
+        """Test plot_tradeoff backward compatibility with baseline parameter."""
+        import matplotlib.pyplot as plt
+
+        from aisteer360.evaluation.utils.viz_utils import plot_tradeoff
+
+        swept = pd.DataFrame({
+            "k_positive": [1, 5],
+            "accuracy_mean": [0.4, 0.5],
+            "accuracy_std": [0.02, 0.03],
+            "positional_bias_mean": [0.1, 0.08],
+            "positional_bias_std": [0.01, 0.01],
+        })
+
+        baseline = pd.DataFrame({
+            "accuracy_mean": [0.35],
+            "accuracy_std": [0.02],
+            "positional_bias_mean": [0.12],
+            "positional_bias_std": [0.01],
+        })
+
+        # Test with only baseline (backward compatible)
+        ax = plot_tradeoff(
+            swept=swept,
+            x_metric="accuracy",
+            y_metric="positional_bias",
+            sweep_col="k_positive",
+            baseline=baseline,
+        )
+
+        assert ax is not None
+        # Check that legend contains baseline
+        legend_texts = [t.get_text() for t in ax.legend_.get_texts()]
+        assert "baseline" in legend_texts
+        plt.close("all")
+
     def test_create_tradeoff_figure(self, sample_profiles_spec):
         """Test create_tradeoff_figure creates multi-panel figure."""
         import matplotlib.pyplot as plt

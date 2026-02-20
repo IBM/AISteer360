@@ -15,9 +15,9 @@ class SteeringVector:
 
     Directions can be either:
 
-        - Non-positional: shape [1, H] — a single direction broadcast to all
+        - Non-positional: shape [1, H]; a single direction broadcast to all
           steered positions (e.g., used by CAA, CAST).
-        - Positional: shape [T, H] — a sequence of T directions, each applied
+        - Positional: shape [T, H]; a sequence of T directions, each applied
           at a specific aligned position (e.g., used by ActAdd).
 
     Attributes:
@@ -72,12 +72,14 @@ class SteeringVector:
         if not file_path.endswith(".svec"):
             file_path += ".svec"
         directory = os.path.dirname(file_path)
+        
         if directory:
             os.makedirs(directory, exist_ok=True)
         data = {
             "model_type": self.model_type,
             "directions": {str(k): v.tolist() for k, v in self.directions.items()},
         }
+
         if self.explained_variances is not None:
             data["explained_variances"] = {str(k): v for k, v in self.explained_variances.items()}
         with open(file_path, "w") as f:
@@ -98,6 +100,7 @@ class SteeringVector:
             file_path += ".svec"
         with open(file_path) as f:
             data = json.load(f)
+
         # load directions with backward compatibility: ensure at least 2D [T, H]
         directions = {}
         for k, v in data["directions"].items():
@@ -105,6 +108,7 @@ class SteeringVector:
             if t.ndim == 1:
                 t = t.unsqueeze(0)  # [H] -> [1, H]
             directions[int(k)] = t
+
         explained_variances = None
         if "explained_variances" in data:
             explained_variances = {int(k): float(v) for k, v in data["explained_variances"].items()}

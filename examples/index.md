@@ -1,7 +1,7 @@
-# Notebooks
+# Examples
 
-Notebooks cover basic implementations of each control in our toolkit (including examples of how to implement methods
-from wrappers), as well as implementations of benchmarks.
+We have prepared a collection of example notebooks for each of the implemented controls in our toolkit (including examples of how to implement methods
+from wrappers), as well as demonstrations of more extensive benchmarks.
 
 ## Controls
 
@@ -31,7 +31,13 @@ from wrappers), as well as implementations of benchmarks.
 
     State control methods influence the model's internal states (activation, attentions, etc.) at inference time. Current notebooks cover:
 
+    :octicons-arrow-right-24: [ActAdd](./notebooks/control_act_add/act_add.ipynb)
+
+    :octicons-arrow-right-24: [CAA](./notebooks/control_caa/caa.ipynb)
+
     :octicons-arrow-right-24: [CAST](./notebooks/control_cast/cast.ipynb)
+
+    :octicons-arrow-right-24: [ITI](./notebooks/control_iti/iti.ipynb)
 
     :octicons-arrow-right-24: [PASTA](./notebooks/control_pasta/pasta.ipynb)
 
@@ -57,22 +63,20 @@ from wrappers), as well as implementations of benchmarks.
 
 <div class="grid cards" markdown>
 
--   :material-comment-question-outline:  __Commonsense MCQA__
-
-    ---
-
-    This benchmark evaluates how well a steered model (under `FewShot` and `LoRA`) performs compared to a base model on
-    answering commonsense multiple-choice questions.
-
-    [:octicons-arrow-right-24: See the benchmark](./notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb)
-
 -   :material-list-box-outline:  __Instruction following__
 
     ---
 
-    This benchmark evaluates a steered model's ability to follow instructions. We compare the performance of the
-    baseline model to the steered model under `PASTA`, `DeAL`, and `ThinkingIntervention`.
+    This notebook studies the effect of post-hoc attention steering ([PASTA](https://arxiv.org/abs/2311.02262)) on a model's ability to follow instructions. We sweep over the steering strength and investigate the trade-off between a model's instruction following ability and general response quality.
 
     [:octicons-arrow-right-24: See the benchmark](./notebooks/benchmark_instruction_following/instruction_following.ipynb)
+
+-   :material-comment-question-outline:  __Commonsense MCQA__
+
+    ---
+
+    This notebook benchmarks steering methods on the [CommonsenseQA](https://huggingface.co/datasets/tau/commonsense_qa) dataset, comparing few-shot prompting against a LoRA adapter trained with DPO. We sweep over the number of few-shot examples and study how accuracy scales relative to the fine-tuned baseline across two models.
+
+    [:octicons-arrow-right-24: See the benchmark](./notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb)
 
 </div>

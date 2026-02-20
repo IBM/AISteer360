@@ -22,6 +22,8 @@ class UseCase(ABC):
         evaluation_data: list[dict] | str | Path,
         evaluation_metrics: list[Metric],
         num_samples: int = -1,
+        shuffle: bool = False,
+        seed: int = 555,
         **kwargs
     ) -> None:
 
@@ -37,6 +39,11 @@ class UseCase(ABC):
                 "Either evaluation data was not provided, or was unable to be generated.",
                 UserWarning
             )
+
+        if shuffle:
+            import random
+            rng = random.Random(seed)
+            rng.shuffle(self.evaluation_data)
 
         if num_samples > 0:
             self.evaluation_data = self.evaluation_data[:num_samples]

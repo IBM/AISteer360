@@ -10,10 +10,9 @@ CompMode = Literal["mean", "last"]
 class LabeledExamples:
     """Independent positive/negative text data with binary labels.
 
-    Unlike ContrastivePairs, this dataclass does not require equal-length lists.
-    Useful for methods (e.g., ITI) where positive and negative examples are
-    independent (not paired) and the estimator concatenates all activations
-    with labels [1]*N_pos + [0]*N_neg.
+    Does not require equal-length lists (unlike ContrastivePairs).
+    Useful for methods where positive and negative examples are independent/
+    unpaired (and the estimator concatenates them, e.g., in ITI).
 
     Attributes:
         positives: Texts exhibiting the target behavior (label=1).

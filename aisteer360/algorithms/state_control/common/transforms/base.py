@@ -14,7 +14,7 @@ class BaseTransform(ABC):
         - a token_mask shaped [B, T] (True where the transform should apply)
 
     Transforms MUST NOT modify hidden_states in-place if the original tensor
-    is needed later (e.g., for norm-preserving wrappers). Return a new tensor.
+    is needed later (e.g., for norm-preserving wrappers); return a new tensor.
     """
 
     @abstractmethod
