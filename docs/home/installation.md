@@ -14,7 +14,7 @@ The toolkit uses [uv](https://docs.astral.sh/uv/) as the package manager (Python
 
 For Windows, `uv` can be installed (using PowerShell 7+) via:
 
- ```powershell
+```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 

@@ -137,6 +137,14 @@ class StateControl(ABC):
         """Optional reset call for state control."""
         pass
 
+    def cleanup(self) -> None:
+        """Release resources allocated during steer().
+
+        Override this method in subclasses that allocate GPU memory or other resources
+        during steering to ensure proper cleanup.
+        """
+        pass
+
 
 class NoStateControl(StateControl):
     """Identity state control.

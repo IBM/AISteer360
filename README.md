@@ -33,18 +33,14 @@ Face API key in the following format:
 HUGGINGFACE_TOKEN=hf_***
 ```
 
-Some Hugging Face models (e.g. `meta-llama/Meta-Llama-3.1-8B-Instruct`) are behind an access gate. To gain access:
-
-1. Request access on the model’s Hub page with the same account whose token you’ll pass to the toolkit.
-2. Wait for approval (you’ll receive an email).
-3. (Re-)authenticate locally by running `huggingface-cli login` if your token has expired or was never saved.
-
-
-## Featured applications
+Some Hugging Face models (e.g. `meta-llama/Meta-Llama-3.1-8B-Instruct`) are behind an access gate. Check that you have access via the model's Hub page with the same account whose token you pass to the toolkit.
 
 > [!NOTE]
 > AISteer360 runs the model inside your process. For efficient inference, please run the toolkit from a machine that
 > has enough GPU memory for both the base checkpoint and the extra overhead your steering method/pipeline adds. 
+
+
+## Featured applications
 
 The ability to benchmark and compare steering methods on realistic use cases is one of the main features of the toolkit. The featured examples below illustrate this functionality.
 
@@ -57,7 +53,15 @@ The ability to benchmark and compare steering methods on realistic use cases is 
 | Multiple choice question answering is a common format for evaluating a model's reasoning ability. This notebook benchmarks steering methods on the [CommonsenseQA](https://huggingface.co/datasets/tau/commonsense_qa) dataset, comparing few-shot prompting against a LoRA adapter trained with DPO. We sweep over the number of few-shot examples and study how accuracy scales relative to the fine-tuned baseline across two models.<br /><br /><a target="_blank" rel="noopener noreferrer" href="https://colab.research.google.com/github/IBM/AISteer360/blob/main/examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a> |
 
 
-## Control inventory
+
+| <div style="font-weight: bold; text-align: left;">Composite steering for truthfulness</div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| One of the primary features of the toolkit is the ability to compose multiple steering methods into one model operation. This notebook composes a state control ([PASTA](https://arxiv.org/abs/2311.02262)) with an output control ([DeAL](https://arxiv.org/abs/2402.06147)) with the goal of improving the model's truthfulness (as measured on [TruthfulQA](https://huggingface.co/datasets/domenicrosati/TruthfulQA)) without significantly degrading informativeness. We sweep over the joint parameter space of the controls and study each control's performance (via the tradeoff between truthfulness and informativeness) to that of the composition.<br /><br /><a target="_blank" rel="noopener noreferrer" href="https://colab.research.google.com/github/IBM/AISteer360/blob/main/examples/notebooks/benchmark_truthful_qa_composite_steering/truthful_qa_composite_steering.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a> |
+
+
+
+
+## Control library
 
 Demonstrations of each of the implemented steering methods in the toolkit are provided in the `examples/notebooks/control_*` folders; links to Colab notebooks are provided below.
 
@@ -92,17 +96,17 @@ To make contributing easier, we have prepared the following tutorials.
 
 ### Adding a new steering method
 
-If there is an existing steering method that is not yet in the toolkit, or you have developed a new steering method of
-your own, the toolkit has been designed to enable relatively easy contribution of new steering methods. Please see the
-tutorial on [adding your own steering method](./docs/tutorials/add_new_steering_method.md) for a detailed guide
+If there is an existing steering method that is not yet in the toolkit but you feel should be, or you have developed a 
+new steering method of your own, the toolkit has been designed to enable relatively easy contribution of new steering methods. 
+Please see the tutorial on [adding your own steering method](./docs/tutorials/add_new_steering_method.md) for a detailed guide
 
 
 ### Adding a new use case / benchmark
 
-Use cases enable comparison of different steering methods on a common task. The `UseCase`
-(`aisteer360/evaluation/use_cases/`) and `Benchmark` classes (`aisteer360/evaluation/benchmark.py`) enable this
-comparison. If you'd like to compare various steering methods/pipelines on a novel use case, please see the tutorial on
-[adding your own use case](./docs/tutorials/add_new_use_case.md).
+Use cases enable comparison of different steering methods on a common task. The base `UseCase`
+(`aisteer360/evaluation/use_cases/`) and the `Benchmark` class (`aisteer360/evaluation/benchmark.py`) enable this
+comparison. If you'd like to compare various steering methods/pipelines on a novel use case, please see the tutorial 
+on [adding your own use case](./docs/tutorials/add_new_use_case.md).
 
 
 ### Adding a new metric

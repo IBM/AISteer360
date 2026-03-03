@@ -81,6 +81,14 @@ class OutputControl(ABC):
         """Optional steering/preparation."""
         pass
 
+    def cleanup(self) -> None:
+        """Release resources allocated during steer().
+
+        Override this method in subclasses that allocate GPU memory or other resources
+        (e.g., reward models) during steering to ensure proper cleanup.
+        """
+        pass
+
 
 class NoOutputControl(OutputControl):
     """Identity output control.

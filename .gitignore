@@ -11,7 +11,8 @@
 /notes
 /scripts
 /examples/notebooks/wrapper_mergekit/mergekit_models/*
-/examples/notebooks/benchmark_commonsense_mcqa/profiles/profiles.json
+examples/**/profiles/
+examples/**/profiles_*/
 /examples/notebooks/**/figures/*.png
 **/trl_models/
 **/profiles/

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import gc
+import logging
+import os
 from typing import Callable, Optional, Tuple
 
 import numpy as np
 import torch
 from torch import nn
 from transformers import (
+    AutoModelForSequenceClassification,
     AutoTokenizer,
     GPT2LMHeadModel,
     LogitsProcessor,
@@ -22,6 +26,8 @@ from transformers.generation.logits_process import (
 
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.output_control.rad.args import RADArgs
+
+logger = logging.getLogger(__name__)
 
 
 class RAD(OutputControl):
@@ -42,11 +48,15 @@ class RAD(OutputControl):
     Args:
         beta (float): Steering intensity. Defaults to 0.0.
         reward_path (str, optional): Path to the trained reward model. See [https://github.com/r-three/RAD](https://github.com/r-three/RAD) for details. Defaults to None.
+        reward_model_id (str, optional): HuggingFace model ID or local path for an AutoModelForSequenceClassification
+            reward model. When set, this is used instead of reward_path. Defaults to None.
+        reward_model_kwargs (dict, optional): Extra kwargs passed to AutoModelForSequenceClassification.from_pretrained().
+            Defaults to {}.
 
     Reference:
 
-    - "Reward-Augmented Decoding: Efficient Controlled Text Generation With a Unidirectional Reward Model" Haikang Deng,
-     Colin Raffel
+    - "Reward-Augmented Decoding: Efficient Controlled Text Generation With a Unidirectional Reward Model" 
+     Haikang Deng, Colin Raffel
      [https://arxiv.org/abs/2310.09520](https://arxiv.org/abs/2310.09520)
     """
     Args = RADArgs
@@ -55,6 +65,7 @@ class RAD(OutputControl):
     model: PreTrainedModel | None = None
     tokenizer: PreTrainedTokenizer | None = None
     base_generate: Callable | None = None
+    _uses_hf_classifier: bool = False
 
     beta: float
 
@@ -66,8 +77,12 @@ class RAD(OutputControl):
     ) -> PreTrainedModel:
         """Initialize RAD by loading and configuring the reward model.
 
-        Sets up the toxicity reward model used for steering during generation. Automatically downloads the model
-        from the RAD repository if not found locally.
+        Sets up the reward model used for steering during generation. Supports two modes:
+
+        1. **HuggingFace classifier** (new path): When `reward_model_id` is set, loads any
+           `AutoModelForSequenceClassification` compatible model from HuggingFace Hub.
+        2. **Legacy toxicity model** (original path): When `reward_path` is set (or neither is set),
+           loads the GPT-2 based toxicity classifier from the original RAD paper.
 
         Args:
             model (PreTrainedModel): The base language model to be steered.
@@ -80,8 +95,8 @@ class RAD(OutputControl):
 
         Note:
 
-        - Downloads ~500MB reward model on first use if not cached
-        - Reward model is GPT2-based with 7 toxicity classification heads
+        - For legacy path: Downloads ~500MB reward model on first use if not cached
+        - Legacy reward model is GPT2-based with 7 toxicity classification heads
         - Model weights are loaded onto the same device as the base model
         """
         self.model = model
@@ -89,29 +104,94 @@ class RAD(OutputControl):
         self.base_generate = model.generate
         self.device = next(model.parameters()).device
 
-        # load reward model from rad
+        if self.reward_model_id is not None:
+            # new path: load any HuggingFace sequence classification model
+            self._load_hf_classifier()
+        else:
+            # legacy path: load GPT-2 toxicity reward model
+            self._load_legacy_toxicity_model()
+
+        return model
+
+    def _load_hf_classifier(self) -> None:
+        """Load a HuggingFace AutoModelForSequenceClassification reward model."""
+        logger.info("Loading reward model from HuggingFace: %s", self.reward_model_id)
+
+        self.rm = AutoModelForSequenceClassification.from_pretrained(
+            self.reward_model_id,
+            **self.reward_model_kwargs,
+        )
+        self.rm = self.rm.to(self.device)
+        self.rm.eval()
+
+        self.rm_tokenizer = AutoTokenizer.from_pretrained(self.reward_model_id)
+        if self.rm_tokenizer.pad_token is None:
+            self.rm_tokenizer.pad_token = self.rm_tokenizer.eos_token
+        self.rm_tokenizer.padding_side = "right"
+
+        # set a reasonable max_length for the reward model tokenizer;
+        # some tokenizers have model_max_length set to an absurdly large sentinel value
+        max_len = getattr(self.rm_tokenizer, "model_max_length", None)
+        if max_len is None or max_len > 100_000:
+            max_len = 512  # reasonable default for reward models
+        self.rm_tokenizer.max_length = max_len
+
+        self._uses_hf_classifier = True
+        logger.info("HuggingFace reward model loaded successfully")
+
+    def _load_legacy_toxicity_model(self) -> None:
+        """Load the legacy GPT-2 toxicity reward model from the RAD paper."""
         self.rm_tokenizer = AutoTokenizer.from_pretrained("gpt2", cache_dir=self.reward_path)
         self.rm_tokenizer.pad_token = self.rm_tokenizer.eos_token
-        self.rm_tokenizer.padding_side = 'right'
+        self.rm_tokenizer.padding_side = "right"
         self.rm_tokenizer.max_length = 1024
-        import os
+
         if (self.reward_path is None) or not os.path.exists(os.path.join(self.reward_path, "pytorch_model.bin")):
-            print(f"Reward model not found in: {self.reward_path}. Downloading from https://huggingface.co/hk/rad_rms/tree/main/gpt2_toxicity...")
+            logger.info(
+                "Reward model not found in: %s. Downloading from https://huggingface.co/hk/rad_rms/tree/main/gpt2_toxicity...",
+                self.reward_path,
+            )
             from huggingface_hub import hf_hub_download
-            hf_hub_download(repo_id="hk/rad_rms", filename="gpt2_toxicity/pytorch_model.bin",
-                            local_dir='./tmp/rad_saved_models/saved_models/')
-            print("Reward model downloaded. Please set reward_path='./tmp/rad_saved_models/saved_models/gpt2_toxicity' in the future.")
+            hf_hub_download(
+                repo_id="hk/rad_rms",
+                filename="gpt2_toxicity/pytorch_model.bin",
+                local_dir="./tmp/rad_saved_models/saved_models/",
+            )
+            logger.info(
+                "Reward model downloaded. Please set reward_path='./tmp/rad_saved_models/saved_models/gpt2_toxicity' in the future."
+            )
         else:
-            print(f"Reward model found in: {self.reward_path}")
+            logger.info("Reward model found in: %s", self.reward_path)
+
         if self.reward_path is None:
-            self.reward_path = './tmp/rad_saved_models/saved_models/gpt2_toxicity'
+            self.reward_path = "./tmp/rad_saved_models/saved_models/gpt2_toxicity"
+
         state_dict = torch.load(os.path.join(self.reward_path, "pytorch_model.bin"), map_location="cpu")
         self.rm = GPT2RewardModel(reward_model_name="gpt2", out_features=7, cache_dir=self.reward_path)
         self.rm.load_state_dict(state_dict, strict=False)
         self.rm = self.rm.to(self.device)
-        print("Reward model is loaded.")
 
-        return model
+        self._uses_hf_classifier = False
+        logger.info("Legacy toxicity reward model loaded successfully")
+
+    def cleanup(self) -> None:
+        """Release the reward model and tokenizer to free GPU memory."""
+        if hasattr(self, "rm") and self.rm is not None:
+            del self.rm
+            self.rm = None
+        if hasattr(self, "rm_tokenizer") and self.rm_tokenizer is not None:
+            del self.rm_tokenizer
+            self.rm_tokenizer = None
+
+        self.model = None
+        self.tokenizer = None
+        self.base_generate = None
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        logger.debug("RAD cleanup completed")
 
     @torch.no_grad()
     def generate(
@@ -183,17 +263,26 @@ class RAD(OutputControl):
         if repetition_penalty and repetition_penalty != 1.0:
             processors.append(RepetitionPenaltyLogitsProcessor(penalty=repetition_penalty))
 
+        # construct reward score extraction function based on model type
+        if self._uses_hf_classifier:
+            rm_score_fn = lambda output: output.logits[:, 0]
+            inverse = False  # general reward models: higher = better
+        else:
+            rm_score_fn = lambda output: output[:, 0]
+            inverse = True  # legacy toxicity model: invert scores
+
         processors.append(
             RewardAugmentedLogitsProcessorNoPkv(
-                        self.tokenizer,
-                        self.rm_tokenizer,
-                        self.rm,
-                        topk=rad_topk,
-                        topp=rad_topp,
-                        method="linear",
-                        beta=beta,
-                        inverse=True,
-                    )
+                self.tokenizer,
+                self.rm_tokenizer,
+                self.rm,
+                topk=rad_topk,
+                topp=rad_topp,
+                method="linear",
+                beta=beta,
+                inverse=inverse,
+                rm_score_fn=rm_score_fn,
+            )
         )
 
         # generate candidates
@@ -217,9 +306,11 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
         method (str): Reward application method. Currently only "linear" supported. Defaults to "linear".
         beta (float): Scaling factor for reward scores. Higher values = stronger steering. Defaults to 30.
         inverse (bool): Whether to invert reward scores (1 - score). Used for toxicity reduction. Defaults to False.
+        rm_score_fn (Callable): Function to extract scalar reward from model output. Takes model output and returns
+            a tensor of shape [batch]. Defaults to extracting the first column of raw output.
     """
     def __init__(self, lm_tokenizer, rm_tokenizer, reward_model, topk=20, topp=1,
-                 method="linear", beta=30, inverse=False):
+                 method="linear", beta=30, inverse=False, rm_score_fn: Callable | None = None):
         self._lm_tokenizer = lm_tokenizer
         self._rm_tokenizer = rm_tokenizer
         self._reward_model = reward_model
@@ -230,6 +321,7 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
         self._method = method
         self._beta = beta
         self._inverse = inverse
+        self._rm_score_fn = rm_score_fn if rm_score_fn is not None else (lambda output: output[:, 0])
 
     def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         """Apply reward-based adjustments to token logits.
@@ -286,11 +378,11 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
             candidate_texts: List of text strings to evaluate.
 
         Returns:
-            torch.Tensor: Reward scores for each candidate, extracted from first output head.
+            torch.Tensor: Reward scores for each candidate, extracted via rm_score_fn.
         """
         with torch.inference_mode():
             # tokenizer should be configured in RAD
-            input_ids = self._rm_tokenizer.batch_encode_plus(
+            inputs = self._rm_tokenizer.batch_encode_plus(
                 candidate_texts,
                 return_tensors="pt",
                 padding=True,
@@ -298,8 +390,8 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
                 max_length=self._rm_tokenizer.max_length,
             ).to(self._device)
 
-            reward = self._reward_model(**input_ids)
-            return reward[:,0]
+            output = self._reward_model(**inputs)
+            return self._rm_score_fn(output)
 
     def apply_function(self, original_score, reward_score):
         """Apply reward adjustment to original logits.
@@ -316,13 +408,21 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
 
         Note:
 
-        - Reward scores are clamped to [0, 1] before application.
+        - Reward scores are normalized to [0, 1] via min-max scaling within the candidate set.
         """
-        reward_score = torch.clamp(reward_score, min=0, max=1)
+        # normalize to [0, 1] within this candidate set
+        r_min = reward_score.min()
+        r_max = reward_score.max()
+        if r_max - r_min > 1e-8:
+            reward_score = (reward_score - r_min) / (r_max - r_min)
+        else:
+            reward_score = torch.ones_like(reward_score) * 0.5
+
         if self._inverse:
-            reward_score = 1-reward_score
+            reward_score = 1 - reward_score
+
         if self._method == "linear":
-            return original_score + (reward_score*self._beta).to(original_score.dtype)
+            return original_score + (reward_score * self._beta).to(original_score.dtype)
         else:
             raise ValueError(f"method {self._method} not supported")
 

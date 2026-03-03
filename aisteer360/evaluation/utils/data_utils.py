@@ -36,6 +36,9 @@ def to_jsonable(obj: Any) -> Any:
     if isinstance(obj, (list, tuple, set)):
         return [to_jsonable(v) for v in obj]
 
+    if callable(obj):
+        return f"callable:{getattr(obj, '__qualname__', type(obj).__name__)}"
+    
     return repr(obj)
 
 
@@ -101,12 +104,19 @@ def flatten_profiles(
 
 
 def _hash_params(params: dict[str, Any]) -> str:
-    """Create a short hash string from params dict for grouping configurations."""
+    """Create a short hash string from params dict for grouping configurations.
+
+    Uses a custom serializer that represents callables by their qualified name (ensure stable hashes).
+    """
     import hashlib
     import json
 
-    # sort keys for stability
-    serialized = json.dumps(params, sort_keys=True, default=str)
+    def _default(obj: Any) -> str:
+        if callable(obj):
+            return f"callable:{getattr(obj, '__qualname__', type(obj).__name__)}"
+        return str(obj)
+
+    serialized = json.dumps(params, sort_keys=True, default=_default)
     return hashlib.md5(serialized.encode()).hexdigest()[:8]
 
 
@@ -276,3 +286,163 @@ def build_per_example_df(
         rows.append(row)
 
     return pd.DataFrame(rows)
+
+def per_example_config_means(
+    profiles: dict[str, list[dict[str, Any]]],
+    metric_lists: dict[str, tuple[str, str]],
+) -> pd.DataFrame:
+    """Compute per-example score means across trials for each (pipeline, config).
+
+    For benchmarks with multiple trials per configuration, this averages each
+    example's per-trial scores to produce a stable per-example estimate.
+
+    Args:
+        profiles: Output from ``Benchmark.run()``. Maps pipeline names to lists of run dicts.
+        metric_lists: Mapping from column name to ``(metric_name, list_key)`` for
+            per-example metric values stored as lists. For example:
+            ``{"truthful": ("Truthfulness", "scores"), "informative": ("Informativeness", "scores")}``
+
+    Returns:
+        DataFrame with columns:
+
+            - ``pipeline``: Name of the steering pipeline.
+            - ``config_id``: Configuration identifier.
+            - ``idx``: Example index.
+            - One column per entry in ``metric_lists``, containing the trial mean.
+
+    Example:
+        >>> means = per_example_config_means(profiles, {
+        ...     "truthful": ("Truthfulness", "scores"),
+        ...     "informative": ("Informativeness", "scores"),
+        ... })
+        >>> means.groupby(["pipeline", "config_id"])["truthful"].mean()
+    """
+    from collections import defaultdict
+
+    # accumulate per-trial scores for each (pipeline, config, idx)
+    accum: dict[tuple[str, str], dict[int, dict[str, list]]] = {}
+
+    for pipeline_name, runs in profiles.items():
+        run_list = runs if isinstance(runs, list) else [runs]
+        for run in run_list:
+            config_id = _hash_params(run.get("params", {}) or {}) if run.get("params") else "baseline"
+            key = (pipeline_name, config_id)
+            if key not in accum:
+                accum[key] = defaultdict(lambda: {col: [] for col in metric_lists})
+
+            evals = run.get("evaluations", {}) or {}
+            score_lists = {}
+            for col_name, (metric_name, list_key) in metric_lists.items():
+                metric_dict = evals.get(metric_name, {}) or {}
+                score_lists[col_name] = metric_dict.get(list_key, [])
+
+            n_examples = max((len(v) for v in score_lists.values()), default=0)
+            for idx in range(n_examples):
+                for col_name, scores in score_lists.items():
+                    if idx < len(scores):
+                        accum[key][idx][col_name].append(scores[idx])
+
+    # collapse to means
+    rows = []
+    for (pipeline_name, config_id), examples in accum.items():
+        for idx, col_scores in sorted(examples.items()):
+            row = {"pipeline": pipeline_name, "config_id": config_id, "idx": idx}
+            for col_name, values in col_scores.items():
+                row[col_name] = np.mean(values) if values else np.nan
+            rows.append(row)
+
+    return pd.DataFrame(rows)
+
+
+def select_best_config(
+    summary: pd.DataFrame,
+    pipeline: str,
+    optimize: str,
+    constraint_col: str | None = None,
+    constraint_min: float | None = None,
+) -> pd.Series:
+    """Select the best configuration for a pipeline from a summary table.
+
+    Picks the configuration that maximizes ``optimize`` subject to an optional
+    minimum-value constraint on another column. Falls back to unconstrained
+    selection if no configuration satisfies the constraint.
+
+    Args:
+        summary: DataFrame from ``summarize_by_config`` with metric summary columns.
+        pipeline: Pipeline name to filter on.
+        optimize: Column name to maximize (e.g., ``"truthfulness_mean"``).
+        constraint_col: Optional column name for the minimum-value constraint.
+        constraint_min: Minimum acceptable value for ``constraint_col``.
+
+    Returns:
+        Series for the best configuration row.
+
+    Raises:
+        ValueError: If no rows match the given pipeline name.
+
+    Example:
+        >>> best = select_best_config(
+        ...     summary, "pasta_deal",
+        ...     optimize="truthfulness_mean",
+        ...     constraint_col="informativeness_mean",
+        ...     constraint_min=0.88,
+        ... )
+        >>> best["config_id"]
+    """
+    subset = summary[summary["pipeline"] == pipeline]
+    if subset.empty:
+        raise ValueError(f"No rows found for pipeline '{pipeline}'")
+
+    if constraint_col is not None and constraint_min is not None:
+        viable = subset[subset[constraint_col] >= constraint_min]
+        if not viable.empty:
+            subset = viable
+
+    return subset.loc[subset[optimize].idxmax()]
+
+
+def get_generation_field(
+    profiles: dict[str, list[dict[str, Any]]],
+    pipeline: str,
+    config_id: str,
+    idx: int,
+    field: str = "response",
+    trial_id: int = 0,
+) -> Any:
+    """Retrieve a generation field from a specific (pipeline, config, example, trial).
+
+    Useful for displaying representative responses alongside aggregated metrics.
+
+    Args:
+        profiles: Output from ``Benchmark.run()``.
+        pipeline: Pipeline name.
+        config_id: Configuration identifier (from ``_hash_params`` or ``"baseline"``).
+        idx: Example index within the generation list.
+        field: Field name to extract from the generation dict. Defaults to ``"response"``.
+        trial_id: Which trial to pull from when multiple trials share a config.
+            Defaults to ``0`` (first trial).
+
+    Returns:
+        The requested field value.
+
+    Raises:
+        KeyError: If the pipeline is not found in profiles.
+        StopIteration: If no run matches the given ``config_id`` and ``trial_id``.
+
+    Example:
+        >>> resp = get_generation_field(profiles, "pasta_deal", "a1b2c3d4", idx=5)
+    """
+    run_list = profiles[pipeline]
+    run_list = run_list if isinstance(run_list, list) else [run_list]
+
+    match_count = 0
+    for run in run_list:
+        run_config = _hash_params(run.get("params", {}) or {}) if run.get("params") else "baseline"
+        if run_config == config_id:
+            if match_count == trial_id:
+                return run["generations"][idx].get(field)
+            match_count += 1
+
+    raise StopIteration(
+        f"No run found for pipeline='{pipeline}', config_id='{config_id}', trial_id={trial_id}"
+    )

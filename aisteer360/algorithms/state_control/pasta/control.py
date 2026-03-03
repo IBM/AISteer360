@@ -348,7 +348,7 @@ class PASTA(StateControl):
             ).contiguous()
             input_kwargs["attention_mask"] = attention_mask
 
-        attention_mask = attention_mask.to(hidden_states.dtype).contiguous()
+        attention_mask = attention_mask.to(hidden_states.dtype).contiguous().clone()
         if attention_mask.size(1) == 1:
             attention_mask = attention_mask.expand(
                 -1,
@@ -358,6 +358,11 @@ class PASTA(StateControl):
             ).contiguous()
 
         batch_size = attention_mask.size(0)
+
+        # beam search expands the batch dimension by num_beams; broadcast token_ranges to match
+        if batch_size > len(token_ranges):
+            token_ranges = [token_ranges[i % len(token_ranges)] for i in range(batch_size)]
+
         for batch_index in range(batch_size):
             for start_idx, end_idx in token_ranges[batch_index].tolist():
                 if start_idx == end_idx:
