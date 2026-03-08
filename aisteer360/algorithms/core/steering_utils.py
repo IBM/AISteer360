@@ -4,6 +4,7 @@ Helper functions for steering.
 from collections import defaultdict
 from typing import Iterable, Type
 
+import torch
 from transformers import PreTrainedTokenizerBase
 
 from aisteer360.algorithms.input_control.base import InputControl, NoInputControl
@@ -77,3 +78,38 @@ def ensure_pad_token(tokenizer: PreTrainedTokenizerBase) -> PreTrainedTokenizerB
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
     return tokenizer
+
+
+def to_left_pad(
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Rearrange a batch to left-padded layout for correct batched causal scoring.
+
+    Left-padding ensures that all sequences in the batch end at the same position, allowing a uniform logit slice
+    after concatenation with reference tokens. Works correctly regardless of whether the input is right-padded,
+    left-padded, or unpadded.
+
+    Args:
+        input_ids: Input token IDs [batch, seq_len]
+        attention_mask: Corresponding attention mask [batch, seq_len]
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]: Left-padded (input_ids, attention_mask)
+    """
+    batch_size, max_len = input_ids.shape
+    seq_lens = attention_mask.sum(dim=1)
+
+    left_ids = input_ids.clone()
+    left_mask = torch.zeros_like(attention_mask)
+
+    for i in range(batch_size):
+        length = seq_lens[i]
+        pad = max_len - length
+        if pad > 0:
+            real_tokens = input_ids[i][attention_mask[i].bool()]
+            pad_tokens = input_ids[i][~attention_mask[i].bool()]
+            left_ids[i] = torch.cat([pad_tokens, real_tokens])
+        left_mask[i, max_len - length:] = 1
+
+    return left_ids, left_mask
