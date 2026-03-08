@@ -53,10 +53,8 @@ class FewShot(InputControl):
 
     Runtime keyword arguments:
 
-    - `positive_examples` (`list[dict]`, `optional`): Positive examples to use for this specific query (overrides pool-based
-    selection).
-    - `negative_examples` (`list[dict]`, `optional`): Negative examples to use for this specific query (overrides pool-based
-    selection).
+    - `positive_examples` (`list[dict]`, `optional`): Positive examples to use for this specific query (overrides pool-based selection).
+    - `negative_examples` (`list[dict]`, `optional`): Negative examples to use for this specific query (overrides pool-based selection).
 
     Notes:
 
@@ -67,6 +65,8 @@ class FewShot(InputControl):
     """
 
     Args = FewShotArgs
+
+    supports_batching: bool = True
 
     # default templates
     _SYSTEM_PROMPT_TEMPLATE = "{directive}: \n{example_blocks}\n\n"
@@ -134,72 +134,113 @@ class FewShot(InputControl):
             raise RuntimeError("FewShot needs a tokenizer; call .steer() first.")
 
         def adapter(input_ids: list[int] | torch.Tensor, runtime_kwargs: dict[str, Any]) -> list[int] | torch.Tensor:
-
             # infer mode from arguments
-            using_runtime_examples = (runtime_kwargs and ("positive_examples" in runtime_kwargs or
-                                                          "negative_examples" in runtime_kwargs))
+            using_runtime_examples = (
+                runtime_kwargs
+                and ("positive_examples" in runtime_kwargs or "negative_examples" in runtime_kwargs)
+            )
             using_pool_mode = self.positive_example_pool is not None or self.negative_example_pool is not None
 
             if not using_runtime_examples and not using_pool_mode:
                 warnings.warn(
                     "FewShot: No examples provided via runtime_kwargs or example pools. "
                     "Returning original input unchanged.",
-                    UserWarning
+                    UserWarning,
                 )
                 return input_ids
 
-            # decode to retrieve user message
-            if isinstance(input_ids, torch.Tensor):
-                input_ids_list = input_ids.tolist()[0]
+            # determine input format
+            is_tensor = isinstance(input_ids, torch.Tensor)
+            original_device = input_ids.device if is_tensor else None
+            original_dtype = input_ids.dtype if is_tensor else None
+
+            # normalize to 2D list format [batch_size, seq_len]
+            if is_tensor:
+                if input_ids.ndim == 1:
+                    batch_input_ids = [input_ids.tolist()]
+                    single_sequence = True
+                else:
+                    batch_input_ids = input_ids.tolist()
+                    single_sequence = False
             else:
-                input_ids_list = input_ids
+                if isinstance(input_ids[0], int):
+                    batch_input_ids = [input_ids]
+                    single_sequence = True
+                else:
+                    batch_input_ids = input_ids
+                    single_sequence = False
 
-            original_text = self.tokenizer.decode(input_ids_list, skip_special_tokens=True)
+            has_chat_template = hasattr(self.tokenizer, "chat_template") and self.tokenizer.chat_template
+            warned_no_template = False
 
-            # get examples based on mode
-            if using_runtime_examples:
-                examples = self._gather_runtime_examples(runtime_kwargs)
-            else:
-                examples = self._sample_from_pools()
+            # process each item independently (per-item sampling ensures correct behavior for query-dependent
+            # selectors and matches the sequential pipeline path)
+            adapted_batch = []
+            for input_ids_single in batch_input_ids:
+                original_text = self.tokenizer.decode(input_ids_single, skip_special_tokens=True)
 
-            if not examples:
-                warnings.warn(
-                    "FewShot: No examples available after selection. Returning original input unchanged.",
-                    UserWarning
+                # sample or gather examples independently per item
+                if using_runtime_examples:
+                    examples = self._gather_runtime_examples(runtime_kwargs)
+                else:
+                    examples = self._sample_from_pools()
+
+                if not examples:
+                    warnings.warn(
+                        "FewShot: No examples available after selection. Returning original input unchanged.",
+                        UserWarning,
+                    )
+                    adapted_batch.append(input_ids_single)
+                    continue
+
+                examples_text = self._format_examples(examples)
+
+                # apply chat template
+                if has_chat_template:
+                    messages = [
+                        {"role": "system", "content": examples_text},
+                        {"role": "user", "content": original_text},
+                    ]
+                    adapted_text = self.tokenizer.apply_chat_template(
+                        messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                    )
+                else:
+                    if not warned_no_template:
+                        warnings.warn(
+                            "No chat template found for tokenizer. Prepending few-shot examples directly to user query.",
+                            UserWarning,
+                        )
+                        warned_no_template = True
+                    adapted_text = examples_text + original_text
+
+                adapted_tokens = self.tokenizer.encode(adapted_text, add_special_tokens=False)
+                adapted_batch.append(adapted_tokens)
+
+            # pad to uniform length for batched output
+            max_len = max(len(seq) for seq in adapted_batch)
+            if self.tokenizer.pad_token_id is None:
+                raise RuntimeError(
+                    "FewShot: tokenizer has no pad_token_id; cannot pad batch sequences. "
+                    "Set a pad token before using FewShot with batched inputs."
                 )
-                return input_ids
+            pad_id = self.tokenizer.pad_token_id
 
-            examples_text = self._format_examples(examples)
+            padded_batch = []
+            for seq in adapted_batch:
+                padded_batch.append(seq + [pad_id] * (max_len - len(seq)))
 
-            # apply chat template
-            if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
-                messages = [
-                    {"role": "system", "content": examples_text},
-                    {"role": "user", "content": original_text}
-                ]
-                adapted_text = self.tokenizer.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True
-                )
+            # convert back to original format
+            if is_tensor:
+                result = torch.tensor(padded_batch, dtype=original_dtype, device=original_device)
+                if single_sequence:
+                    result = result.squeeze(0)
+                return result
             else:
-                warnings.warn(
-                    "No chat template found for tokenizer. Prepending few-shot examples directly to user query.",
-                    UserWarning
-                )
-                adapted_text = examples_text + original_text
-
-            # encode the adapted text
-            adapted_tokens = self.tokenizer.encode(
-                adapted_text,
-                add_special_tokens=False,
-                return_tensors="pt" if isinstance(input_ids, torch.Tensor) else None
-            )
-
-            if isinstance(input_ids, torch.Tensor):
-                return adapted_tokens.squeeze(0) if adapted_tokens.dim() > 1 else adapted_tokens
-            else:
-                return adapted_tokens
+                if single_sequence:
+                    return padded_batch[0]
+                return padded_batch
 
         return adapter
 
