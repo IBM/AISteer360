@@ -701,13 +701,13 @@ class TestVizUtils:
             "positional_bias_std": [0.01],
         })
 
-        # Test with fixed_pipelines as list of tuples
+        # Test with compare_to_pipelines as list of tuples
         ax = plot_tradeoff(
             swept=swept,
             x_metric="accuracy",
             y_metric="positional_bias",
             sweep_col="k_positive",
-            fixed_pipelines=[
+            compare_to_pipelines=[
                 ("baseline", baseline),
                 ("DPO-LoRA", dpo),
             ],

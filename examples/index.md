@@ -79,4 +79,12 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     [:octicons-arrow-right-24: See the benchmark](./notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb)
 
+-   :material-layers-triple-outline:  __Composite steering for truthfulness__
+
+    ---
+
+    One of the primary features of the toolkit is the ability to compose multiple steering methods into one model operation. This notebook composes a state control ([PASTA](https://arxiv.org/abs/2311.02262)) with an output control ([DeAL](https://arxiv.org/abs/2402.06147)) with the goal of improving the model's truthfulness (as measured on [TruthfulQA](https://huggingface.co/datasets/domenicrosati/TruthfulQA)) without significantly degrading informativeness. We sweep over the joint parameter space of the controls and study each control's performance (via the tradeoff between truthfulness and informativeness) to that of the composition.
+
+    [:octicons-arrow-right-24: See the benchmark](./notebooks/benchmark_truthful_qa_composite_steering/truthful_qa_composite_steering.ipynb)
+
 </div>

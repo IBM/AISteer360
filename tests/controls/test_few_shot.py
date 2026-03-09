@@ -117,3 +117,133 @@ def test_few_shot(model_and_tokenizer, device: torch.device, conf: dict):
     assert isinstance(out_ids, torch.Tensor), "Output is not torch.Tensor"
     assert out_ids.ndim == 2, "Expected (batch, seq_len) tensor"
     assert out_ids.size(1) >= 1, "No new tokens generated"
+
+
+PROMPT_TEXT_SHORT = "Hello world"
+PROMPT_TEXT_SHORT_2 = "Goodbye moon"
+
+
+@pytest.mark.parametrize("input_format", ["tensor_1d", "tensor_2d", "list_flat", "list_nested"])
+def test_few_shot_batch_formats(model_and_tokenizer, device: torch.device, input_format: str):
+    """Test that FewShot correctly handles various input formats and preserves format on output."""
+    random.seed(42)
+    torch.manual_seed(42)
+
+    base_model, tokenizer = model_and_tokenizer
+    model = base_model.to(device)
+
+    fewshot = FewShot(
+        directive="Follow these examples",
+        positive_example_pool=POS_POOL,
+        k_positive=1,
+    )
+
+    pipeline = SteeringPipeline(controls=[fewshot], lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+
+    adapter = fewshot.get_prompt_adapter()
+
+    # prepare input in the specified format
+    tokens_1 = tokenizer.encode(PROMPT_TEXT_SHORT, add_special_tokens=False)
+    tokens_2 = tokenizer.encode(PROMPT_TEXT_SHORT_2, add_special_tokens=False)
+
+    if input_format == "tensor_1d":
+        input_ids = torch.tensor(tokens_1, device=device)
+    elif input_format == "tensor_2d":
+        input_ids = torch.tensor([tokens_1], device=device)
+    elif input_format == "list_flat":
+        input_ids = tokens_1
+    else:  # list_nested
+        input_ids = [tokens_1, tokens_2]
+
+    adapted = adapter(input_ids, {})
+
+    # verify output format matches input format
+    if input_format == "tensor_1d":
+        assert isinstance(adapted, torch.Tensor), "Expected tensor output for tensor input"
+        assert adapted.ndim == 1, "Expected 1D tensor for 1D tensor input"
+        assert adapted.device == device, "Device should be preserved"
+        assert len(adapted) > len(tokens_1), "Adapted should be longer with examples prepended"
+
+    elif input_format == "tensor_2d":
+        assert isinstance(adapted, torch.Tensor), "Expected tensor output for tensor input"
+        assert adapted.ndim == 2, "Expected 2D tensor for 2D tensor input"
+        assert adapted.device == device, "Device should be preserved"
+        assert adapted.size(0) == 1, "Batch size should be preserved"
+        assert adapted.size(1) > len(tokens_1), "Adapted should be longer with examples prepended"
+
+    elif input_format == "list_flat":
+        assert isinstance(adapted, list), "Expected list output for list input"
+        assert isinstance(adapted[0], int), "Expected flat list of ints for flat list input"
+        assert len(adapted) > len(tokens_1), "Adapted should be longer with examples prepended"
+
+    else:  # list_nested
+        assert isinstance(adapted, list), "Expected list output for list input"
+        assert isinstance(adapted[0], list), "Expected nested list for nested list input"
+        assert len(adapted) == 2, "Batch size should be preserved"
+        # both sequences should be padded to same length
+        assert len(adapted[0]) == len(adapted[1]), "Batched sequences should be padded to same length"
+        assert len(adapted[0]) > len(tokens_1), "Adapted should be longer with examples prepended"
+
+
+def test_few_shot_1d_tensor_bug_regression(model_and_tokenizer, device: torch.device):
+    """Regression test: 1D tensor input should decode correctly, not grab a single token ID."""
+    base_model, tokenizer = model_and_tokenizer
+    model = base_model.to(device)
+
+    fewshot = FewShot(
+        directive="Test directive",
+        positive_example_pool=POS_POOL,
+        k_positive=1,
+    )
+
+    pipeline = SteeringPipeline(controls=[fewshot], lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+
+    adapter = fewshot.get_prompt_adapter()
+
+    # create 1D tensor input
+    tokens = tokenizer.encode(PROMPT_TEXT_SHORT, add_special_tokens=False)
+    input_ids_1d = torch.tensor(tokens, device=device)
+
+    # this would fail before the fix: .tolist()[0] grabbed a single int instead of the sequence
+    adapted = adapter(input_ids_1d, {})
+
+    # the adapted output should contain the original text (decoded correctly)
+    decoded = tokenizer.decode(adapted.tolist(), skip_special_tokens=True)
+    assert PROMPT_TEXT_SHORT in decoded, "Original prompt text should appear in adapted output"
+
+
+def test_few_shot_missing_pad_token_raises(model_and_tokenizer, device: torch.device):
+    """Test that missing pad_token_id raises RuntimeError instead of silently using 0."""
+    base_model, tokenizer = model_and_tokenizer
+    model = base_model.to(device)
+
+    fewshot = FewShot(
+        directive="Test directive",
+        positive_example_pool=POS_POOL,
+        k_positive=1,
+    )
+
+    pipeline = SteeringPipeline(controls=[fewshot], lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+
+    adapter = fewshot.get_prompt_adapter()
+
+    tokens = tokenizer.encode(PROMPT_TEXT_SHORT, add_special_tokens=False)
+    input_ids = torch.tensor([tokens], device=device)
+
+    # temporarily remove pad_token_id to simulate missing pad token
+    original_pad_token_id = tokenizer.pad_token_id
+    tokenizer.pad_token_id = None
+    try:
+        with pytest.raises(RuntimeError, match="pad_token_id"):
+            adapter(input_ids, {})
+    finally:
+        tokenizer.pad_token_id = original_pad_token_id
