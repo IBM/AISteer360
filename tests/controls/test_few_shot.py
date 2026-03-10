@@ -164,13 +164,13 @@ def test_few_shot_batch_formats(model_and_tokenizer, device: torch.device, input
     if input_format == "tensor_1d":
         assert isinstance(adapted, torch.Tensor), "Expected tensor output for tensor input"
         assert adapted.ndim == 1, "Expected 1D tensor for 1D tensor input"
-        assert adapted.device == device, "Device should be preserved"
+        assert adapted.device.type == device.type, "Device type should be preserved"
         assert len(adapted) > len(tokens_1), "Adapted should be longer with examples prepended"
 
     elif input_format == "tensor_2d":
         assert isinstance(adapted, torch.Tensor), "Expected tensor output for tensor input"
         assert adapted.ndim == 2, "Expected 2D tensor for 2D tensor input"
-        assert adapted.device == device, "Device should be preserved"
+        assert adapted.device.type == device.type, "Device type should be preserved"
         assert adapted.size(0) == 1, "Batch size should be preserved"
         assert adapted.size(1) > len(tokens_1), "Adapted should be longer with examples prepended"
 
