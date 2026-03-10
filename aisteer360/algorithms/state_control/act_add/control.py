@@ -30,10 +30,9 @@ class ActAdd(StateControl):
 
     Reference:
 
-        - "Steering Language Models With Activation Engineering"
-          Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J. Vazquez,
-          Ulisse Mini, Monte MacDiarmid
-          [https://arxiv.org/abs/2308.10248](https://arxiv.org/abs/2308.10248)
+    - "Steering Language Models With Activation Engineering"
+    Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J. Vazquez, Ulisse Mini, Monte MacDiarmid
+    [https://arxiv.org/abs/2308.10248](https://arxiv.org/abs/2308.10248)
     """
 
     Args = ActAddArgs

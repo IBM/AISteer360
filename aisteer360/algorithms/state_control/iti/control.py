@@ -40,9 +40,9 @@ class ITI(StateControl):
 
     Reference:
 
-        - "Inference-Time Intervention: Eliciting Truthful Answers from a Language Model"
-          Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, Martin Wattenberg
-          [https://arxiv.org/abs/2306.03341](https://arxiv.org/abs/2306.03341)
+    - "Inference-Time Intervention: Eliciting Truthful Answers from a Language Model"
+    Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, Martin Wattenberg
+    [https://arxiv.org/abs/2306.03341](https://arxiv.org/abs/2306.03341)
     """
 
     Args = ITIArgs

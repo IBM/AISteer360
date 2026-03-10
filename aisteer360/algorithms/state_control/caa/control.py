@@ -37,9 +37,9 @@ class CAA(StateControl):
 
     Reference:
 
-        - "Steering Llama 2 via Contrastive Activation Addition"
-          Nina Panickssery, Nick Gabrieli, Julian Schulz, Meg Tong, Evan Hubinger, Alexander Matt Turner
-          [https://arxiv.org/abs/2312.06681](https://arxiv.org/abs/2312.06681)
+    - "Steering Llama 2 via Contrastive Activation Addition"
+    Nina Panickssery, Nick Gabrieli, Julian Schulz, Meg Tong, Evan Hubinger, Alexander Matt Turner
+    [https://arxiv.org/abs/2312.06681](https://arxiv.org/abs/2312.06681)
     """
 
     Args = CAAArgs
