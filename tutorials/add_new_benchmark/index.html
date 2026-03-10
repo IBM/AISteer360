@@ -304,7 +304,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../notebooks/" class="md-tabs__link">
+        <a href="../../examples/" class="md-tabs__link">
           
   
   
@@ -987,7 +987,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../notebooks/" class="md-nav__link ">
+            <a href="../../examples/" class="md-nav__link ">
               
   
   
@@ -1122,7 +1122,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1202,7 +1202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1225,7 +1225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1305,7 +1305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1328,7 +1328,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1412,7 +1412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1435,7 +1435,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1458,7 +1458,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1481,7 +1481,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1569,7 +1569,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1592,12 +1592,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -2846,7 +2846,7 @@ and a use case specific argument (<code>num_shuffling_runs</code>):</p>
 To decrease the execution time of the benchmark run, we additionally set <code>num_samples=500</code> which serves to limit the
 evaluation to (the first) <code>500</code> elements of the evaluation dataset.</p>
 <p>In this benchmark, we compare the model's base performance with two steering controls:
-<a href="../../notebooks/controls/few_shot/"><code>FewShot</code></a> and <a href="../../notebooks/controls/trl_wrapper/"><code>DPO (with LoRA)</code></a>. Both
+<a href="../../examples/notebooks/control_few_shot/few_shot/"><code>FewShot</code></a> and <a href="../../examples/notebooks/wrapper_trl/trl_wrapper/"><code>DPO (with LoRA)</code></a>. Both
 of these controls require specification of steering data, i.e., the source data that a control uses to steer the base
 model. Common steering data is used by both controls, forming the example pools for <code>FewShot</code> and the training dataset
 for <code>DPO</code>. The steering dataset takes the following form:
@@ -2973,12 +2973,12 @@ The benchmark is executed by calling the <code>run()</code> method, which genera
 <span class="n">benchmark</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">profiles</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="s2">&quot;./profiles/&quot;</span><span class="p">)</span>
 </code></pre></div>
 A complete working example of the <code>CommonsenseMCQA</code> benchmark can be found in the
-<a href="../../notebooks/benchmarks/commonsense_mcqa/">example notebook</a>.</p>
+<a href="../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/">example notebook</a>.</p>
 <h2 id="benchmark-with-inference-time-arguments">Benchmark with inference-time arguments</h2>
 <p>The benchmark for the <code>CommonsenseMCQA</code> use case compares <code>FewShot</code> and <code>DPO</code> controls, neither of which require
 additional inference-time arguments. In some cases, controls in a pipeline rely on information that is only available at
 inference time, e.g., increasing attention weights on specific prompt tokens corresponding to instructions as in
-<a href="../../notebooks/controls/pasta/">PASTA</a>.</p>
+<a href="../../examples/notebooks/control_pasta/pasta/">PASTA</a>.</p>
 <p>The <code>Benchmark</code> class allows these arguments to be passed in to each control via the specification of
 <code>runtime_overrides</code>. We briefly illustrate how this is done for the <code>InstructionFollowing</code> use case.</p>
 <p>As before, we initialize the use case and the controls that we wish to use. The <code>InstructionFollowing</code> use case is
@@ -3039,7 +3039,7 @@ is as follows:
 <span class="p">)</span>
 </code></pre></div>
 The benchmark can then be run as usual to generate the profiles. We direct the reader to the
-<a href="../../notebooks/benchmarks/instruction_following/">notebook</a> for the full implementation.</p>
+<a href="../../examples/notebooks/benchmark_instruction_following/instruction_following/">notebook</a> for the full implementation.</p>
 <h2 id="benchmark-with-variable-controls">Benchmark with variable controls</h2>
 <p>Both of the above benchmark modalities are run using fixed steering controls, i.e., controls that are initialized with
 fixed parameters outside of the benchmark object. To study model behavior as control parameters change, the toolkit

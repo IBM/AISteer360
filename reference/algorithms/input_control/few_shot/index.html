@@ -302,7 +302,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../notebooks/" class="md-tabs__link">
+        <a href="../../../../examples/" class="md-tabs__link">
           
   
   
@@ -913,7 +913,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../notebooks/" class="md-nav__link ">
+            <a href="../../../../examples/" class="md-nav__link ">
               
   
   
@@ -1048,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1128,7 +1128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1151,7 +1151,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1231,7 +1231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1254,7 +1254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1338,7 +1338,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1361,7 +1361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1384,7 +1384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1407,7 +1407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1495,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1518,12 +1518,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -1962,6 +1962,15 @@
   <a href="#aisteer360.algorithms.input_control.few_shot.control.FewShot.tokenizer" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;tokenizer
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aisteer360.algorithms.input_control.few_shot.control.FewShot.cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;cleanup
     </span>
   </a>
   
@@ -3145,6 +3154,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#aisteer360.algorithms.input_control.few_shot.control.FewShot.cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;cleanup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#aisteer360.algorithms.input_control.few_shot.control.FewShot.get_prompt_adapter" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_prompt_adapter
@@ -3567,10 +3585,8 @@ Determines how examples are chosen from pools. Defaults to 'random'.</p>
     </table>
         <p>Runtime keyword arguments:</p>
 <ul>
-<li><code>positive_examples</code> (<code>list[dict]</code>, <code>optional</code>): Positive examples to use for this specific query (overrides pool-based
-selection).</li>
-<li><code>negative_examples</code> (<code>list[dict]</code>, <code>optional</code>): Negative examples to use for this specific query (overrides pool-based
-selection).</li>
+<li><code>positive_examples</code> (<code>list[dict]</code>, <code>optional</code>): Positive examples to use for this specific query (overrides pool-based selection).</li>
+<li><code>negative_examples</code> (<code>list[dict]</code>, <code>optional</code>): Negative examples to use for this specific query (overrides pool-based selection).</li>
 </ul>
 <p>Notes:</p>
 <ul>
@@ -3839,7 +3855,48 @@ selection).</li>
 <span class="normal">266</span>
 <span class="normal">267</span>
 <span class="normal">268</span>
-<span class="normal">269</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FewShot</span><span class="p">(</span><span class="n">InputControl</span><span class="p">):</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FewShot</span><span class="p">(</span><span class="n">InputControl</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Implementation of few-shot learning control for prompt adaptation.</span>
 
@@ -3876,10 +3933,8 @@ selection).</li>
 
 <span class="sd">    Runtime keyword arguments:</span>
 
-<span class="sd">    - `positive_examples` (`list[dict]`, `optional`): Positive examples to use for this specific query (overrides pool-based</span>
-<span class="sd">    selection).</span>
-<span class="sd">    - `negative_examples` (`list[dict]`, `optional`): Negative examples to use for this specific query (overrides pool-based</span>
-<span class="sd">    selection).</span>
+<span class="sd">    - `positive_examples` (`list[dict]`, `optional`): Positive examples to use for this specific query (overrides pool-based selection).</span>
+<span class="sd">    - `negative_examples` (`list[dict]`, `optional`): Negative examples to use for this specific query (overrides pool-based selection).</span>
 
 <span class="sd">    Notes:</span>
 
@@ -3890,6 +3945,8 @@ selection).</li>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">Args</span> <span class="o">=</span> <span class="n">FewShotArgs</span>
+
+    <span class="n">supports_batching</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
 
     <span class="c1"># default templates</span>
     <span class="n">_SYSTEM_PROMPT_TEMPLATE</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">{directive}</span><span class="s2">: </span><span class="se">\n</span><span class="si">{example_blocks}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
@@ -3957,72 +4014,113 @@ selection).</li>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;FewShot needs a tokenizer; call .steer() first.&quot;</span><span class="p">)</span>
 
         <span class="k">def</span><span class="w"> </span><span class="nf">adapter</span><span class="p">(</span><span class="n">input_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">runtime_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-
             <span class="c1"># infer mode from arguments</span>
-            <span class="n">using_runtime_examples</span> <span class="o">=</span> <span class="p">(</span><span class="n">runtime_kwargs</span> <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;positive_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span> <span class="ow">or</span>
-                                                          <span class="s2">&quot;negative_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span><span class="p">))</span>
+            <span class="n">using_runtime_examples</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">runtime_kwargs</span>
+                <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;positive_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span> <span class="ow">or</span> <span class="s2">&quot;negative_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span><span class="p">)</span>
+            <span class="p">)</span>
             <span class="n">using_pool_mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_example_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_example_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
 
             <span class="k">if</span> <span class="ow">not</span> <span class="n">using_runtime_examples</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">using_pool_mode</span><span class="p">:</span>
                 <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                     <span class="s2">&quot;FewShot: No examples provided via runtime_kwargs or example pools. &quot;</span>
                     <span class="s2">&quot;Returning original input unchanged.&quot;</span><span class="p">,</span>
-                    <span class="ne">UserWarning</span>
+                    <span class="ne">UserWarning</span><span class="p">,</span>
                 <span class="p">)</span>
                 <span class="k">return</span> <span class="n">input_ids</span>
 
-            <span class="c1"># decode to retrieve user message</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-                <span class="n">input_ids_list</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="c1"># determine input format</span>
+            <span class="n">is_tensor</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+            <span class="n">original_device</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">device</span> <span class="k">if</span> <span class="n">is_tensor</span> <span class="k">else</span> <span class="kc">None</span>
+            <span class="n">original_dtype</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="n">is_tensor</span> <span class="k">else</span> <span class="kc">None</span>
+
+            <span class="c1"># normalize to 2D list format [batch_size, seq_len]</span>
+            <span class="k">if</span> <span class="n">is_tensor</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()]</span>
+                    <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                    <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">input_ids_list</span> <span class="o">=</span> <span class="n">input_ids</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">):</span>
+                    <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">input_ids</span><span class="p">]</span>
+                    <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="n">input_ids</span>
+                    <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">False</span>
 
-            <span class="n">original_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids_list</span><span class="p">,</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">has_chat_template</span> <span class="o">=</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;chat_template&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">chat_template</span>
+            <span class="n">warned_no_template</span> <span class="o">=</span> <span class="kc">False</span>
 
-            <span class="c1"># get examples based on mode</span>
-            <span class="k">if</span> <span class="n">using_runtime_examples</span><span class="p">:</span>
-                <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gather_runtime_examples</span><span class="p">(</span><span class="n">runtime_kwargs</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_from_pools</span><span class="p">()</span>
+            <span class="c1"># process each item independently (per-item sampling ensures correct behavior for query-dependent</span>
+            <span class="c1"># selectors and matches the sequential pipeline path)</span>
+            <span class="n">adapted_batch</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">input_ids_single</span> <span class="ow">in</span> <span class="n">batch_input_ids</span><span class="p">:</span>
+                <span class="n">original_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids_single</span><span class="p">,</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">examples</span><span class="p">:</span>
-                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                    <span class="s2">&quot;FewShot: No examples available after selection. Returning original input unchanged.&quot;</span><span class="p">,</span>
-                    <span class="ne">UserWarning</span>
+                <span class="c1"># sample or gather examples independently per item</span>
+                <span class="k">if</span> <span class="n">using_runtime_examples</span><span class="p">:</span>
+                    <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gather_runtime_examples</span><span class="p">(</span><span class="n">runtime_kwargs</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_from_pools</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">examples</span><span class="p">:</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                        <span class="s2">&quot;FewShot: No examples available after selection. Returning original input unchanged.&quot;</span><span class="p">,</span>
+                        <span class="ne">UserWarning</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">adapted_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">input_ids_single</span><span class="p">)</span>
+                    <span class="k">continue</span>
+
+                <span class="n">examples_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_examples</span><span class="p">(</span><span class="n">examples</span><span class="p">)</span>
+
+                <span class="c1"># apply chat template</span>
+                <span class="k">if</span> <span class="n">has_chat_template</span><span class="p">:</span>
+                    <span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
+                        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">examples_text</span><span class="p">},</span>
+                        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">original_text</span><span class="p">},</span>
+                    <span class="p">]</span>
+                    <span class="n">adapted_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
+                        <span class="n">messages</span><span class="p">,</span>
+                        <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                        <span class="n">add_generation_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">warned_no_template</span><span class="p">:</span>
+                        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                            <span class="s2">&quot;No chat template found for tokenizer. Prepending few-shot examples directly to user query.&quot;</span><span class="p">,</span>
+                            <span class="ne">UserWarning</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="n">warned_no_template</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">adapted_text</span> <span class="o">=</span> <span class="n">examples_text</span> <span class="o">+</span> <span class="n">original_text</span>
+
+                <span class="n">adapted_tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adapted_text</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">adapted_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">adapted_tokens</span><span class="p">)</span>
+
+            <span class="c1"># pad to uniform length for batched output</span>
+            <span class="n">max_len</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">adapted_batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="s2">&quot;FewShot: tokenizer has no pad_token_id; cannot pad batch sequences. &quot;</span>
+                    <span class="s2">&quot;Set a pad token before using FewShot with batched inputs.&quot;</span>
                 <span class="p">)</span>
-                <span class="k">return</span> <span class="n">input_ids</span>
+            <span class="n">pad_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token_id</span>
 
-            <span class="n">examples_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_examples</span><span class="p">(</span><span class="n">examples</span><span class="p">)</span>
+            <span class="n">padded_batch</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">adapted_batch</span><span class="p">:</span>
+                <span class="n">padded_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">seq</span> <span class="o">+</span> <span class="p">[</span><span class="n">pad_id</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">max_len</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)))</span>
 
-            <span class="c1"># apply chat template</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s1">&#39;chat_template&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">chat_template</span><span class="p">:</span>
-                <span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
-                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">examples_text</span><span class="p">},</span>
-                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">original_text</span><span class="p">}</span>
-                <span class="p">]</span>
-                <span class="n">adapted_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
-                    <span class="n">messages</span><span class="p">,</span>
-                    <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                    <span class="n">add_generation_prompt</span><span class="o">=</span><span class="kc">True</span>
-                <span class="p">)</span>
+            <span class="c1"># convert back to original format</span>
+            <span class="k">if</span> <span class="n">is_tensor</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">padded_batch</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">original_dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">original_device</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">single_sequence</span><span class="p">:</span>
+                    <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">result</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                    <span class="s2">&quot;No chat template found for tokenizer. Prepending few-shot examples directly to user query.&quot;</span><span class="p">,</span>
-                    <span class="ne">UserWarning</span>
-                <span class="p">)</span>
-                <span class="n">adapted_text</span> <span class="o">=</span> <span class="n">examples_text</span> <span class="o">+</span> <span class="n">original_text</span>
-
-            <span class="c1"># encode the adapted text</span>
-            <span class="n">adapted_tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
-                <span class="n">adapted_text</span><span class="p">,</span>
-                <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
-            <span class="p">)</span>
-
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">adapted_tokens</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">adapted_tokens</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">adapted_tokens</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">adapted_tokens</span>
+                <span class="k">if</span> <span class="n">single_sequence</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">padded_batch</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">return</span> <span class="n">padded_batch</span>
 
         <span class="k">return</span> <span class="n">adapter</span>
 
@@ -4296,7 +4394,7 @@ selection).</li>
 
 
 <h5 id="aisteer360.algorithms.input_control.few_shot.control.FewShot.supports_batching" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">supports_batching</span> <span class="o">=</span> <span class="kc">False</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">supports_batching</span> <span class="o">=</span> <span class="kc">True</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
@@ -4335,6 +4433,43 @@ selection).</li>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="aisteer360.algorithms.input_control.few_shot.control.FewShot.cleanup" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">cleanup</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Release resources allocated during steer().</p>
+<p>Override this method in subclasses that allocate GPU memory or other resources
+during steering to ensure proper cleanup.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>aisteer360/algorithms/input_control/base.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">cleanup</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Release resources allocated during steer().</span>
+
+<span class="sd">    Override this method in subclasses that allocate GPU memory or other resources</span>
+<span class="sd">    during steering to ensure proper cleanup.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -4539,7 +4674,48 @@ returns a closure that modifies input token sequences by prepending few-shot exa
 <span class="normal">201</span>
 <span class="normal">202</span>
 <span class="normal">203</span>
-<span class="normal">204</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_prompt_adapter</span><span class="p">(</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_prompt_adapter</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">runtime_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
@@ -4574,72 +4750,113 @@ returns a closure that modifies input token sequences by prepending few-shot exa
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;FewShot needs a tokenizer; call .steer() first.&quot;</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">adapter</span><span class="p">(</span><span class="n">input_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">runtime_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-
         <span class="c1"># infer mode from arguments</span>
-        <span class="n">using_runtime_examples</span> <span class="o">=</span> <span class="p">(</span><span class="n">runtime_kwargs</span> <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;positive_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span> <span class="ow">or</span>
-                                                      <span class="s2">&quot;negative_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span><span class="p">))</span>
+        <span class="n">using_runtime_examples</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">runtime_kwargs</span>
+            <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;positive_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span> <span class="ow">or</span> <span class="s2">&quot;negative_examples&quot;</span> <span class="ow">in</span> <span class="n">runtime_kwargs</span><span class="p">)</span>
+        <span class="p">)</span>
         <span class="n">using_pool_mode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">positive_example_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">negative_example_pool</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">using_runtime_examples</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">using_pool_mode</span><span class="p">:</span>
             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
                 <span class="s2">&quot;FewShot: No examples provided via runtime_kwargs or example pools. &quot;</span>
                 <span class="s2">&quot;Returning original input unchanged.&quot;</span><span class="p">,</span>
-                <span class="ne">UserWarning</span>
+                <span class="ne">UserWarning</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="n">input_ids</span>
 
-        <span class="c1"># decode to retrieve user message</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="n">input_ids_list</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c1"># determine input format</span>
+        <span class="n">is_tensor</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span>
+        <span class="n">original_device</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">device</span> <span class="k">if</span> <span class="n">is_tensor</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">original_dtype</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">dtype</span> <span class="k">if</span> <span class="n">is_tensor</span> <span class="k">else</span> <span class="kc">None</span>
+
+        <span class="c1"># normalize to 2D list format [batch_size, seq_len]</span>
+        <span class="k">if</span> <span class="n">is_tensor</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()]</span>
+                <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="n">input_ids</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">input_ids_list</span> <span class="o">=</span> <span class="n">input_ids</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">input_ids</span><span class="p">]</span>
+                <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">batch_input_ids</span> <span class="o">=</span> <span class="n">input_ids</span>
+                <span class="n">single_sequence</span> <span class="o">=</span> <span class="kc">False</span>
 
-        <span class="n">original_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids_list</span><span class="p">,</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">has_chat_template</span> <span class="o">=</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s2">&quot;chat_template&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">chat_template</span>
+        <span class="n">warned_no_template</span> <span class="o">=</span> <span class="kc">False</span>
 
-        <span class="c1"># get examples based on mode</span>
-        <span class="k">if</span> <span class="n">using_runtime_examples</span><span class="p">:</span>
-            <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gather_runtime_examples</span><span class="p">(</span><span class="n">runtime_kwargs</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_from_pools</span><span class="p">()</span>
+        <span class="c1"># process each item independently (per-item sampling ensures correct behavior for query-dependent</span>
+        <span class="c1"># selectors and matches the sequential pipeline path)</span>
+        <span class="n">adapted_batch</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">input_ids_single</span> <span class="ow">in</span> <span class="n">batch_input_ids</span><span class="p">:</span>
+            <span class="n">original_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids_single</span><span class="p">,</span> <span class="n">skip_special_tokens</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">examples</span><span class="p">:</span>
-            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="s2">&quot;FewShot: No examples available after selection. Returning original input unchanged.&quot;</span><span class="p">,</span>
-                <span class="ne">UserWarning</span>
+            <span class="c1"># sample or gather examples independently per item</span>
+            <span class="k">if</span> <span class="n">using_runtime_examples</span><span class="p">:</span>
+                <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_gather_runtime_examples</span><span class="p">(</span><span class="n">runtime_kwargs</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">examples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_from_pools</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">examples</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                    <span class="s2">&quot;FewShot: No examples available after selection. Returning original input unchanged.&quot;</span><span class="p">,</span>
+                    <span class="ne">UserWarning</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">adapted_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">input_ids_single</span><span class="p">)</span>
+                <span class="k">continue</span>
+
+            <span class="n">examples_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_examples</span><span class="p">(</span><span class="n">examples</span><span class="p">)</span>
+
+            <span class="c1"># apply chat template</span>
+            <span class="k">if</span> <span class="n">has_chat_template</span><span class="p">:</span>
+                <span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">examples_text</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">original_text</span><span class="p">},</span>
+                <span class="p">]</span>
+                <span class="n">adapted_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
+                    <span class="n">messages</span><span class="p">,</span>
+                    <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="n">add_generation_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">warned_no_template</span><span class="p">:</span>
+                    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                        <span class="s2">&quot;No chat template found for tokenizer. Prepending few-shot examples directly to user query.&quot;</span><span class="p">,</span>
+                        <span class="ne">UserWarning</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">warned_no_template</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">adapted_text</span> <span class="o">=</span> <span class="n">examples_text</span> <span class="o">+</span> <span class="n">original_text</span>
+
+            <span class="n">adapted_tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">adapted_text</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">adapted_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">adapted_tokens</span><span class="p">)</span>
+
+        <span class="c1"># pad to uniform length for batched output</span>
+        <span class="n">max_len</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)</span> <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">adapted_batch</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;FewShot: tokenizer has no pad_token_id; cannot pad batch sequences. &quot;</span>
+                <span class="s2">&quot;Set a pad token before using FewShot with batched inputs.&quot;</span>
             <span class="p">)</span>
-            <span class="k">return</span> <span class="n">input_ids</span>
+        <span class="n">pad_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token_id</span>
 
-        <span class="n">examples_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format_examples</span><span class="p">(</span><span class="n">examples</span><span class="p">)</span>
+        <span class="n">padded_batch</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">seq</span> <span class="ow">in</span> <span class="n">adapted_batch</span><span class="p">:</span>
+            <span class="n">padded_batch</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">seq</span> <span class="o">+</span> <span class="p">[</span><span class="n">pad_id</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">max_len</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">seq</span><span class="p">)))</span>
 
-        <span class="c1"># apply chat template</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="s1">&#39;chat_template&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">chat_template</span><span class="p">:</span>
-            <span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">examples_text</span><span class="p">},</span>
-                <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">original_text</span><span class="p">}</span>
-            <span class="p">]</span>
-            <span class="n">adapted_text</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
-                <span class="n">messages</span><span class="p">,</span>
-                <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                <span class="n">add_generation_prompt</span><span class="o">=</span><span class="kc">True</span>
-            <span class="p">)</span>
+        <span class="c1"># convert back to original format</span>
+        <span class="k">if</span> <span class="n">is_tensor</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">padded_batch</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">original_dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">original_device</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">single_sequence</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">result</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="s2">&quot;No chat template found for tokenizer. Prepending few-shot examples directly to user query.&quot;</span><span class="p">,</span>
-                <span class="ne">UserWarning</span>
-            <span class="p">)</span>
-            <span class="n">adapted_text</span> <span class="o">=</span> <span class="n">examples_text</span> <span class="o">+</span> <span class="n">original_text</span>
-
-        <span class="c1"># encode the adapted text</span>
-        <span class="n">adapted_tokens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span>
-            <span class="n">adapted_text</span><span class="p">,</span>
-            <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-            <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="p">)</span>
-
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_ids</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">adapted_tokens</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">adapted_tokens</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">adapted_tokens</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">adapted_tokens</span>
+            <span class="k">if</span> <span class="n">single_sequence</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">padded_batch</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">padded_batch</span>
 
     <span class="k">return</span> <span class="n">adapter</span>
 </code></pre></div></td></tr></table></div>

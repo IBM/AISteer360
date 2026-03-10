@@ -304,7 +304,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../notebooks/" class="md-tabs__link">
+        <a href="../../examples/" class="md-tabs__link">
           
   
   
@@ -996,7 +996,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../notebooks/" class="md-nav__link ">
+            <a href="../../examples/" class="md-nav__link ">
               
   
   
@@ -1131,7 +1131,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1211,7 +1211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1234,7 +1234,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1314,7 +1314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1337,7 +1337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1421,7 +1421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1444,7 +1444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1467,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1490,7 +1490,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1578,7 +1578,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1601,12 +1601,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -2861,7 +2861,7 @@ the model itself. This is enabled in the toolkit through a prompt adapter <span 
 <p>Some examples of input control methods include: few-shot prompting, reasoning guidance (like CoT, ToT, GoT,
 self-consistency), automatic prompting methods, and prompt routing. Few-shot prompting is implemented in our toolkit
 under the control name <code>FewShot</code> (source code: <code>algorithms/input_control/few_shot/control.py</code>). See the notebook
-here: <a href="../../notebooks/controls/few_shot/">FewShot</a>.</p>
+here: <a href="../../examples/notebooks/control_few_shot/few_shot/">FewShot</a>.</p>
 <h2 id="structural-control">Structural control</h2>
 <p><strong>Baseline model</strong>: <span class="arithmatex">\(y \sim p_\theta(x)\)</span></p>
 <p><strong>Steered model</strong>: <span class="arithmatex">\(y \sim p_{\theta'}(x)\)</span></p>
@@ -2884,8 +2884,8 @@ via fine-tuning, adapter layers, or architectural modifications (e.g., merging) 
 <p>Examples of structural control methods include: fine-tuning methods (full, parameter efficient), soft prompting (prefix
 tuning, p-tuning), and model merging. Many of the structural control methods in the toolkit are implemented using
 wrappers around existing libraries, e.g., Hugging Face's PEFT library. Some implementations of structural control
-methods can be found in the notebooks: <a href="../../notebooks/controls/mergekit_wrapper/">MergeKit</a><sup id="fnref:goddard-etal-2024-arcees"><a class="footnote-ref" href="#fn:goddard-etal-2024-arcees">1</a></sup>,
-<a href="../../notebooks/controls/trl_wrapper/">TRL</a><sup id="fnref:vonwerra2022trl"><a class="footnote-ref" href="#fn:vonwerra2022trl">2</a></sup>.</p>
+methods can be found in the notebooks: <a href="../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/">MergeKit</a><sup id="fnref:goddard-etal-2024-arcees"><a class="footnote-ref" href="#fn:goddard-etal-2024-arcees">1</a></sup>,
+<a href="../../examples/notebooks/wrapper_trl/trl_wrapper/">TRL</a><sup id="fnref:vonwerra2022trl"><a class="footnote-ref" href="#fn:vonwerra2022trl">2</a></sup>.</p>
 <h2 id="state-control">State control</h2>
 <p><strong>Baseline model</strong>: <span class="arithmatex">\(y \sim p_\theta(x)\)</span></p>
 <p><strong>Steered model</strong>: <span class="arithmatex">\(y \sim p_{\theta}^a(x)\)</span></p>
@@ -2906,7 +2906,7 @@ variables during the forward pass.</p>
 </ul>
 <p>Some examples of output control methods include: activation addition/steering, attention steering, and representation
 patching. Example implementations of state control methods can be found in the following notebooks:
-<a href="../../notebooks/controls/cast/">CAST</a><sup id="fnref:lee2025programming"><a class="footnote-ref" href="#fn:lee2025programming">3</a></sup>, <a href="../../notebooks/controls/pasta/">PASTA</a><sup id="fnref:zhang2024tell"><a class="footnote-ref" href="#fn:zhang2024tell">4</a></sup>.</p>
+<a href="../../examples/notebooks/control_cast/cast/">CAST</a><sup id="fnref:lee2025programming"><a class="footnote-ref" href="#fn:lee2025programming">3</a></sup>, <a href="../../examples/notebooks/control_pasta/pasta/">PASTA</a><sup id="fnref:zhang2024tell"><a class="footnote-ref" href="#fn:zhang2024tell">4</a></sup>.</p>
 <h2 id="output-control">Output control</h2>
 <p><strong>Baseline model</strong>: <span class="arithmatex">\(y \sim p_\theta(x)\)</span></p>
 <p><strong>Steered model</strong>: <span class="arithmatex">\(y \sim d(p_{\theta})(x)\)</span></p>
@@ -2925,9 +2925,9 @@ patching. Example implementations of state control methods can be found in the f
 </li>
 </ul>
 <p>Examples of output control methods include: sampling/search strategies, weighted decoding, and reward-augmented
-decoding. Some example methods can be found in the following notebooks: <a href="../../notebooks/controls/deal/">DeAL</a><sup id="fnref:huang2024deal"><a class="footnote-ref" href="#fn:huang2024deal">5</a></sup>,
-<a href="../../notebooks/controls/rad/">RAD</a><sup id="fnref:deng-raffel-2023-reward"><a class="footnote-ref" href="#fn:deng-raffel-2023-reward">6</a></sup>, <a href="../../notebooks/controls/sasa/">SASA</a><sup id="fnref:ko2025large"><a class="footnote-ref" href="#fn:ko2025large">7</a></sup>,
-<a href="../../notebooks/controls/thinking_intervention/">ThinkingIntervention</a><sup id="fnref:wu2025effectively"><a class="footnote-ref" href="#fn:wu2025effectively">8</a></sup>.</p>
+decoding. Some example methods can be found in the following notebooks: <a href="../../examples/notebooks/control_deal/deal/">DeAL</a><sup id="fnref:huang2024deal"><a class="footnote-ref" href="#fn:huang2024deal">5</a></sup>,
+<a href="../../examples/notebooks/control_rad/rad/">RAD</a><sup id="fnref:deng-raffel-2023-reward"><a class="footnote-ref" href="#fn:deng-raffel-2023-reward">6</a></sup>, <a href="../../examples/notebooks/control_sasa/sasa/">SASA</a><sup id="fnref:ko2025large"><a class="footnote-ref" href="#fn:ko2025large">7</a></sup>,
+<a href="../../examples/notebooks/control_thinking_intervention/thinking_intervention/">ThinkingIntervention</a><sup id="fnref:wu2025effectively"><a class="footnote-ref" href="#fn:wu2025effectively">8</a></sup>.</p>
 <div class="footnote">
 <hr />
 <ol>

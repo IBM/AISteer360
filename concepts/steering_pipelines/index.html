@@ -304,7 +304,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../notebooks/" class="md-tabs__link">
+        <a href="../../examples/" class="md-tabs__link">
           
   
   
@@ -978,7 +978,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../notebooks/" class="md-nav__link ">
+            <a href="../../examples/" class="md-nav__link ">
               
   
   
@@ -1113,7 +1113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1193,7 +1193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1216,7 +1216,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1296,7 +1296,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1319,7 +1319,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1403,7 +1403,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1426,7 +1426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1449,7 +1449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1472,7 +1472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1560,7 +1560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1583,12 +1583,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -2799,7 +2799,7 @@ single steering operation on a model. This allows for individual controls to be 
 interventions.</p>
 <p>Steering pipelines are created using the <code>SteeringPipeline</code> class. The most common pattern is to specify a Hugging Face
 model name via <code>base_model_or_path</code> along with instantiated controls, e.g.,
-<a href="../../notebooks/controls/few_shot/"><code>few_shot</code></a> and <a href="../../notebooks/controls/trl_wrapper/"><code>dpo</code></a>, as follows:</p>
+<a href="../../examples/notebooks/control_few_shot/few_shot/"><code>few_shot</code></a> and <a href="../../examples/notebooks/wrapper_trl/trl_wrapper/"><code>dpo</code></a>, as follows:</p>
 <p><div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">aisteer360.algorithms.core.steering_pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">SteeringPipeline</span>
 
 <span class="n">pipeline</span> <span class="o">=</span> <span class="n">SteeringPipeline</span><span class="p">(</span>

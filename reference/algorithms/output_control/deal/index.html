@@ -302,7 +302,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../notebooks/" class="md-tabs__link">
+        <a href="../../../../examples/" class="md-tabs__link">
           
   
   
@@ -913,7 +913,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../notebooks/" class="md-nav__link ">
+            <a href="../../../../examples/" class="md-nav__link ">
               
   
   
@@ -1048,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1128,7 +1128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1151,7 +1151,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1231,7 +1231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1254,7 +1254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1338,7 +1338,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1361,7 +1361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1384,7 +1384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1407,7 +1407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1495,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1518,12 +1518,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -2288,6 +2288,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#aisteer360.algorithms.output_control.deal.control.DeAL.cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;cleanup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#aisteer360.algorithms.output_control.deal.control.DeAL.generate" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;generate
@@ -2962,6 +2971,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#aisteer360.algorithms.output_control.deal.control.DeAL.cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;cleanup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#aisteer360.algorithms.output_control.deal.control.DeAL.generate" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;generate
@@ -3136,7 +3154,7 @@
               Bases: <code><a class="autorefs autorefs-internal" title="            OutputControl (aisteer360.algorithms.output_control.base.OutputControl)" href="../../../library_reference/#aisteer360.algorithms.output_control.base.OutputControl">OutputControl</a></code></p>
 
 
-        <p>Implementation of DeAL (Decoding-time Alignment) from Deng et al., 2024.</p>
+        <p>Implementation of DeAL (Decoding-time Alignment) from Huang et al., 2024.</p>
 <p>DeAL performs controlled text generation through iterative lookahead search and reward-guided beam selection. Unlike
 training-time alignment methods, DeAL operates purely at inference time to steer language model outputs toward
 desired behaviors.</p>
@@ -3513,7 +3531,7 @@ https://arxiv.org/abs/2402.06147</li>
 <span class="normal">254</span>
 <span class="normal">255</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">DeAL</span><span class="p">(</span><span class="n">OutputControl</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Implementation of DeAL (Decoding-time Alignment) from Deng et al., 2024.</span>
+<span class="sd">    Implementation of DeAL (Decoding-time Alignment) from Huang et al., 2024.</span>
 
 <span class="sd">    DeAL performs controlled text generation through iterative lookahead search and reward-guided beam selection. Unlike</span>
 <span class="sd">    training-time alignment methods, DeAL operates purely at inference time to steer language model outputs toward</span>
@@ -3894,6 +3912,43 @@ https://arxiv.org/abs/2402.06147</li>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h5 id="aisteer360.algorithms.output_control.deal.control.DeAL.cleanup" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">cleanup</span><span class="p">()</span></code>
+
+</h5>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Release resources allocated during steer().</p>
+<p>Override this method in subclasses that allocate GPU memory or other resources
+(e.g., reward models) during steering to ensure proper cleanup.</p>
+
+
+            <details class="quote">
+              <summary>Source code in <code>aisteer360/algorithms/output_control/base.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">cleanup</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Release resources allocated during steer().</span>
+
+<span class="sd">    Override this method in subclasses that allocate GPU memory or other resources</span>
+<span class="sd">    (e.g., reward models) during steering to ensure proper cleanup.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

@@ -302,7 +302,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../notebooks/" class="md-tabs__link">
+        <a href="../../../../examples/" class="md-tabs__link">
           
   
   
@@ -913,7 +913,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../notebooks/" class="md-nav__link ">
+            <a href="../../../../examples/" class="md-nav__link ">
               
   
   
@@ -1048,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/few_shot/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_few_shot/few_shot/" class="md-nav__link">
         
   
   
@@ -1128,7 +1128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/mergekit_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_mergekit/mergekit_wrapper/" class="md-nav__link">
         
   
   
@@ -1151,7 +1151,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/trl_wrapper/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/wrapper_trl/trl_wrapper/" class="md-nav__link">
         
   
   
@@ -1231,7 +1231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/cast/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_cast/cast/" class="md-nav__link">
         
   
   
@@ -1254,7 +1254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/pasta/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_pasta/pasta/" class="md-nav__link">
         
   
   
@@ -1338,7 +1338,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/deal/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_deal/deal/" class="md-nav__link">
         
   
   
@@ -1361,7 +1361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/rad/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_rad/rad/" class="md-nav__link">
         
   
   
@@ -1384,7 +1384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/sasa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_sasa/sasa/" class="md-nav__link">
         
   
   
@@ -1407,7 +1407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/controls/thinking_intervention/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/control_thinking_intervention/thinking_intervention/" class="md-nav__link">
         
   
   
@@ -1495,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/commonsense_mcqa/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa/" class="md-nav__link">
         
   
   
@@ -1518,12 +1518,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../notebooks/benchmarks/instruction_following/" class="md-nav__link">
+      <a href="../../../../examples/notebooks/benchmark_instruction_following/instruction_following/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Instruction following
+    Instruction Following
     
   </span>
   
@@ -2521,15 +2521,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.format_instructions" class="md-nav__link">
-    <span class="md-ellipsis">
-      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;format_instructions
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.max_retries" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;max_retries
@@ -3072,15 +3063,6 @@
   <a href="#aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.extras" class="md-nav__link">
     <span class="md-ellipsis">
       <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;extras
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.format_instructions" class="md-nav__link">
-    <span class="md-ellipsis">
-      <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;format_instructions
     </span>
   </a>
   
@@ -3655,43 +3637,7 @@ Defaults to (1, 5).</p>
 
               <details class="quote">
                 <summary>Source code in <code>aisteer360/evaluation/metrics/base_judge.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 60</span>
-<span class="normal"> 61</span>
-<span class="normal"> 62</span>
-<span class="normal"> 63</span>
-<span class="normal"> 64</span>
-<span class="normal"> 65</span>
-<span class="normal"> 66</span>
-<span class="normal"> 67</span>
-<span class="normal"> 68</span>
-<span class="normal"> 69</span>
-<span class="normal"> 70</span>
-<span class="normal"> 71</span>
-<span class="normal"> 72</span>
-<span class="normal"> 73</span>
-<span class="normal"> 74</span>
-<span class="normal"> 75</span>
-<span class="normal"> 76</span>
-<span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
-<span class="normal"> 91</span>
-<span class="normal"> 92</span>
-<span class="normal"> 93</span>
-<span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 96</span>
 <span class="normal"> 97</span>
 <span class="normal"> 98</span>
 <span class="normal"> 99</span>
@@ -3881,7 +3827,42 @@ Defaults to (1, 5).</p>
 <span class="normal">283</span>
 <span class="normal">284</span>
 <span class="normal">285</span>
-<span class="normal">286</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">LLMJudgeMetric</span><span class="p">(</span><span class="n">Metric</span><span class="p">):</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">LLMJudgeMetric</span><span class="p">(</span><span class="n">Metric</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Base class for LLM-as-a-judge evaluation metrics.</span>
 
 <span class="sd">    Leverages a language model to evaluate the quality of generated text responses according to customized (natural</span>
@@ -3956,9 +3937,8 @@ Defaults to (1, 5).</p>
         <span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">output_parser</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_fn</span> <span class="o">=</span> <span class="n">build_structured_parser</span><span class="p">(</span><span class="n">scale</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">format_instructions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_fn</span> <span class="o">=</span> <span class="n">build_structured_parser</span><span class="p">(</span><span class="n">scale</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">base_prompt_template</span> <span class="o">=</span> <span class="n">prompt_template</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">format_instructions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_parser</span><span class="o">.</span><span class="n">get_format_instructions</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_retries</span> <span class="o">=</span> <span class="n">max_retries</span>
 
@@ -4187,26 +4167,6 @@ Defaults to (1, 5).</p>
 
 <h4 id="aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.extras" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">extras</span> <span class="o">=</span> <span class="n">extras</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
-
-</h4>
-
-
-    <div class="doc doc-contents ">
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h4 id="aisteer360.evaluation.metrics.base_judge.LLMJudgeMetric.format_instructions" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">format_instructions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_parser</span><span class="o">.</span><span class="n">get_format_instructions</span><span class="p">()</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
@@ -4518,42 +4478,7 @@ referenced in the prompt_template using the {prompt} placeholder.</p>
 
             <details class="quote">
               <summary>Source code in <code>aisteer360/evaluation/metrics/base_judge.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">206</span>
-<span class="normal">207</span>
-<span class="normal">208</span>
-<span class="normal">209</span>
-<span class="normal">210</span>
-<span class="normal">211</span>
-<span class="normal">212</span>
-<span class="normal">213</span>
-<span class="normal">214</span>
-<span class="normal">215</span>
-<span class="normal">216</span>
-<span class="normal">217</span>
-<span class="normal">218</span>
-<span class="normal">219</span>
-<span class="normal">220</span>
-<span class="normal">221</span>
-<span class="normal">222</span>
-<span class="normal">223</span>
-<span class="normal">224</span>
-<span class="normal">225</span>
-<span class="normal">226</span>
-<span class="normal">227</span>
-<span class="normal">228</span>
-<span class="normal">229</span>
-<span class="normal">230</span>
-<span class="normal">231</span>
-<span class="normal">232</span>
-<span class="normal">233</span>
-<span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span>
-<span class="normal">237</span>
-<span class="normal">238</span>
-<span class="normal">239</span>
-<span class="normal">240</span>
-<span class="normal">241</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">241</span>
 <span class="normal">242</span>
 <span class="normal">243</span>
 <span class="normal">244</span>
@@ -4598,7 +4523,42 @@ referenced in the prompt_template using the {prompt} placeholder.</p>
 <span class="normal">283</span>
 <span class="normal">284</span>
 <span class="normal">285</span>
-<span class="normal">286</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">inference_mode</span><span class="p">()</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@torch</span><span class="o">.</span><span class="n">inference_mode</span><span class="p">()</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">responses</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
@@ -4705,10 +4665,9 @@ referenced in the prompt_template using the {prompt} placeholder.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Build a StructuredOutputParser and parsing function for rating predictions.</p>
-<p>Constructs a <code>StructuredOutputParser</code> configured with a single <code>ResponseSchema</code> that expects a float score within
-the specified scale range. It also returns a parsing function that extracts and validates the score from text,
-ensuring the result is clamped between the provided bounds.</p>
+        <p>Build format instructions and a parsing function for rating predictions.</p>
+<p>Returns a lightweight parser that extracts a <code>{"score": &lt;float&gt;}</code> JSON object
+from the judge model's response and clamps the value to the given scale.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -4742,85 +4701,121 @@ ensuring the result is clamped between the provided bounds.</p>
     </table>
 
 
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A tuple of <code>(format_instructions: str, parse_fn)</code> where <em>format_instructions</em></p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>is the instruction string to append to the judge prompt and <em>parse_fn(text, scale)</em></p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>returns a clamped float score.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
             <details class="quote">
               <summary>Source code in <code>aisteer360/evaluation/metrics/base_judge.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span>
-<span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
-<span class="normal">51</span>
-<span class="normal">52</span>
-<span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span>
-<span class="normal">57</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_structured_parser</span><span class="p">(</span><span class="n">scale</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Build a StructuredOutputParser and parsing function for rating predictions.</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span>
+<span class="normal">66</span>
+<span class="normal">67</span>
+<span class="normal">68</span>
+<span class="normal">69</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span>
+<span class="normal">83</span>
+<span class="normal">84</span>
+<span class="normal">85</span>
+<span class="normal">86</span>
+<span class="normal">87</span>
+<span class="normal">88</span>
+<span class="normal">89</span>
+<span class="normal">90</span>
+<span class="normal">91</span>
+<span class="normal">92</span>
+<span class="normal">93</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">build_structured_parser</span><span class="p">(</span><span class="n">scale</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build format instructions and a parsing function for rating predictions.</span>
 
-<span class="sd">    Constructs a `StructuredOutputParser` configured with a single `ResponseSchema` that expects a float score within</span>
-<span class="sd">    the specified scale range. It also returns a parsing function that extracts and validates the score from text,</span>
-<span class="sd">    ensuring the result is clamped between the provided bounds.</span>
+<span class="sd">    Returns a lightweight parser that extracts a ``{&quot;score&quot;: &lt;float&gt;}`` JSON object</span>
+<span class="sd">    from the judge model&#39;s response and clamps the value to the given scale.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        scale (tuple[float, float]): A `(low, high)` tuple specifying the valid inclusive range for the score.</span>
+<span class="sd">        scale (tuple[float, float]): A ``(low, high)`` tuple specifying the valid inclusive range for the score.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A tuple of ``(format_instructions: str, parse_fn)`` where *format_instructions*</span>
+<span class="sd">        is the instruction string to append to the judge prompt and *parse_fn(text, scale)*</span>
+<span class="sd">        returns a clamped float score.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="n">scale</span>
-    <span class="n">score_schema</span> <span class="o">=</span> <span class="n">ResponseSchema</span><span class="p">(</span>
-        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;score&quot;</span><span class="p">,</span>
-        <span class="n">description</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;A single float between </span><span class="si">{</span><span class="n">low</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">high</span><span class="si">}</span><span class="s2"> (inclusive) that rates the prediction.&quot;</span>
-    <span class="p">)</span>
-    <span class="n">output_parser</span> <span class="o">=</span> <span class="n">StructuredOutputParser</span><span class="o">.</span><span class="n">from_response_schemas</span><span class="p">([</span><span class="n">score_schema</span><span class="p">])</span>
+    <span class="n">format_instructions</span> <span class="o">=</span> <span class="n">_FORMAT_INSTRUCTIONS</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">low</span><span class="o">=</span><span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="o">=</span><span class="n">high</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">parse_fn</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">_</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Parse and validate a score from text using the structured output parser.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse and validate a score from text.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            text: Raw text response from the judge model.</span>
+<span class="sd">            _: Unused (scale is captured from the enclosing scope).</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            A tuple with elements:</span>
-
-<span class="sd">                - StructuredOutputParser: The parser configured with the score schema.</span>
-<span class="sd">                - Callable[[str, tuple[float, float]], float]: A function that takes a raw text response and the</span>
-<span class="sd">                  `(low, high)` scale, extracts the score, converts it to a float, and clamps it within the valid range.</span>
+<span class="sd">            A float score clamped to [low, high].</span>
 
 <span class="sd">        Raises:</span>
 <span class="sd">            ValueError: If the score cannot be parsed from the text.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">output_parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">)[</span><span class="s2">&quot;score&quot;</span><span class="p">])</span>
-        <span class="k">except</span> <span class="n">OutputParserException</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not parse score: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">_extract_json</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;score&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">parsed</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;JSON missing &#39;score&#39; key, got keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">parsed</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">parsed</span><span class="p">[</span><span class="s2">&quot;score&quot;</span><span class="p">])</span>
         <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">high</span><span class="p">,</span> <span class="n">score</span><span class="p">))</span>
 
-    <span class="k">return</span> <span class="n">output_parser</span><span class="p">,</span> <span class="n">parse_fn</span>
+    <span class="k">return</span> <span class="n">format_instructions</span><span class="p">,</span> <span class="n">parse_fn</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
