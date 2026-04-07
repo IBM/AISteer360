@@ -217,7 +217,7 @@ class SteeringPipeline:
         """vLLM backend: steer on a temp HF model, then boot vLLM engine."""
         import gc
 
-        from aisteer360.adapters.vllm_hook.backend import boot_vllm_engine
+        from aisteer360.adapter_vllm_hook.backend import boot_vllm_engine
 
         # Load a temporary HF model to run steer(), 
         # same loop as the regular steer() for preparing the control
