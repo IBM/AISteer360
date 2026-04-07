@@ -7,7 +7,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control.common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control.common.hook_utils import get_model_dtype, get_model_layer_list
 from aisteer360.algorithms.state_control.common.selectors import FixedLayerSelector, FractionalDepthSelector
 from aisteer360.algorithms.state_control.common.token_scope import compute_prompt_lens, make_token_mask
 from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform, NormPreservingTransform
@@ -88,7 +88,7 @@ class CAA(StateControl):
             sv = estimator.fit(model, tokenizer, data=self.data, spec=self.train_spec)
 
         # move to device
-        sv = sv.to(device, dtype=model.dtype)
+        sv = sv.to(device, dtype=get_model_dtype(model))
 
         # optionally normalize the vector
         if self.normalize_vector:

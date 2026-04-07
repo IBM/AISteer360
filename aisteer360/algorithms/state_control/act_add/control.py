@@ -10,6 +10,7 @@ from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control.common.estimators import SinglePairEstimator
 from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate
 from aisteer360.algorithms.state_control.common.hook_utils import (
+    get_model_dtype,
     get_model_layer_list,
     extract_hidden_states,
     replace_hidden_states,
@@ -78,7 +79,7 @@ class ActAdd(StateControl):
             )
 
         device = next(model.parameters()).device
-        sv = sv.to(device, dtype=model.dtype)
+        sv = sv.to(device, dtype=get_model_dtype(model))
 
         # resolve layer_id via selector
         if self.layer_id is not None:

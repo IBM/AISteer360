@@ -67,6 +67,8 @@ class SteeringPipeline:
     device: torch.device | str | None = None
     hf_model_kwargs: dict = field(default_factory=dict)
     lazy_init: bool = False
+    backend: str = "hf"
+    vllm_kwargs: dict = field(default_factory=dict)
 
     # lazy‑filled fields
     model: PreTrainedModel | None = field(init=False, default=None)
@@ -78,6 +80,7 @@ class SteeringPipeline:
     output_control: OutputControl = field(init=False)
 
     _is_steered: bool = field(default=False, init=False, repr=False)
+    _vllm_engine: object = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
 
@@ -88,8 +91,16 @@ class SteeringPipeline:
         self.state_control = controls_merged["state_control"]
         self.output_control = controls_merged["output_control"]
 
+        if self.backend == "vllm":
+            # vLLM backend: skip model loading, only load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.tokenizer_name_or_path or self.model_name_or_path,
+                trust_remote_code=True,
+            )
+            self.tokenizer = ensure_pad_token(self.tokenizer)
+
         # load HF artifacts
-        if not self.lazy_init:
+        elif not self.lazy_init:
             if self.model_name_or_path is None:
                 raise ValueError("`model_name_or_path` must be provided when lazy_init=False")
 
@@ -164,6 +175,10 @@ class SteeringPipeline:
         if self._is_steered:
             return
 
+        if self.backend == "vllm":
+            self._steer_vllm(**steer_kwargs)
+            return
+
         # steer each control (bottom-up order: structural -> input -> state -> output)
         for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
             steer_fn = getattr(control, "steer", None)
@@ -198,12 +213,47 @@ class SteeringPipeline:
         # return steered pipeline
         self._is_steered = True
 
+    def _steer_vllm(self, **steer_kwargs) -> None:
+        """vLLM backend: steer on a temp HF model, then boot vLLM engine."""
+        import gc
+
+        from aisteer360.adapter_vllm_hook.backend import boot_vllm_engine
+
+        # Load a temporary HF model to run steer(), 
+        # same loop as the regular steer() for preparing the control
+        temp_model = AutoModelForCausalLM.from_pretrained(
+            self.model_name_or_path,
+            **self.hf_model_kwargs,
+        )
+
+        for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
+            steer_fn = getattr(control, "steer", None)
+            if callable(steer_fn):
+                maybe_new = steer_fn(temp_model, tokenizer=self.tokenizer, **steer_kwargs)
+                if isinstance(maybe_new, nn.Module):
+                    temp_model = maybe_new
+
+        # Unload temp model to free up the space before booting vLLM; 
+        # This does not work with structural control
+        del temp_model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        # Boot vLLM engine with the state control
+        self._vllm_engine = boot_vllm_engine(
+            model_name_or_path=str(self.model_name_or_path),
+            state_control=self.state_control,
+            vllm_kwargs=self.vllm_kwargs,
+        )
+        self._is_steered = True
+
     def _prepare_inputs(
             self,
             input_ids: list[int] | torch.LongTensor,
             attention_mask: torch.Tensor | None,
             runtime_kwargs: dict | None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | list[str]:
         """Apply input control and normalize input tensors.
 
         Transforms the prompt via the input control's adapter and ensures both input_ids and attention_mask are
@@ -215,10 +265,10 @@ class SteeringPipeline:
             runtime_kwargs: Per-call parameters for input control
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: (steered_input_ids, attention_mask), both as 2D tensors on model device
+            HF backend: tuple[torch.Tensor, torch.Tensor] — (steered_input_ids, attention_mask), both as 2D tensors on model device
+            vLLM backend: list[str] — decoded prompt strings
         """
         runtime_kwargs = runtime_kwargs or {}
-        device = self.model.device
 
         # apply input control adapter
         adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
@@ -229,6 +279,12 @@ class SteeringPipeline:
             steered_input_ids = torch.tensor(steered_input_ids, dtype=torch.long)
         if steered_input_ids.ndim == 1:
             steered_input_ids = steered_input_ids.unsqueeze(0)
+
+        # decode to strings and return 
+        if self.backend == "vllm":
+            return self.tokenizer.batch_decode(steered_input_ids, skip_special_tokens=False)
+
+        device = self.model.device
         steered_input_ids = steered_input_ids.to(device)
 
         # normalize attention_mask
@@ -302,6 +358,9 @@ class SteeringPipeline:
         if not self._is_steered:
             raise RuntimeError("Must call `.steer()` before `.generate()`.")
 
+        if self.backend == "vllm":
+            return self._generate_vllm(input_ids, attention_mask, runtime_kwargs, **gen_kwargs)
+
         runtime_kwargs = runtime_kwargs or {}
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
@@ -342,10 +401,60 @@ class SteeringPipeline:
         Returns:
             Decoded text string (single prompt) or list of strings (batch)
         """
+        if self.backend == "vllm":
+            return self._generate_text_vllm(*args, **kwargs)
         ids = self.generate(*args, **kwargs)
         if ids.ndim == 1:
             return self.tokenizer.decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         return self.tokenizer.batch_decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+
+    
+    def _generate_vllm(
+            self,
+            input_ids: list[int] | torch.LongTensor,
+            attention_mask: torch.Tensor | None = None,
+            runtime_kwargs: dict | None = None,
+            **gen_kwargs,
+    ) -> torch.Tensor:
+        """Generate via vLLM backend.
+
+        Returns:
+            Generated token IDs
+        """
+        prompts = self._prepare_inputs(input_ids, None, runtime_kwargs)
+
+        sampling_params = _gen_kwargs_to_sampling_params(gen_kwargs)
+        use_hook = gen_kwargs.pop("use_hook", True)
+        outputs = self._vllm_engine.generate(prompts, sampling_params, use_hook=use_hook)
+
+        # convert RequestOutput → padded token ID tensor
+        all_ids = [torch.tensor(out.outputs[0].token_ids, dtype=torch.long) for out in outputs]
+        max_len = max(t.size(0) for t in all_ids)
+        pad_id = self.tokenizer.pad_token_id or 0
+        padded = torch.full((len(all_ids), max_len), pad_id, dtype=torch.long)
+        for i, t in enumerate(all_ids):
+            padded[i, : t.size(0)] = t
+        return padded
+
+    def _generate_text_vllm(
+            self,
+            input_ids: list[int] | torch.LongTensor,
+            attention_mask: torch.Tensor | None = None,
+            runtime_kwargs: dict | None = None,
+            **gen_kwargs,
+    ) -> str | list[str]:
+
+        if not self._is_steered:
+            raise RuntimeError("Must call `.steer()` before `.generate_text()`.")
+
+        prompts = self._prepare_inputs(input_ids, None, runtime_kwargs)
+
+        sampling_params = _gen_kwargs_to_sampling_params(gen_kwargs)
+        use_hook = gen_kwargs.pop("use_hook", True)
+        outputs = self._vllm_engine.generate(prompts, sampling_params, use_hook=use_hook)
+
+        texts = [out.outputs[0].text for out in outputs]
+        return texts[0] if len(texts) == 1 else texts
 
     def compute_logprobs(
             self,
@@ -381,6 +490,11 @@ class SteeringPipeline:
         """
         if not self._is_steered:
             raise RuntimeError("Must call `.steer()` before `.compute_logprobs()`.")
+        if self.backend == "vllm":
+            raise NotImplementedError(
+                "compute_logprobs() is not supported with backend='vllm'. "
+                "Use backend='hf' for logprob computation."
+            )
         if ref_output_ids is None:
             raise ValueError("`ref_output_ids` is required for `compute_logprobs()`.")
 
@@ -537,3 +651,31 @@ class SteeringPipeline:
             all_logprobs.append(token_logprobs)
 
         return torch.cat(all_logprobs, dim=0)
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers
+# ---------------------------------------------------------------------------
+
+def _gen_kwargs_to_sampling_params(gen_kwargs: dict):
+    """Map HuggingFace-style generation kwargs to vLLM SamplingParams."""
+    from vllm import SamplingParams
+
+    mapping = {
+        "max_new_tokens": "max_tokens",
+        "max_length": "max_tokens",
+        "temperature": "temperature",
+        "top_p": "top_p",
+        "top_k": "top_k",
+        "repetition_penalty": "repetition_penalty",
+    }
+    sp_kwargs: dict = {}
+    for hf_key, vllm_key in mapping.items():
+        if hf_key in gen_kwargs:
+            sp_kwargs[vllm_key] = gen_kwargs.pop(hf_key)
+
+    # sensible defaults
+    sp_kwargs.setdefault("max_tokens", 256)
+    sp_kwargs.setdefault("temperature", 0.7)
+
+    return SamplingParams(**sp_kwargs)

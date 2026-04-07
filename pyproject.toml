@@ -71,6 +71,11 @@ docs = [
     "mkdocs-bibtex",
 ]
 
+vllm = [
+    "vllm>=0.8.0",
+    "vllm-hook-plugins",
+]
+
 dev = [
     "pytest>=8.3.2,<9.0.0",
     "pre-commit>=4.3.0"
