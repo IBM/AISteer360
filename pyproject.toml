@@ -42,7 +42,7 @@ dependencies = [
     "immutabledict>=4.2.1,<5.0.0",
     "langdetect==1.0.9",
     "matplotlib>=3.8.0,<4.0.0",
-    "mergekit==0.0.5.1",
+    "mergekit>=0.0.5.1",
     "nltk>=3.9.1,<4.0.0",
     "notebook>=7.4.5",
     "numpy>=1.16.0",

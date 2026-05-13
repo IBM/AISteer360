@@ -43,6 +43,9 @@ class MCQAPositionalBias(Metric):
 
         valid_responses = [r for r in responses if r is not None]
 
+        if not valid_responses:
+            return {"mean": 0.0, "std": 0.0}
+
         position_counts = Counter(valid_responses)
         total_responses = len(valid_responses)
         positions = sorted(position_counts.keys())
