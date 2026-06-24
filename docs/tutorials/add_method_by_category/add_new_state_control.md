@@ -12,7 +12,7 @@ First, create the registry file:
 from .control import ActivationBias
 from .args import ActivationBiasArgs
 
-REGISTRY_ENTRY = {
+STEERING_METHOD = {
     "category": "state_control",
     "name": "activation_bias",
     "control": ActivationBias,
@@ -132,12 +132,5 @@ activation_bias_pipeline = SteeringPipeline(
 activation_bias_pipeline.steer()
 
 prompt = "What should I do in Prague?"
-chat = activation_bias_pipeline.tokenizer.apply_chat_template(
-    [{"role": "user", "content": prompt}],
-    tokenize=False,
-    add_generation_prompt=True
-)
-inputs = activation_bias_pipeline.tokenizer(chat, return_tensors="pt")
-
-print(activation_bias_pipeline.generate_text(inputs.input_ids, max_new_tokens=50))
+print(activation_bias_pipeline.generate(prompt, max_new_tokens=50))
 ```

@@ -1,6 +1,6 @@
-# TRL
+# CPO
 
-::: aisteer360.algorithms.structural_control.wrappers.trl
+::: aisteer360.algorithms.input_control.cpo
     handler: python
     options:
         show_if_no_docstring: true
@@ -12,13 +12,11 @@
         separate_signature: false
         inherited_members: true
         show_submodules: true
+        show_root_heading: true
         show_symbol_type_heading: true
         show_symbol_type_toc: true
         filters:
           - "!^_"
-          - "!apotrainer"
-          - "!dpotrainer"
-          - "!sfttrainer"
           - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"

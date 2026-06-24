@@ -1,6 +1,6 @@
-# TRL
+# Common library
 
-::: aisteer360.algorithms.structural_control.wrappers.trl
+::: aisteer360.algorithms.state_control._common
     handler: python
     options:
         show_if_no_docstring: true
@@ -15,10 +15,6 @@
         show_symbol_type_heading: true
         show_symbol_type_toc: true
         filters:
-          - "!^_"
-          - "!apotrainer"
-          - "!dpotrainer"
-          - "!sfttrainer"
           - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"

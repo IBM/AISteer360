@@ -38,7 +38,10 @@ nav:
     - Notebooks: examples/index.md
     - Controls:
       - Input control:
+        - CPO: "examples/notebooks/control_cpo/cpo.ipynb"
         - FewShot: "examples/notebooks/control_few_shot/few_shot.ipynb"
+        - GEPA: "examples/notebooks/control_gepa/gepa.ipynb"
+        - PRewrite: "examples/notebooks/control_prewrite/prewrite.ipynb"
       - Structural control:
         - MergeKit wrapper: "examples/notebooks/wrapper_mergekit/mergekit_wrapper.ipynb"
         - TRL wrapper: "examples/notebooks/wrapper_trl/trl_wrapper.ipynb"
@@ -67,14 +70,18 @@ nav:
         - Core: reference/algorithms/core.md
         - Input control:
             - Base classes: reference/algorithms/input_control/base_input_control.md
+            - Common library: reference/algorithms/input_control/_common.md
             - FewShot: reference/algorithms/input_control/few_shot.md
+            - PRewrite: reference/algorithms/input_control/prewrite.md
+            - CPO: reference/algorithms/input_control/cpo.md
+            - GEPA: reference/algorithms/input_control/gepa.md
         - Structural control:
             - Base classes: reference/algorithms/structural_control/base_structural_control.md
             - MergeKit wrapper: reference/algorithms/structural_control/mergekit_wrapper.md
             - TRL wrapper: reference/algorithms/structural_control/trl_wrapper.md
         - State control:
             - Base classes: reference/algorithms/state_control/base_state_control.md
-            - Common library: reference/algorithms/state_control/common.md
+            - Common library: reference/algorithms/state_control/_common.md
             - ActAdd: reference/algorithms/state_control/act_add.md
             - CAA: reference/algorithms/state_control/caa.md
             - CAST: reference/algorithms/state_control/cast.md

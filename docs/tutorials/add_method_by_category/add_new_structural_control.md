@@ -11,7 +11,7 @@ The registry follows the standard pattern as:
 from .control import NoiseInjection
 from .args import NoiseInjectionArgs
 
-REGISTRY_ENTRY = {
+STEERING_METHOD = {
     "category": "structural_control",
     "name": "noise_injection",
     "control": NoiseInjection,
@@ -129,12 +129,5 @@ noise_injection_pipeline = SteeringPipeline(
 noise_injection_pipeline.steer()
 
 prompt = "What is a neural network?"
-chat = noise_injection_pipeline.tokenizer.apply_chat_template(
-    [{"role": "user", "content": prompt}],
-    tokenize=False,
-    add_generation_prompt=True
-)
-inputs = noise_injection_pipeline.tokenizer(chat, return_tensors="pt")
-
-print(noise_injection_pipeline.generate_text(inputs.input_ids, max_new_tokens=50))
+print(noise_injection_pipeline.generate(prompt, max_new_tokens=50))
 ```
