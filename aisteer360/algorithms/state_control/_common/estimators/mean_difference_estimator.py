@@ -4,17 +4,17 @@ import logging
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from aisteer360.algorithms.state_control.common.estimators.base import BaseEstimator
-from aisteer360.algorithms.state_control.common.estimators.contrastive_direction_estimator import (
+from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
+from aisteer360.algorithms.state_control._common.estimators.contrastive_direction_estimator import (
     _layerwise_tokenwise_hidden,
 )
-from aisteer360.algorithms.state_control.common.estimators.utils import (
+from aisteer360.algorithms.state_control._common.estimators.utils import (
     get_last_token_positions,
     select_at_positions,
     tokenize_pairs,
 )
-from aisteer360.algorithms.state_control.common.specs import ContrastivePairs, VectorTrainSpec
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.specs import ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 logger = logging.getLogger(__name__)
 
