@@ -142,8 +142,10 @@ class PASTA(StateControl):
                     self.tokenizer(substring, return_tensors="pt", padding=True)['input_ids'],
                     skip_special_tokens=True
                 )
-            except:
-                breakpoint()
+            except Exception as error:
+                raise ValueError(
+                    f"PASTA failed to re-tokenize substrings {substring!r}: {error}"
+                ) from error
 
         if self.tokenizer.padding_side != "left":
             self.tokenizer.padding_side = "left"
@@ -336,11 +338,26 @@ class PASTA(StateControl):
 
         attention_mask = input_kwargs.get("attention_mask")
         if attention_mask is None:  # build it
-            batch_size, sequence_len, _ = hidden_states.size()
+            batch_size, query_len, _ = hidden_states.size()
             num_heads = self.model.config.num_attention_heads
-            causal = torch.triu(
-                hidden_states.new_full((sequence_len, sequence_len), float("-inf")),
-                diagonal=1,
+
+            # during decoding the query attends to the full kv cache, so the mask spans the cached key
+            # positions (read from cache_position) rather than just the current query window
+            cache_position = input_kwargs.get("cache_position")
+            if cache_position is not None:
+                key_len = int(cache_position[-1]) + 1
+            else:
+                key_len = query_len
+
+            # query row i sits at absolute position (key_len - query_len + i) and attends to keys 0..position
+            query_positions = torch.arange(
+                key_len - query_len, key_len, device=hidden_states.device
+            ).unsqueeze(1)
+            key_positions = torch.arange(key_len, device=hidden_states.device).unsqueeze(0)
+            causal = torch.where(
+                key_positions <= query_positions,
+                hidden_states.new_zeros(()),
+                hidden_states.new_full((), float("-inf")),
             )
             attention_mask = causal[None, None]  # (1,1,q,k)
             attention_mask = attention_mask.expand(
