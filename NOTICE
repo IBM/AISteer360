@@ -10,25 +10,24 @@ This distribution contains code licensed under multiple open source licenses.
    https://www.apache.org/licenses/LICENSE-2.0
 
 2. Third-Party Component: MergeKit
-   Version: 0.0.5.1
-   License: GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later)
+   Version: 0.1.4 (pinned >=0.1.4,<0.2.0)
+   License: GNU Lesser General Public License v3.0 (LGPL-3.0-only)
    License text: https://www.gnu.org/licenses/lgpl-3.0.html
-   Source: https://pypi.org/project/mergekit/0.0.5.1/
+   Source: https://pypi.org/project/mergekit/0.1.4/
 
    MergeKit is distributed as an independent Python package dependency and is not
-   modified or redistributed by this project. This project specifically depends on
-   the LGPL-licensed version 0.0.5.1. Versions after 0.0.5.1 (starting with v0.1)
-   use the Business Source License (BSL), which cannot be distributed under
-   Apache 2.0 terms and are therefore excluded from this toolkit.
+   modified or redistributed by this project. Earlier v0.1 releases were distributed
+   under the Business Source License (BSL), which could not be redistributed under
+   Apache 2.0 terms; MergeKit has since returned to the LGPL-3.0 license, so this
+   project now depends on a current LGPL-licensed release (>= 0.1.4).
 
 3. Third-Party Component: TRL (Hugging Face)
-   Version: 0.16.1
+   Version: 0.27.2 (pinned >=0.19.0,<0.28.0)
    License: Apache License, Version 2.0
    License text: https://www.apache.org/licenses/LICENSE-2.0
    Source: https://github.com/huggingface/trl
 
 License Summary:
 - The original aisteer360 toolkit code is licensed under Apache 2.0.
-- MergeKit v0.0.5.1 is licensed under LGPL-3.0-or-later and included as an unmodified dependency.
-- TRL v0.16.1 is licensed under Apache 2.0 and included as an unmodified dependency.
-- MergeKit versions after 0.0.5.1 use the BSL and are not included in this distribution.
+- MergeKit (>= 0.1.4) is licensed under LGPL-3.0-only and included as an unmodified dependency.
+- TRL (>= 0.19.0) is licensed under Apache 2.0 and included as an unmodified dependency.
