@@ -53,13 +53,13 @@ class PPOTrainerMixin(TRLMixin, StructuralControl):
         reward_model = AutoModelForSequenceClassification.from_pretrained(
             self.reward_model_name_or_path,
             num_labels=1,
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
         value_path = self.value_model_name_or_path or self.reward_model_name_or_path
         value_model = AutoModelForSequenceClassification.from_pretrained(
             value_path,
             num_labels=1,
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
 
         self._check_scoring_vocab(reward_model, value_model)

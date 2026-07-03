@@ -135,6 +135,7 @@ def train(
     use_dml: bool | None = None,
     encoder: TextEncoder | None = None,
     device=None,
+    trust_remote_code: bool = False,
 ) -> CausalRewardScorer:
     """Fit the CPO reward model on a list of `{query, prompt, score}` rows.
 
@@ -147,10 +148,15 @@ def train(
             when econml is importable, otherwise fall back.
         encoder: Optional pre-built `TextEncoder`. Useful for tests to avoid reloading.
         device: Optional device for the encoder.
+        trust_remote_code: Trust remote code when loading `embedding_model`. Ignored if `encoder` is supplied.
     """
     if not offline_data:
         raise ValueError("offline_data is empty.")
-    enc = encoder if encoder is not None else TextEncoder(embedding_model, device=device)
+    enc = (
+        encoder
+        if encoder is not None
+        else TextEncoder(embedding_model, device=device, trust_remote_code=trust_remote_code)
+    )
 
     queries = [row["query"] for row in offline_data]
     prompts = [row["prompt"] for row in offline_data]

@@ -96,6 +96,7 @@ class CPO(InputControl):
     offline_data: list[dict] | None = None
     n_prompts_per_query: int = 200
     embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
+    trust_remote_code: bool = True
     pca_query_dim: int = 40
     pca_prompt_dim: int = 15
     prompt_lm: Any = None
@@ -127,7 +128,11 @@ class CPO(InputControl):
         self.tokenizer = tokenizer
 
         encoder_device = next(model.parameters()).device if model is not None else None
-        self._encoder = TextEncoder(self.embedding_model, device=encoder_device)
+        self._encoder = TextEncoder(
+            self.embedding_model,
+            device=encoder_device,
+            trust_remote_code=self.trust_remote_code,
+        )
 
         prompt_lm = self.prompt_lm if self.prompt_lm is not None else model
         self._proposer = LLMMetaPromptProposer(
@@ -147,6 +152,7 @@ class CPO(InputControl):
             seed_prompt=self.seed_prompt,
             use_dml=self.use_dml,
             encoder=self._encoder,
+            trust_remote_code=self.trust_remote_code,
         )
 
         self.memory = CPOMemory(causal_scorer=scorer)

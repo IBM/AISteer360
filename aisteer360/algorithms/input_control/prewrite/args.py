@@ -129,6 +129,11 @@ class PRewriteArgs(BaseArgs):
         },
     )
 
+    trust_remote_code: bool = field(
+        default=False,
+        metadata={"help": "Trust remote code when loading the rewriter model/tokenizer."},
+    )
+
     rewriter_gen_kwargs: dict | None = field(
         default=None,
         metadata={"help": "Generation kwargs for the rewriter LLM (e.g. temperature, max_new_tokens)."},

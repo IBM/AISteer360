@@ -114,7 +114,7 @@ class ShortAnswerMatch(Metric):
         exact_scores: list[float] = []
         f1_scores: list[float] = []
         for response, gold in zip(responses, golds):
-            response = response or ""
+            response = response or ""  # treat a missing response as empty
             candidates = [gold] if isinstance(gold, str) else list(gold)
             if not candidates:
                 raise ValueError("Each reference must be a non-empty string or list of strings.")

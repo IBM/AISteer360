@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import warnings
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -349,3 +350,32 @@ class TestCPOMemoryRoundTrip:
         cpo.memory.save(tmp_path / "mem")
         loaded = CPOMemory.load(tmp_path / "mem", encoder=cpo.memory.causal_scorer.encoder)
         assert loaded.query_cache == cpo.memory.query_cache
+
+
+class TestCPOTrustRemoteCode:
+    """CPO is the documented exception: `trust_remote_code` defaults to True for the paper-default encoder."""
+
+    def test_args_default_true(self, offline_rows):
+        assert CPOArgs(seed_prompt="x", offline_data=offline_rows).trust_remote_code is True
+
+    def test_args_opt_out_false(self, offline_rows):
+        args = CPOArgs(seed_prompt="x", offline_data=offline_rows, trust_remote_code=False)
+        assert args.trust_remote_code is False
+
+    def test_text_encoder_threads_flag(self):
+        """TextEncoder forwards its `trust_remote_code` arg to both loaders (default False)."""
+        with (
+            patch("aisteer360.algorithms.input_control.cpo.utils.embeddings.AutoTokenizer") as tokenizer_cls,
+            patch("aisteer360.algorithms.input_control.cpo.utils.embeddings.AutoModel") as model_cls,
+        ):
+            model_cls.from_pretrained.return_value = MagicMock()
+            TextEncoder("some/encoder")
+            assert tokenizer_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is False
+            assert model_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is False
+
+            tokenizer_cls.reset_mock()
+            model_cls.reset_mock()
+            model_cls.from_pretrained.return_value = MagicMock()
+            TextEncoder("some/encoder", trust_remote_code=True)
+            assert tokenizer_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is True
+            assert model_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is True

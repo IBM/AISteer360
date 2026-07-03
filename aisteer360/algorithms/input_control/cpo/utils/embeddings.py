@@ -19,9 +19,14 @@ logger = logging.getLogger(__name__)
 class TextEncoder:
     """Mean-pooled HF encoder. Not a `BaseScorer` — this is purely a featurizer for CPO's reward model."""
 
-    def __init__(self, model_name_or_path: str, device: str | torch.device | None = None) -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
-        self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=True)
+    def __init__(
+        self,
+        model_name_or_path: str,
+        device: str | torch.device | None = None,
+        trust_remote_code: bool = False,
+    ) -> None:
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)
+        self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)
         if device is not None:
             self.model = self.model.to(device)
         self.model.eval()

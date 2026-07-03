@@ -46,6 +46,8 @@ class SteeringPipeline:
             When specified, `device_map` must remain at its default value of `"auto"`.
         hf_model_kwargs (dict, optional): Extra keyword arguments passed to
             `transformers.AutoModelForCausalLM.from_pretrained`.
+        trust_remote_code (bool, optional): Trust remote code when loading the tokenizer. Defaults to
+            `False`. To trust remote code for the model, pass `trust_remote_code=True` via `hf_model_kwargs`.
         lazy_init (bool, optional): If `True`, defers loading the base model until `steer()` time.
             Useful when a `StructuralControl` will itself load or create the final weights
             (e.g., MergeKit). When `False`, the model is loaded during `SteeringPipeline`
@@ -68,6 +70,7 @@ class SteeringPipeline:
     device_map: str | dict[str, int] | int | torch.device | None = "auto"
     device: torch.device | str | None = None
     hf_model_kwargs: dict = field(default_factory=dict)
+    trust_remote_code: bool = False
     lazy_init: bool = False
 
     # lazy‑filled fields
@@ -116,14 +119,14 @@ class SteeringPipeline:
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 self.tokenizer_name_or_path or self.model_name_or_path,
-                trust_remote_code=True,
+                trust_remote_code=self.trust_remote_code,
             )
             self.tokenizer = ensure_pad_token(self.tokenizer)
         else:
             if isinstance(self.tokenizer_name_or_path, (str, Path)):
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     self.tokenizer_name_or_path,
-                    trust_remote_code=True
+                    trust_remote_code=self.trust_remote_code
                 )
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
@@ -187,7 +190,7 @@ class SteeringPipeline:
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     repo or Path(getattr(self.structural_control.args, "out_path", "")),
-                    trust_remote_code=True,
+                    trust_remote_code=self.trust_remote_code,
                 )
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 

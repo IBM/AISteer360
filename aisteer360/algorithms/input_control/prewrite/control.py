@@ -75,6 +75,7 @@ class PRewrite(InputControl):
     reward_fn: Any = None
     grpo_config: dict | None = None
     reward_dev_size: int | None = None
+    trust_remote_code: bool = False
     rewriter_gen_kwargs: dict | None = None
     eval_gen_kwargs: dict | None = None
 
@@ -160,17 +161,17 @@ class PRewrite(InputControl):
                         "PRewrite: `rewriter_model` was supplied without `rewriter_tokenizer` "
                         "and no name_or_path could be inferred from the model."
                     )
-                rewriter_tok = AutoTokenizer.from_pretrained(source, trust_remote_code=True)
+                rewriter_tok = AutoTokenizer.from_pretrained(source, trust_remote_code=self.trust_remote_code)
             return self.rewriter_model, rewriter_tok
         if self.rewriter_model_name_or_path is None:
             return model, tokenizer
         rewriter_lm = AutoModelForCausalLM.from_pretrained(
             self.rewriter_model_name_or_path,
             device_map="auto",
-            trust_remote_code=True,
+            trust_remote_code=self.trust_remote_code,
         )
         rewriter_tok = AutoTokenizer.from_pretrained(
-            self.rewriter_model_name_or_path, trust_remote_code=True
+            self.rewriter_model_name_or_path, trust_remote_code=self.trust_remote_code
         )
         if rewriter_tok.pad_token_id is None and rewriter_tok.eos_token_id is not None:
             rewriter_tok.pad_token = rewriter_tok.eos_token

@@ -46,6 +46,14 @@ class CPOArgs(BaseArgs):
         metadata={"help": "HF text encoder used to featurize queries and prompts."},
     )
 
+    trust_remote_code: bool = field(
+        default=True,
+        metadata={"help": (
+            "Trust remote code when loading `embedding_model`. Defaults to True for the default "
+            "encoder, which ships custom modeling code. Set False for standard encoders."
+        )},
+    )
+
     pca_query_dim: int = field(
         default=40,
         metadata={"help": "PCA target dimensionality for query embeddings."},

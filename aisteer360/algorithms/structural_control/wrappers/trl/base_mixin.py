@@ -19,6 +19,7 @@ class TRLMixin:
     base_model_name_or_path: str | None = None
     tokenizer_name_or_path: str | None = None
     hf_model_kwargs: dict[str, Any] = {}
+    trust_remote_code: bool = False
 
     training_args: dict[str, Any] = {}
     output_dir: str | None = None
@@ -47,7 +48,7 @@ class TRLMixin:
                 raise ValueError("TRLMixin: model is None and `base_model_name_or_path` was not provided.")
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.base_model_name_or_path,
-                trust_remote_code=True,
+                trust_remote_code=self.trust_remote_code,
                 **(self.hf_model_kwargs or {}),
             )
         else:
@@ -61,7 +62,7 @@ class TRLMixin:
             )
             if not path:
                 raise ValueError("TRLMixin: could not resolve tokenizer path.")
-            self.tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=self.trust_remote_code)
         else:
             self.tokenizer = tokenizer
 

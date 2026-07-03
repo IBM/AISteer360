@@ -291,6 +291,20 @@ class TestPrependTextFormatter:
         out = f.apply_to_messages([[{"role": "system", "content": "s"}]], memory)
         assert any(m.get("role") == "user" and "ctx" in m.get("content", "") for m in out[0])
 
+    def test_resolve_text_present(self):
+        f = PrependTextFormatter()
+        assert f._resolve_text(TextMemory(slots={"text": "ctx"})) == "ctx"
+
+    def test_resolve_text_missing_raises(self):
+        f = PrependTextFormatter()
+        with pytest.raises(TypeError):
+            f._resolve_text(TextMemory())
+
+    def test_resolve_text_non_str_raises(self):
+        f = PrependTextFormatter()
+        with pytest.raises(TypeError):
+            f._resolve_text(TextMemory(slots={"text": 123}))
+
 
 class TestChatTemplateSlotFormatter:
     def test_substitutes_named_slot(self):

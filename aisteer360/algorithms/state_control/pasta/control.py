@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import Sequence
 
@@ -8,6 +9,8 @@ from transformers import BatchEncoding, PreTrainedModel, PreTrainedTokenizer
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control.pasta.args import PASTAArgs
+
+logger = logging.getLogger(__name__)
 
 
 class PASTA(StateControl):
@@ -241,13 +244,17 @@ class PASTA(StateControl):
                 Defaults to 0 (first occurrence).
 
         Returns:
-            tuple[int, int]: Start (inclusive) and end (exclusive) token indices.
+            tuple[int, int]: Start (inclusive) and end (exclusive) token indices. If the substring is
+                absent from `string`, returns the `(0, 0)` sentinel (skipped downstream) after warning.
 
         Raises:
-            ValueError: If substring cannot be mapped to token range.
+            ValueError: If the substring is present in `string` but cannot be aligned to token offsets.
         """
         if substring not in string:
-            print(f"'{substring}' not found in input {string}")
+            logger.warning(
+                "PASTA: substring %r not found in input (len=%d chars); skipping steering for this range.",
+                substring, len(string),
+            )
             return 0, 0
 
         char_index = -1
@@ -381,7 +388,9 @@ class PASTA(StateControl):
             token_ranges = [token_ranges[i % len(token_ranges)] for i in range(batch_size)]
 
         for batch_index in range(batch_size):
-            for start_idx, end_idx in token_ranges[batch_index].tolist():
+            ranges = token_ranges[batch_index].tolist()
+            has_valid_range = any(start != end for start, end in ranges)
+            for start_idx, end_idx in ranges:
                 if start_idx == end_idx:
                     continue
                 if self.scale_position == "include":
@@ -403,8 +412,8 @@ class PASTA(StateControl):
                 else:
                     raise ValueError(f"Unknown scale_position '{self.scale_position}'")
 
-        if self.scale_position == "include":
-            attention_mask[:, head_idx, :, :input_len] -= self._scale_constant
+            if self.scale_position == "include" and has_valid_range:
+                attention_mask[batch_index, head_idx, :, :input_len] -= self._scale_constant
 
         input_kwargs["attention_mask"] = attention_mask
         return input_args, input_kwargs
