@@ -6,15 +6,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from aisteer360.algorithms.state_control.common.estimators.base import BaseEstimator
-from aisteer360.algorithms.state_control.common.estimators.utils import (
+from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
+from aisteer360.algorithms.state_control._common.estimators.utils import (
     get_last_token_positions,
     select_at_positions,
     tokenize_texts,
 )
-from aisteer360.algorithms.state_control.common.hook_utils import get_model_layer_list
-from aisteer360.algorithms.state_control.common.specs import LabeledExamples, VectorTrainSpec
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.specs import LabeledExamples, VectorTrainSpec
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 logger = logging.getLogger(__name__)
 

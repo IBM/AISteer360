@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 
 from aisteer360.algorithms.core.base_args import BaseArgs
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 
 @dataclass

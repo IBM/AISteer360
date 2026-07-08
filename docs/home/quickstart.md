@@ -46,7 +46,7 @@ Using these pools, we define the `FewShot` control as follows:
 from aisteer360.algorithms.input_control.few_shot.control import FewShot
 
 few_shot = FewShot(
-    selector_name="random",
+    selector="random",
     positive_example_pool=positive_example_pool,
     negative_example_pool=negative_example_pool,
     k_positive=4,
@@ -70,17 +70,12 @@ few_shot_pipeline.steer()
 Inference can now be run on the steered pipeline as follows:
 ```python
 prompt = "How many feet are in a mile?"
-input_ids = few_shot_pipeline.tokenizer.encode(prompt, return_tensors="pt")
-
-output = few_shot_pipeline.generate(
-    input_ids=input_ids,
-    max_new_tokens=100,
-    temperature=0.7,
-    return_full_sequence=False
-)
-
-print(few_shot_pipeline.tokenizer.decode(output[0], skip_special_tokens=True))
+print(few_shot_pipeline.generate(prompt, max_new_tokens=100, temperature=0.7))
 ```
+
+`SteeringPipeline.generate` is polymorphic: it accepts a `str`, `list[str]`, chat messages, or a pre-tokenized
+tensor, and returns the matching shape (decoded text for text/chat input, tensor for tensor input). Pass
+`return_output=True` to get an `Output` object instead.
 
 And there you have it, a simple few-shot steering control. For more complex controls, as well as examples on how
 controls can be compared on a given task, please see the [example notebooks](../examples/index.md).

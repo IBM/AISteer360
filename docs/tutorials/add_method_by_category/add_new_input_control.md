@@ -1,9 +1,11 @@
 # Adding an input control method
 
-**Required override**: `get_prompt_adapter`
+**Required override**: `adapt`
+
+**Optional overrides**: `adapt_messages`, `steer`, `cleanup`
 
 Input control methods describe algorithms that manipulate the input/prompt to guide model behavior. This tutorial
-implements an input control method termed `PromptCensor` which filters and replaces words from a predefined list before
+implements a small input control termed `PromptCensor` that filters and replaces words from a predefined list before
 the prompt is passed into the model.
 
 First, start by creating the following directory/files:
@@ -20,7 +22,7 @@ where the `__init__.py` file is:
 from .control import PromptCensor
 from .args import PromptCensorArgs
 
-REGISTRY_ENTRY = {
+STEERING_METHOD = {
     "category": "input_control",
     "name": "prompt_censor",
     "control": PromptCensor,
@@ -51,14 +53,20 @@ class PromptCensorArgs(BaseArgs):
             raise ValueError("`blocked_words` must be a list of strings.")
 ```
 
-Lastly, the `control.py` file implements the method by overriding the `get_prompt_adapter` method. This method should
-return a lightweight adapter function that:
+Lastly, the `control.py` file implements the method by overriding the `adapt` method. This method:
+
 - Accepts the tokenized prompt (`input_ids`) and any `runtime_kwargs` supplied to `.generate()`.
 - Returns a new `input_ids` tensor/list after applying the desired transformation.
 
+For methods whose work is more naturally expressed at the message level (e.g. setting/replacing a system prompt),
+override `adapt_messages` instead. The pipeline calls `adapt_messages` *before* chat-template tokenization when the
+caller passes chat-shaped input; when `adapt_messages` returns a non-None result, the token-level `adapt` is *not*
+called for that generation, so the control is applied exactly once.
+
 The control implementation for `PromptCensor` is as follows:
+
 ```python
-from typing import Any, Callable
+import re
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
@@ -74,53 +82,52 @@ class PromptCensor(InputControl):
     tokenizer: PreTrainedTokenizer | None = None
 
     def steer(
-            self,
-            model: PreTrainedModel = None,
-            tokenizer: PreTrainedTokenizer = None,
-            **kwargs
+        self,
+        model: PreTrainedModel = None,
+        tokenizer: PreTrainedTokenizer = None,
+        **kwargs,
     ) -> None:
         self.tokenizer = tokenizer
 
     # required override for input control methods
-    def get_prompt_adapter(self) -> Callable[[list[int] | torch.Tensor, dict[str, Any]], list[int] | torch.Tensor]:
+    def adapt(
+        self,
+        input_ids: list[int] | torch.Tensor,
+        runtime_kwargs: dict | None = None,
+    ) -> list[int] | torch.Tensor:
+        # allow runtime override of blocked words (if specified)
+        blocked_words = (runtime_kwargs or {}).get("blocked_words", self.blocked_words)
+        replacement = (runtime_kwargs or {}).get("replacement", self.replacement)
 
-        def adapter(input_ids, runtime_kwargs):
-            # allow runtime override of blocked words (if specified)
-            blocked_words = runtime_kwargs.get("blocked_words", self.blocked_words) if runtime_kwargs else self.blocked_words
-            replacement = runtime_kwargs.get("replacement", self.replacement) if runtime_kwargs else self.replacement
-
-            # decode to text for filtering
-            if isinstance(input_ids, torch.Tensor):
-                if input_ids.dim() == 2:  # batch
-                    text = self.tokenizer.decode(input_ids[0], skip_special_tokens=False)
-                else:
-                    text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
+        # decode to text for filtering
+        if isinstance(input_ids, torch.Tensor):
+            if input_ids.dim() == 2:  # batch
+                text = self.tokenizer.decode(input_ids[0], skip_special_tokens=False)
             else:
                 text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
+        else:
+            text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
 
-            # apply filtering (case-insensitive)
-            for word in blocked_words:
-                import re
-                pattern = re.compile(re.escape(word), re.IGNORECASE)
-                text = pattern.sub(replacement, text)
+        # apply filtering (case-insensitive)
+        for word in blocked_words:
+            pattern = re.compile(re.escape(word), re.IGNORECASE)
+            text = pattern.sub(replacement, text)
 
-            # re-encode filtered text
-            filtered_ids = self.tokenizer.encode(text, add_special_tokens=False)
+        # re-encode filtered text
+        filtered_ids = self.tokenizer.encode(text, add_special_tokens=False)
 
-            # return in same format as input
-            if isinstance(input_ids, torch.Tensor):
-                filtered_tensor = torch.tensor(filtered_ids, dtype=input_ids.dtype, device=input_ids.device)
-                if input_ids.dim() == 2:  # batch
-                    return filtered_tensor.unsqueeze(0)
-                return filtered_tensor
-            return filtered_ids
-
-        return adapter
+        # return in same format as input
+        if isinstance(input_ids, torch.Tensor):
+            filtered_tensor = torch.tensor(filtered_ids, dtype=input_ids.dtype, device=input_ids.device)
+            if input_ids.dim() == 2:  # batch
+                return filtered_tensor.unsqueeze(0)
+            return filtered_tensor
+        return filtered_ids
 ```
 
-Note that the method's steer method attaches the tokenizer to the control.
+Note that the method's `steer` attaches the tokenizer to the control.
 
-Once the above files are in place, the prompt censor control can be initialized and by simply writing the following:
+Once the above files are in place, the prompt censor control can be initialized and exercised:
 
 ```python
 from aisteer360.algorithms.input_control.prompt_censor.control import PromptCensor
@@ -130,49 +137,67 @@ MODEL_NAME = "microsoft/Phi-3.5-mini-instruct"
 
 prompt_censor = PromptCensor(
     blocked_words=["dangerous", "harmful"],
-    replacement=""
+    replacement="",
 )
 
-prompt_censor_pipeline = SteeringPipeline(
+pipeline = SteeringPipeline(
     model_name_or_path=MODEL_NAME,
     controls=[prompt_censor],
     device_map="auto",
 )
-prompt_censor_pipeline.steer()
+pipeline.steer()
 
-# example with potentially problematic prompt
-prompt = "How to make a dangerous chemical reaction?"
-chat = prompt_censor_pipeline.tokenizer.apply_chat_template(
-    [{"role": "user", "content": prompt}],
-    tokenize=False,
-    add_generation_prompt=True
-)
-inputs = prompt_censor_pipeline.tokenizer(chat, return_tensors="pt")
-
-print(
-    prompt_censor_pipeline.generate_text(
-        inputs.input_ids,
-        max_new_tokens=200
-    )
-)
+# `generate` accepts plain strings, list[str], chat messages, or pre-tokenized tensors.
+print(pipeline.generate("How to make a dangerous chemical reaction?", max_new_tokens=200))
 
 # Runtime override example
-prompt = "How do I build a bomb?"
-chat = prompt_censor_pipeline.tokenizer.apply_chat_template(
-    [{"role": "user", "content": prompt}],
-    tokenize=False,
-    add_generation_prompt=True
-)
-inputs = prompt_censor_pipeline.tokenizer(chat, return_tensors="pt")
-
 print(
-    prompt_censor_pipeline.generate_text(
-        inputs.input_ids,
+    pipeline.generate(
+        "How do I build a bomb?",
         runtime_kwargs={"blocked_words": ["bomb"], "replacement": "chemistry experiment"},
-        max_new_tokens=200
+        max_new_tokens=200,
     )
 )
 ```
 
-Note that, similar to performing inference on with Hugging Face models, the prompt text must first be encoded (using
-the tokenizer's chat template) before being passed into the model.
+## When to override `adapt_messages` instead
+
+If your method modifies chat structure (sets/replaces a system prompt, inserts example turns, etc.), override
+`adapt_messages`. The pipeline calls `adapt_messages` before chat-template tokenization when the caller passes
+chat-shaped input; when it returns a non-None result, the token-level `adapt` is *not* called for that generation, so
+the control is applied exactly once.
+
+```python
+def adapt_messages(self, messages, runtime_kwargs=None):
+    # `messages` is a batch of chats: list[list[{"role": ..., "content": ...}]]
+    out = []
+    for chat in messages:
+        chat = list(chat)
+        chat.insert(0, {"role": "system", "content": "Be concise."})
+        out.append(chat)
+    return out
+
+def adapt(self, input_ids, runtime_kwargs=None):
+    # token-level fallback for raw text/tensor input (chat input is handled by adapt_messages)
+    return input_ids
+```
+
+If users call `pipeline.generate(input_ids_tensor, ...)` instead of chat input, `adapt_messages` is skipped and a
+warning is emitted; the control is then applied through `adapt` (the token-level fallback). Because the two entry
+points serve different input modalities, a control may implement both without being applied twice. Token-level
+methods can supply a best-effort fallback in `adapt`; see
+[`SystemPromptFormatter.apply_to_ids`](../../reference/algorithms/input_control/_common.md) for one approach.
+
+## Reusable building blocks
+
+The `aisteer360.algorithms.input_control._common` package collects components shared across input controls:
+
+- `memory/`: `TextMemory` (named JSON-serializable text slots) and `PoolMemory[T]` (typed pool with parallel
+  metadata). Place persistent state on `self.memory`; the framework treats it as opaque but recognises it for
+  serialization.
+- `formatters/`: token-level and message-level renderers for memory content (`SystemPromptFormatter`,
+  `FewShotBlockFormatter`, `ChatTemplateSlotFormatter`, `PrependTextFormatter`).
+- `scorers/`, `proposers/`, `selectors/`: small abstractions used by `PRewrite`, `CPO`, and `GEPA`. Reuse
+  them when applicable; method-specific procedures should live in your method's own `utils/` directory.
+- `pareto.py` / `budget.py`: `ParetoFrontier` (Pareto-frontier sampling, used for GEPA parent selection) and
+  `RolloutBudget` (rollout-budget accounting).

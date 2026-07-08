@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from aisteer360.algorithms.core.base_args import BaseArgs
-from aisteer360.algorithms.state_control.common.specs import (
+from aisteer360.algorithms.state_control._common.specs import (
     Comparator,
     CompMode,
     ConditionSearchSpec,
@@ -11,8 +11,8 @@ from aisteer360.algorithms.state_control.common.specs import (
     VectorTrainSpec,
     as_contrastive_pairs,
 )
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
-from aisteer360.algorithms.state_control.common.token_scope import TokenScope
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.token_scope import TokenScope
 
 
 @dataclass

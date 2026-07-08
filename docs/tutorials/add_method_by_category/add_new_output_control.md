@@ -13,7 +13,7 @@ The registry entry is given by:
 from .control import KeywordReranker
 from .args import KeywordRerankerArgs
 
-REGISTRY_ENTRY = {
+STEERING_METHOD = {
     "category": "output_control",
     "name": "keyword_reranker",
     "control": KeywordReranker,
@@ -156,10 +156,9 @@ chat = keyword_reranker_pipeline.tokenizer.apply_chat_template(
     tokenize=False,
     add_generation_prompt=True
 )
-inputs = keyword_reranker_pipeline.tokenizer(chat, return_tensors="pt")
 
-output = keyword_reranker_pipeline.generate_text(
-    inputs.input_ids,
+output = keyword_reranker_pipeline.generate(
+    chat,
     runtime_kwargs={"keywords": ["matrix", "vector"]},
     max_new_tokens=50,
     temperature=0.7
@@ -167,8 +166,8 @@ output = keyword_reranker_pipeline.generate_text(
 print(output)
 
 # different keywords can be passed in at inference time (without resteering)
-output = keyword_reranker_pipeline.generate_text(
-    inputs.input_ids,
+output = keyword_reranker_pipeline.generate(
+    chat,
     runtime_kwargs={"keywords": ["eigenvalue", "determinant"], "case_insensitive": False},
     max_new_tokens=50,
     temperature=0.7

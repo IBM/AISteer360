@@ -12,7 +12,6 @@
         separate_signature: false
         inherited_members: true
         show_submodules: true
-        show_root_heading: true
         show_symbol_type_heading: true
         show_symbol_type_toc: true
         filters:

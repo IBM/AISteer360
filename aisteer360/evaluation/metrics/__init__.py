@@ -10,13 +10,15 @@ from aisteer360.evaluation.metrics.base_judge import LLMJudgeMetric
 from aisteer360.evaluation.metrics.generic.factuality import Factuality
 from aisteer360.evaluation.metrics.generic.perplexity import Perplexity
 from aisteer360.evaluation.metrics.generic.relevance import Relevance
+from aisteer360.evaluation.metrics.generic.short_answer_match import ShortAnswerMatch
 
 from .base import Metric
 
 __all__ = [
     "Metric",
     "LLMJudgeMetric",
-    "Relevance",
     "Factuality",
-    "Perplexity"
+    "Perplexity",
+    "Relevance",
+    "ShortAnswerMatch"
 ]

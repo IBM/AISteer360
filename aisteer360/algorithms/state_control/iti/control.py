@@ -7,12 +7,12 @@ import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
-from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control.common.hook_utils import get_model_layer_list
-from aisteer360.algorithms.state_control.common.selectors import TopKHeadSelector
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
-from aisteer360.algorithms.state_control.common.token_scope import compute_prompt_lens, make_token_mask
-from aisteer360.algorithms.state_control.common.transforms import HeadAdditiveTransform, NormPreservingTransform
+from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
+from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.selectors import TopKHeadSelector
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens, make_token_mask
+from aisteer360.algorithms.state_control._common.transforms import HeadAdditiveTransform, NormPreservingTransform
 
 from .args import ITIArgs
 from .utils import ProbeMassShiftEstimator

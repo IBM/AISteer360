@@ -19,7 +19,6 @@
           - "!apotrainer"
           - "!dpotrainer"
           - "!sfttrainer"
-          - "!sppotrainer"
           - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"

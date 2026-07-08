@@ -24,30 +24,45 @@ See Also:
 - `aisteer360.algorithms.input_control`: Implementations of input control methods
 - `aisteer360.core.steering_pipeline`: Integration with steering pipeline
 """
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import fields
-from typing import Any, Callable, Type
+from typing import TYPE_CHECKING, Type
 
 import torch
 from transformers import PreTrainedTokenizerBase
 
 from aisteer360.algorithms.core.base_args import BaseArgs
 
+if TYPE_CHECKING:
+    from aisteer360.algorithms.input_control._common.memory.base import Memory
+
 
 class InputControl(ABC):
     """Abstract base class for input control steering methods.
 
-    Transforms prompts before model processing through a prompt adapter function that modifies input token sequences.
+    Transforms a prompt before it reaches the model, steering behavior via the input alone (no changes to weights,
+    architecture, or runtime activations). Any preparation happens once in `steer()`; `adapt()` / `adapt_messages()`
+    are a function of the input and the prepared state at inference time.
 
     Methods:
-        get_prompt_adapter(runtime_kwargs) -> Callable: Return transformation function (required)
-        steer(model, tokenizer, **kwargs) -> None: One-time preparation (optional)
+        adapt(input_ids, runtime_kwargs) -> input_ids: Tensor-level adaptation (required).
+        adapt_messages(messages, runtime_kwargs) -> messages | None: Optional message-level adaptation,
+            called BEFORE chat-template tokenization. Default returns None (no change).
+        steer(model, tokenizer, **kwargs) -> None: One-time preparation (optional).
+        cleanup() -> None: Release resources allocated during steer (optional).
+
+    Subclasses that produce an artifact in `steer()` (instructions, demonstrations, learned weights, ...) may expose it
+    via the `memory` attribute, e.g., see `TextMemory`. 
     """
 
     Args: Type[BaseArgs] | None = None
 
     enabled: bool = True
     supports_batching: bool = False
+
+    memory: Memory | None = None  # subclasses populate in steer()
 
     def __init__(self, *args, **kwargs) -> None:
         if self.Args is None:  # null control
@@ -62,25 +77,59 @@ class InputControl(ABC):
             setattr(self, field.name, getattr(self.args, field.name))
 
     @abstractmethod
-    def get_prompt_adapter(
+    def adapt(
         self,
-        runtime_kwargs: dict | None = None
-    ) -> Callable[[list[int] | torch.Tensor, dict[str, Any]], list[int] | torch.Tensor]:
-        """Receives (input_ids, runtime_kwargs) and returns modified input_ids."""
-        pass
+        input_ids: list[int] | torch.Tensor,
+        runtime_kwargs: dict | None = None,
+    ) -> list[int] | torch.Tensor:
+        """Transform `input_ids` into a steered prompt.
 
-    def steer(self,
-              model=None,
-              tokenizer=None,
-              **kwargs) -> None:
-        """Optional steering/preparation."""
+        May read instance state (e.g. `self.memory`) that was populated by `steer()`.
+
+        Args:
+            input_ids: The user's prompt token IDs.
+            runtime_kwargs: Per-call parameters.
+
+        Returns:
+            The transformed token IDs.
+        """
+
+    def adapt_messages(
+        self,
+        messages: list[list[dict]],
+        runtime_kwargs: dict | None = None,
+    ) -> list[list[dict]] | None:
+        """Optional message-level adaptation, called BEFORE chat-template tokenization.
+
+        Default returns None (no message-level changes). Subclasses that modify chat structure (set/replace system
+        prompt, insert example turns) override this. When this method returns a non-None result for a chat-input
+        generation, the pipeline does NOT additionally call `adapt()` for that call; controls may therefore implement
+        both entry points (message-level for chat input, token-level for raw text/tensor input) without being applied
+        twice.
+
+        Args:
+            messages: A batch of chats; outer list is the batch, inner list is the message sequence for one chat.
+            runtime_kwargs: Per-call parameters.
+
+        Returns:
+            The transformed messages, or None to indicate no change.
+        """
+        return None
+
+    def steer(
+        self,
+        model=None,
+        tokenizer=None,
+        **kwargs,
+    ) -> None:
+        """Optional offline preparation. Default is no-op."""
         pass
 
     def cleanup(self) -> None:
-        """Release resources allocated during steer().
+        """Release resources allocated during `steer()`.
 
-        Override this method in subclasses that allocate GPU memory or other resources
-        during steering to ensure proper cleanup.
+        Override this method in subclasses that allocate GPU memory or other resources during steering to ensure proper
+        cleanup.
         """
         pass
 
@@ -88,30 +137,25 @@ class InputControl(ABC):
 class NoInputControl(InputControl):
     """Identity input control.
 
-    Used as the default when no input control is needed. Returns input_ids.
+    Used as the default when no input control is needed. Returns input_ids unchanged.
     """
     enabled: bool = False
     supports_batching: bool = True
     tokenizer: PreTrainedTokenizerBase | None = None
 
-    def get_prompt_adapter(
-            self,
-            runtime_kwargs: dict | None = None
-    ):
-        """Null adapter operation; returns identity map."""
-        if self.tokenizer is None:
-            return lambda ids, _: ids
-
-        def adapter(input_ids: list[int] | torch.Tensor, runtime_kwargs) -> list[int] | torch.Tensor:
-            return input_ids
-
-        return adapter
+    def adapt(
+        self,
+        input_ids: list[int] | torch.Tensor,
+        runtime_kwargs: dict | None = None,
+    ) -> list[int] | torch.Tensor:
+        """Identity adapter; returns input_ids unchanged."""
+        return input_ids
 
     def steer(
-            self,
-            model=None,
-            tokenizer: PreTrainedTokenizerBase | None = None,
-            **kwargs
+        self,
+        model=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+        **kwargs,
     ) -> None:
         """Null steer operation; attaches tokenizer."""
         self.tokenizer = tokenizer

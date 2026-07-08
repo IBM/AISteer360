@@ -3,7 +3,7 @@ from typing import Any
 from datasets import Dataset
 
 _PROMPT_KEYS = ["prompt", "question", "query", "input", "instruction"]
-_MESSAGES_KEYS = ["messages", "conversations"]  # prompt-only for SPPO
+_MESSAGES_KEYS = ["messages", "conversations"]  # prompt-only conversational keys
 
 
 def _first_present(record: dict[str, Any], keys: list[str]) -> Any | None:

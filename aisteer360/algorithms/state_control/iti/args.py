@@ -2,14 +2,14 @@
 from dataclasses import dataclass, field
 
 from aisteer360.algorithms.core.base_args import BaseArgs
-from aisteer360.algorithms.state_control.common.specs import (
+from aisteer360.algorithms.state_control._common.specs import (
     ContrastivePairs,
     LabeledExamples,
     VectorTrainSpec,
     as_labeled_examples,
 )
-from aisteer360.algorithms.state_control.common.steering_vector import SteeringVector
-from aisteer360.algorithms.state_control.common.token_scope import TokenScope
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.token_scope import TokenScope
 
 
 @dataclass

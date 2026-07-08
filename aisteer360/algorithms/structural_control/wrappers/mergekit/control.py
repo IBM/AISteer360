@@ -3,6 +3,7 @@ from pathlib import Path
 import mergekit.config as mk_config
 import mergekit.merge as mk_merge
 import torch
+import yaml
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -82,9 +83,10 @@ class MergeKit(StructuralControl):
         args: MergeKitArgs = self.args
 
         if args.config_path:
-            config = mk_config.MergeConfiguration.from_yaml(args.config_path)
+            with open(args.config_path, "r", encoding="utf-8") as config_file:
+                config = mk_config.MergeConfiguration.model_validate(yaml.safe_load(config_file))
         else:
-            config = mk_config.MergeConfiguration(**args.config_dict)
+            config = mk_config.MergeConfiguration.model_validate(args.config_dict)
 
         # find merged weights
         out_path = Path(args.out_path)
@@ -105,7 +107,7 @@ class MergeKit(StructuralControl):
             merge_config=config,
             out_path=str(out_path),
             options=mk_merge.MergeOptions(
-                use_cuda=args.allow_cuda,
+                cuda=args.allow_cuda,
                 trust_remote_code=args.trust_remote_code,
             )
         )

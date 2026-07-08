@@ -9,18 +9,18 @@ import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
-from aisteer360.algorithms.state_control.common.estimators import ContrastiveDirectionEstimator
-from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate, CacheOnceGate, MultiKeyThresholdGate
-from aisteer360.algorithms.state_control.common.gates.scores import projected_cosine_similarity
-from aisteer360.algorithms.state_control.common.hook_utils import (
+from aisteer360.algorithms.state_control._common.estimators import ContrastiveDirectionEstimator
+from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate, CacheOnceGate, MultiKeyThresholdGate
+from aisteer360.algorithms.state_control._common.gates.scores import projected_cosine_similarity
+from aisteer360.algorithms.state_control._common.hook_utils import (
     extract_hidden_states,
     get_model_layer_list,
     replace_hidden_states,
 )
-from aisteer360.algorithms.state_control.common.selectors import ConditionPointSelector
-from aisteer360.algorithms.state_control.common.selectors.layer_heuristics import late_third
-from aisteer360.algorithms.state_control.common.token_scope import compute_prompt_lens, make_token_mask
-from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform, NormPreservingTransform
+from aisteer360.algorithms.state_control._common.selectors import ConditionPointSelector
+from aisteer360.algorithms.state_control._common.selectors.layer_heuristics import late_third
+from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens, make_token_mask
+from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform, NormPreservingTransform
 
 from .args import CASTArgs
 

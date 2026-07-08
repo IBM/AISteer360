@@ -19,19 +19,19 @@ from pathlib import Path
 import pytest
 import torch
 
-from aisteer360.algorithms.state_control.common import (
+from aisteer360.algorithms.state_control._common import (
     ContrastivePairs,
     SteeringVector,
     VectorTrainSpec,
     as_contrastive_pairs,
 )
-from aisteer360.algorithms.state_control.common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control.common.hook_utils import (
+from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
+from aisteer360.algorithms.state_control._common.hook_utils import (
     extract_hidden_states,
     get_model_layer_list,
     replace_hidden_states,
 )
-from aisteer360.algorithms.state_control.common.token_scope import (
+from aisteer360.algorithms.state_control._common.token_scope import (
     compute_prompt_lens,
     make_token_mask,
 )
@@ -486,7 +486,7 @@ class TestMultiKeyThresholdGate:
 
     def test_single_key_larger(self):
         """Test single key with 'larger' comparator."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(threshold=0.5, comparator="larger")
 
@@ -499,7 +499,7 @@ class TestMultiKeyThresholdGate:
 
     def test_single_key_smaller(self):
         """Test single key with 'smaller' comparator."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(threshold=0.5, comparator="smaller")
 
@@ -512,7 +512,7 @@ class TestMultiKeyThresholdGate:
 
     def test_multiple_keys_any(self):
         """Test multiple keys with 'any' aggregation."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(
             threshold=0.5,
@@ -529,7 +529,7 @@ class TestMultiKeyThresholdGate:
 
     def test_multiple_keys_all(self):
         """Test multiple keys with 'all' aggregation."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(
             threshold=0.5,
@@ -549,7 +549,7 @@ class TestMultiKeyThresholdGate:
 
     def test_is_ready_with_expected_keys(self):
         """Test is_ready() with expected_keys."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(
             threshold=0.5,
@@ -567,7 +567,7 @@ class TestMultiKeyThresholdGate:
 
     def test_empty_decisions_returns_false(self):
         """Test that is_open() returns False when no decisions made."""
-        from aisteer360.algorithms.state_control.common.gates import MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
 
         gate = MultiKeyThresholdGate(threshold=0.5, comparator="larger")
         assert gate.is_open() is False
@@ -578,7 +578,7 @@ class TestCacheOnceGate:
 
     def test_caches_decision_when_ready(self):
         """Test that decision is cached once inner gate is ready."""
-        from aisteer360.algorithms.state_control.common.gates import CacheOnceGate, MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import CacheOnceGate, MultiKeyThresholdGate
 
         inner = MultiKeyThresholdGate(threshold=0.5, comparator="larger")
         gate = CacheOnceGate(inner)
@@ -593,7 +593,7 @@ class TestCacheOnceGate:
 
     def test_reset_clears_cache(self):
         """Test that reset() clears the cached decision."""
-        from aisteer360.algorithms.state_control.common.gates import CacheOnceGate, MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import CacheOnceGate, MultiKeyThresholdGate
 
         inner = MultiKeyThresholdGate(threshold=0.5, comparator="larger")
         gate = CacheOnceGate(inner)
@@ -606,7 +606,7 @@ class TestCacheOnceGate:
 
     def test_freezes_on_first_ready(self):
         """Test that only first ready state is cached."""
-        from aisteer360.algorithms.state_control.common.gates import CacheOnceGate, MultiKeyThresholdGate
+        from aisteer360.algorithms.state_control._common.gates import CacheOnceGate, MultiKeyThresholdGate
 
         inner = MultiKeyThresholdGate(
             threshold=0.5,
@@ -628,7 +628,7 @@ class TestProjectedCosineSimilarity:
 
     def test_known_values(self):
         """Test against known values."""
-        from aisteer360.algorithms.state_control.common.gates.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.gates.scores import projected_cosine_similarity
 
         # create a simple case
         hidden = torch.tensor([1.0, 0.0, 0.0])
@@ -646,7 +646,7 @@ class TestProjectedCosineSimilarity:
 
     def test_orthogonal_vectors(self):
         """Test with orthogonal vectors."""
-        from aisteer360.algorithms.state_control.common.gates.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.gates.scores import projected_cosine_similarity
 
         hidden = torch.tensor([1.0, 0.0, 0.0])
         direction = torch.tensor([0.0, 1.0, 0.0])
@@ -666,7 +666,7 @@ class TestAdditiveTransform:
 
     def test_applies_direction_with_mask(self):
         """Test that direction is added only where mask is True."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.zeros(1, 4, 8)  # [B=1, T=4, H=8]
         directions = {0: torch.ones(8)}  # layer 0: all ones
@@ -687,7 +687,7 @@ class TestAdditiveTransform:
 
     def test_no_direction_returns_unchanged(self):
         """Test that missing layer direction returns hidden unchanged."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.randn(2, 5, 16)
         transform = AdditiveTransform({0: torch.randn(16)}, strength=1.0)
@@ -699,7 +699,7 @@ class TestAdditiveTransform:
 
     def test_strength_scaling(self):
         """Test that strength parameter scales correctly."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.zeros(1, 1, 4)
         directions = {0: torch.tensor([1.0, 2.0, 3.0, 4.0])}
@@ -712,7 +712,7 @@ class TestAdditiveTransform:
 
     def test_positional_mode_with_alignment(self):
         """Test positional mode (T>1) with alignment parameter."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.zeros(1, 6, 4)  # [B=1, T=6, H=4]
         # positional steering vector with T=3 tokens
@@ -739,7 +739,7 @@ class TestAdditiveTransform:
 
     def test_positional_mode_clips_at_seq_end(self):
         """Test that positional mode clips steering vectors at sequence end."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.zeros(1, 4, 4)  # [B=1, T=4, H=4]
         # steering vector with T=3, but aligned at position 2 so only 2 fit
@@ -759,7 +759,7 @@ class TestAdditiveTransform:
 
     def test_positional_mode_skips_when_out_of_range(self):
         """Test that positional mode returns unchanged when alignment is beyond seq_len."""
-        from aisteer360.algorithms.state_control.common.transforms import AdditiveTransform
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
         hidden = torch.zeros(1, 3, 4)  # [B=1, T=3, H=4]
         # use T=2 to trigger positional mode (T>1)
@@ -782,7 +782,7 @@ class TestNormPreservingTransform:
 
     def test_preserves_norm_when_increased(self):
         """Test that norm is preserved when it would increase."""
-        from aisteer360.algorithms.state_control.common.transforms import (
+        from aisteer360.algorithms.state_control._common.transforms import (
             AdditiveTransform,
             NormPreservingTransform,
         )
@@ -803,7 +803,7 @@ class TestNormPreservingTransform:
 
     def test_does_not_scale_when_norm_decreases(self):
         """Test that scaling doesn't happen when norm decreases."""
-        from aisteer360.algorithms.state_control.common.transforms import (
+        from aisteer360.algorithms.state_control._common.transforms import (
             AdditiveTransform,
             NormPreservingTransform,
         )
@@ -824,8 +824,8 @@ class TestNormPreservingTransform:
 
     def test_raises_on_nan(self):
         """Test that NaN detection raises ValueError."""
-        from aisteer360.algorithms.state_control.common.transforms import NormPreservingTransform
-        from aisteer360.algorithms.state_control.common.transforms.base import BaseTransform
+        from aisteer360.algorithms.state_control._common.transforms import NormPreservingTransform
+        from aisteer360.algorithms.state_control._common.transforms.base import BaseTransform
 
         class NaNTransform(BaseTransform):
             def apply(self, hidden_states, *, layer_id, token_mask, **kwargs):
@@ -843,7 +843,7 @@ class TestLayerHeuristics:
 
     def test_late_third(self):
         """Test late_third returns correct layer range."""
-        from aisteer360.algorithms.state_control.common.selectors import late_third
+        from aisteer360.algorithms.state_control._common.selectors import late_third
 
         # 12 layers -> last third is layers 8-11
         result = late_third(12)

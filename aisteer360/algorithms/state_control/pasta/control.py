@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import Sequence
 
@@ -8,6 +9,8 @@ from transformers import BatchEncoding, PreTrainedModel, PreTrainedTokenizer
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control.pasta.args import PASTAArgs
+
+logger = logging.getLogger(__name__)
 
 
 class PASTA(StateControl):
@@ -142,8 +145,10 @@ class PASTA(StateControl):
                     self.tokenizer(substring, return_tensors="pt", padding=True)['input_ids'],
                     skip_special_tokens=True
                 )
-            except:
-                breakpoint()
+            except Exception as error:
+                raise ValueError(
+                    f"PASTA failed to re-tokenize substrings {substring!r}: {error}"
+                ) from error
 
         if self.tokenizer.padding_side != "left":
             self.tokenizer.padding_side = "left"
@@ -239,13 +244,17 @@ class PASTA(StateControl):
                 Defaults to 0 (first occurrence).
 
         Returns:
-            tuple[int, int]: Start (inclusive) and end (exclusive) token indices.
+            tuple[int, int]: Start (inclusive) and end (exclusive) token indices. If the substring is
+                absent from `string`, returns the `(0, 0)` sentinel (skipped downstream) after warning.
 
         Raises:
-            ValueError: If substring cannot be mapped to token range.
+            ValueError: If the substring is present in `string` but cannot be aligned to token offsets.
         """
         if substring not in string:
-            print(f"'{substring}' not found in input {string}")
+            logger.warning(
+                "PASTA: substring %r not found in input (len=%d chars); skipping steering for this range.",
+                substring, len(string),
+            )
             return 0, 0
 
         char_index = -1
@@ -336,11 +345,26 @@ class PASTA(StateControl):
 
         attention_mask = input_kwargs.get("attention_mask")
         if attention_mask is None:  # build it
-            batch_size, sequence_len, _ = hidden_states.size()
+            batch_size, query_len, _ = hidden_states.size()
             num_heads = self.model.config.num_attention_heads
-            causal = torch.triu(
-                hidden_states.new_full((sequence_len, sequence_len), float("-inf")),
-                diagonal=1,
+
+            # during decoding the query attends to the full kv cache, so the mask spans the cached key
+            # positions (read from cache_position) rather than just the current query window
+            cache_position = input_kwargs.get("cache_position")
+            if cache_position is not None:
+                key_len = int(cache_position[-1]) + 1
+            else:
+                key_len = query_len
+
+            # query row i sits at absolute position (key_len - query_len + i) and attends to keys 0..position
+            query_positions = torch.arange(
+                key_len - query_len, key_len, device=hidden_states.device
+            ).unsqueeze(1)
+            key_positions = torch.arange(key_len, device=hidden_states.device).unsqueeze(0)
+            causal = torch.where(
+                key_positions <= query_positions,
+                hidden_states.new_zeros(()),
+                hidden_states.new_full((), float("-inf")),
             )
             attention_mask = causal[None, None]  # (1,1,q,k)
             attention_mask = attention_mask.expand(
@@ -364,7 +388,9 @@ class PASTA(StateControl):
             token_ranges = [token_ranges[i % len(token_ranges)] for i in range(batch_size)]
 
         for batch_index in range(batch_size):
-            for start_idx, end_idx in token_ranges[batch_index].tolist():
+            ranges = token_ranges[batch_index].tolist()
+            has_valid_range = any(start != end for start, end in ranges)
+            for start_idx, end_idx in ranges:
                 if start_idx == end_idx:
                     continue
                 if self.scale_position == "include":
@@ -386,8 +412,8 @@ class PASTA(StateControl):
                 else:
                     raise ValueError(f"Unknown scale_position '{self.scale_position}'")
 
-        if self.scale_position == "include":
-            attention_mask[:, head_idx, :, :input_len] -= self._scale_constant
+            if self.scale_position == "include" and has_valid_range:
+                attention_mask[batch_index, head_idx, :, :input_len] -= self._scale_constant
 
         input_kwargs["attention_mask"] = attention_mask
         return input_args, input_kwargs

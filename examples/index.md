@@ -13,7 +13,13 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     Input control methods adapt the input (prompt) before the model is called. Current notebooks cover:
 
+    :octicons-arrow-right-24: [CPO](./notebooks/control_cpo/cpo.ipynb)
+
     :octicons-arrow-right-24: [FewShot](./notebooks/control_few_shot/few_shot.ipynb)
+
+    :octicons-arrow-right-24: [GEPA](./notebooks/control_gepa/gepa.ipynb)
+
+    :octicons-arrow-right-24: [PRewrite](./notebooks/control_prewrite/prewrite.ipynb)
 
 -   __Structural control__
 

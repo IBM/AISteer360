@@ -108,7 +108,7 @@ The controls can now be instantiated as follows:
 from aisteer360.algorithms.input_control.few_shot.control import FewShot
 
 few_shot = FewShot(
-    selector_name="random",
+    selector="random",
     positive_example_pool=positive_pool,
     negative_example_pool=negative_pool,
     k_positive=4,
@@ -280,7 +280,7 @@ below.
 few_shot_spec = ControlSpec(
     control_cls=FewShot,
     params={
-        "selector_name": "random",
+        "selector": "random",
         "positive_example_pool": positive_pool,
         "negative_example_pool": negative_pool,
     },

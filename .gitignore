@@ -3,12 +3,15 @@
 *.pyc
 **/__pycache__/
 .ipynb_checkpoints/
+**/.pytest_cache/
 .env
 .venv
 /.venv/
 /backend/venv
 *.lock
+/logs
 /notes
+/runs
 /scripts
 /examples/notebooks/wrapper_mergekit/mergekit_models/*
 examples/**/profiles/

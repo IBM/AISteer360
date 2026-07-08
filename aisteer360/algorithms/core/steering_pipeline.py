@@ -1,15 +1,17 @@
 """
 Core steering pipeline for composing and applying multiple LLM control methods.
 """
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence, overload
 
 import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
 from aisteer360.algorithms.core.steering_utils import ensure_pad_token, merge_controls, to_left_pad
+from aisteer360.algorithms.core.types import Output
 from aisteer360.algorithms.input_control.base import InputControl
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.state_control.base import StateControl
@@ -27,7 +29,7 @@ class SteeringPipeline:
 
     1. Instantiate with a base model checkpoint and/or control objects
     2. Call `steer()` once to apply all controls in order (structural → input → state → output)
-    3. Use `generate()` or `generate_text()` for inference with steering applied
+    3. Use `generate()` for inference with steering applied (polymorphic across str / list[str] / chat / tensor)
 
     Args:
         model_name_or_path (str or pathlib.Path, optional): HuggingFace model hub name or local directory.
@@ -44,6 +46,8 @@ class SteeringPipeline:
             When specified, `device_map` must remain at its default value of `"auto"`.
         hf_model_kwargs (dict, optional): Extra keyword arguments passed to
             `transformers.AutoModelForCausalLM.from_pretrained`.
+        trust_remote_code (bool, optional): Trust remote code when loading the tokenizer. Defaults to
+            `False`. To trust remote code for the model, pass `trust_remote_code=True` via `hf_model_kwargs`.
         lazy_init (bool, optional): If `True`, defers loading the base model until `steer()` time.
             Useful when a `StructuralControl` will itself load or create the final weights
             (e.g., MergeKit). When `False`, the model is loaded during `SteeringPipeline`
@@ -66,6 +70,7 @@ class SteeringPipeline:
     device_map: str | dict[str, int] | int | torch.device | None = "auto"
     device: torch.device | str | None = None
     hf_model_kwargs: dict = field(default_factory=dict)
+    trust_remote_code: bool = False
     lazy_init: bool = False
 
     # lazy‑filled fields
@@ -78,6 +83,7 @@ class SteeringPipeline:
     output_control: OutputControl = field(init=False)
 
     _is_steered: bool = field(default=False, init=False, repr=False)
+    _warned_tensor_with_adapt_messages: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
 
@@ -113,14 +119,14 @@ class SteeringPipeline:
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 self.tokenizer_name_or_path or self.model_name_or_path,
-                trust_remote_code=True,
+                trust_remote_code=self.trust_remote_code,
             )
             self.tokenizer = ensure_pad_token(self.tokenizer)
         else:
             if isinstance(self.tokenizer_name_or_path, (str, Path)):
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     self.tokenizer_name_or_path,
-                    trust_remote_code=True
+                    trust_remote_code=self.trust_remote_code
                 )
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
@@ -184,7 +190,7 @@ class SteeringPipeline:
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     repo or Path(getattr(self.structural_control.args, "out_path", "")),
-                    trust_remote_code=True,
+                    trust_remote_code=self.trust_remote_code,
                 )
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
@@ -203,6 +209,7 @@ class SteeringPipeline:
             input_ids: list[int] | torch.LongTensor,
             attention_mask: torch.Tensor | None,
             runtime_kwargs: dict | None,
+            skip_adapt: bool = False,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Apply input control and normalize input tensors.
 
@@ -213,6 +220,9 @@ class SteeringPipeline:
             input_ids: Input token IDs as list or tensor [seq_len] or [batch, seq_len]
             attention_mask: Optional attention mask matching input_ids shape
             runtime_kwargs: Per-call parameters for input control
+            skip_adapt: When True, skip the token-level `input_control.adapt()` call (used by the chat path
+                when `adapt_messages` already performed the adaptation before tokenization, so the control is
+                not applied twice to the same prompt).
 
         Returns:
             tuple[torch.Tensor, torch.Tensor]: (steered_input_ids, attention_mask), both as 2D tensors on model device
@@ -220,9 +230,14 @@ class SteeringPipeline:
         runtime_kwargs = runtime_kwargs or {}
         device = self.model.device
 
-        # apply input control adapter
-        adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
-        steered_input_ids = adapter(input_ids, runtime_kwargs)
+        # apply input control (unless message-level adaptation already ran for this call)
+        if skip_adapt:
+            steered_input_ids = input_ids
+        else:
+            steered_input_ids = self.input_control.adapt(
+                input_ids,
+                runtime_kwargs=runtime_kwargs,
+            )
 
         # normalize input_ids to 2D tensor
         if isinstance(steered_input_ids, list):
@@ -272,44 +287,233 @@ class SteeringPipeline:
         self.state_control.set_hooks(hooks)
         self.state_control._model_ref = self.model
 
-    def generate(
-            self,
-            input_ids: list[int] | torch.LongTensor,
-            attention_mask: torch.Tensor | None = None,
-            runtime_kwargs: dict | None = None,
-            **gen_kwargs
-    ) -> torch.Tensor:
-        """Generate text with all steering controls applied.
-
-        Applies controls in sequence during generation:
-
-        1. Input control adapts the prompt
-        2. State control registers hooks for state control (e.g., activation steering)
-        3. Output control handles the actual generation
-
-        Args:
-            input_ids: Token IDs as list or tensor (shape: [seq_len] or [batch, seq_len])
-            attention_mask: Optional attention mask matching input_ids shape
-            runtime_kwargs: Per-generation parameters for controls (e.g., {"substrings": [...]})
-            **gen_kwargs: Generation parameters passed to `model.generate()`
+    @staticmethod
+    def _classify_inputs(
+            inputs: Any,
+    ) -> tuple[Literal["text", "chat", "tensor"], bool, Any]:
+        """Classify the input modality and normalize to a batched form.
 
         Returns:
-            Generated token IDs (shape: [batch, generated_len])
+            tuple[modality, is_single, normalized] where:
+
+                - `modality`: one of `"text"`, `"chat"`, or `"tensor"`.
+                - `is_single`: True if the caller passed a single (non-batched) input.
+                - `normalized`: `list[str]` for text, `list[list[dict]]` for chat, 2-D `torch.Tensor` for tensor.
+        """
+        if isinstance(inputs, str):
+            return "text", True, [inputs]
+
+        if isinstance(inputs, torch.Tensor):
+            if inputs.ndim == 1:
+                return "tensor", True, inputs.unsqueeze(0)
+            if inputs.ndim == 2:
+                return "tensor", False, inputs
+            raise ValueError(f"Tensor input must be 1-D or 2-D; got {inputs.ndim}-D.")
+
+        if isinstance(inputs, list):
+            if len(inputs) == 0:
+                raise ValueError("Empty input list.")
+            first = inputs[0]
+            if isinstance(first, str):
+                return "text", False, list(inputs)
+            if isinstance(first, dict):
+                # one chat (list of messages)
+                return "chat", True, [list(inputs)]
+            if isinstance(first, list) and first and isinstance(first[0], dict):
+                # batch of chats (list of list of messages)
+                return "chat", False, [list(chat) for chat in inputs]
+            if isinstance(first, int):
+                # 1-D token id list
+                return "tensor", True, torch.tensor([list(inputs)], dtype=torch.long)
+            if isinstance(first, list) and first and isinstance(first[0], int):
+                # 2-D token id list-of-lists
+                return "tensor", False, torch.tensor([list(seq) for seq in inputs], dtype=torch.long)
+
+        raise TypeError(f"Unsupported input type: {type(inputs).__name__}.")
+
+    def _maybe_warn_tensor_with_adapt_messages(self) -> None:
+        """Warn (once per pipeline lifecycle) if a control overrides `adapt_messages` but the caller used
+        tensor/text input, bypassing chat-template tokenization."""
+        if self._warned_tensor_with_adapt_messages:
+            return
+        cls = type(self.input_control)
+        if cls.adapt_messages is not InputControl.adapt_messages:
+            warnings.warn(
+                f"{cls.__name__} overrides `adapt_messages` but received tensor/text input; "
+                "the message-level adaptation will not run. Pass `list[dict]` or `list[list[dict]]` "
+                "to engage `adapt_messages`.",
+                UserWarning,
+            )
+            self._warned_tensor_with_adapt_messages = True
+
+    def _apply_adapt_messages_and_tokenize(
+            self,
+            messages_batch: list[list[dict]],
+            runtime_kwargs: dict,
+    ) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
+        """Run `input_control.adapt_messages` (if supplied) then chat-template tokenize.
+
+        Returns:
+            tuple[input_ids, attention_mask, handled] where `handled` is True iff the control's
+            `adapt_messages` returned a non-None result (i.e., the adaptation already happened at the
+            message level and the token-level `adapt()` must not run again for this call).
+        """
+        adapted = self.input_control.adapt_messages(
+            messages_batch,
+            runtime_kwargs=runtime_kwargs,
+        )
+        handled = adapted is not None
+        if handled:
+            messages_batch = adapted
+
+        encoded = self.tokenizer.apply_chat_template(
+            messages_batch,
+            return_tensors="pt",
+            padding=True,
+            add_generation_prompt=True,
+            return_dict=True,
+        )
+        input_ids = encoded["input_ids"]
+        attention_mask = encoded.get("attention_mask")
+        if input_ids.ndim == 1:
+            input_ids = input_ids.unsqueeze(0)
+            if attention_mask is not None and attention_mask.ndim == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+        return input_ids, attention_mask, handled
+
+    @overload
+    def generate(
+            self,
+            inputs: str,
+            attention_mask: torch.Tensor | None = ...,
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> str: ...
+    @overload
+    def generate(
+            self,
+            inputs: list[str],
+            attention_mask: torch.Tensor | None = ...,
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> list[str]: ...
+    @overload
+    def generate(
+            self,
+            inputs: torch.Tensor,
+            attention_mask: torch.Tensor | None = ...,
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> torch.Tensor: ...
+    @overload
+    def generate(
+            self,
+            inputs: Any,
+            attention_mask: torch.Tensor | None = ...,
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[True] = ...,
+            **gen_kwargs: Any,
+    ) -> Output | list[Output]: ...
+
+    def generate(
+            self,
+            inputs: str | list[str] | list[dict] | list[list[dict]] | torch.Tensor | list[int] | list[list[int]] | None = None,
+            attention_mask: torch.Tensor | None = None,
+            runtime_kwargs: dict | None = None,
+            return_output: bool = False,
+            *,
+            input_ids: Any = None,
+            **gen_kwargs,
+    ) -> str | list[str] | torch.Tensor | Output | list[Output]:
+        """Polymorphic generation across text, chat, and tensor inputs.
+
+        Dispatch table:
+
+        | Input type | Tokenization | Default return type |
+        | --- | --- | --- |
+        | `str` | plain text | `str` |
+        | `list[str]` | batched plain text | `list[str]` |
+        | `list[dict]` (one chat) | `apply_chat_template` | `str` |
+        | `list[list[dict]]` (batch of chats) | batched `apply_chat_template` | `list[str]` |
+        | `torch.Tensor` | already tokenized; passed through | `torch.Tensor` |
+
+        With `return_output=True`, the return is always `Output` (single) or `list[Output]` (batched), regardless
+        of input modality.
+
+        `attention_mask` is meaningful only for tensor inputs; it is ignored (with a warning) for text and chat
+        inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to
+        `adapt(input_ids, ...)`. For chat input, when `adapt_messages` returns a non-None result the token-level
+        `adapt()` is not called for that generation — the input control is applied exactly once per call.
+
+        Args:
+            inputs: One of the modalities above.
+            attention_mask: Optional, tensor-only.
+            runtime_kwargs: Per-generation parameters for controls (e.g., `{"substrings": [...]}`).
+            return_output: If True, return one or more `Output` objects instead of decoded text / token IDs.
+            **gen_kwargs: Generation parameters passed to `model.generate()`. May include
+                `return_full_sequence: bool` to include the prompt in the returned token IDs.
+
+        Returns:
+            See dispatch table above.
 
         Raises:
-            RuntimeError: If steer() has not yet been called
+            RuntimeError: If `steer()` has not yet been called.
         """
         if not self._is_steered:
             raise RuntimeError("Must call `.steer()` before `.generate()`.")
 
+        # Backwards-compatible keyword alias: callers may still pass `input_ids=` as the prompt.
+        if inputs is None and input_ids is not None:
+            inputs = input_ids
+        elif inputs is not None and input_ids is not None:
+            raise TypeError("Pass either `inputs` or `input_ids`, not both.")
+        if inputs is None:
+            raise TypeError("`generate()` requires `inputs` (or the legacy `input_ids` keyword).")
+
         runtime_kwargs = runtime_kwargs or {}
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
-        # input control
-        steered_input_ids, attention_mask = self._prepare_inputs(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
+        modality, is_single, normalized = self._classify_inputs(inputs)
+
+        # Resolve the prompt input_ids (and attention_mask) per modality
+        message_level_handled = False
+        if modality == "chat":
+            if attention_mask is not None:
+                warnings.warn(
+                    "`attention_mask` is ignored for chat input; it is rebuilt after tokenization.",
+                    UserWarning,
+                )
+            prompt_input_ids, prompt_attention_mask, message_level_handled = (
+                self._apply_adapt_messages_and_tokenize(normalized, runtime_kwargs)
+            )
+        elif modality == "text":
+            if attention_mask is not None:
+                warnings.warn(
+                    "`attention_mask` is ignored for text input; it is rebuilt after tokenization.",
+                    UserWarning,
+                )
+            self._maybe_warn_tensor_with_adapt_messages()
+            tokenized = self.tokenizer(
+                list(normalized),
+                return_tensors="pt",
+                padding=True,
+            )
+            prompt_input_ids = tokenized["input_ids"]
+            prompt_attention_mask = tokenized.get("attention_mask")
+        else:  # tensor
+            self._maybe_warn_tensor_with_adapt_messages()
+            prompt_input_ids = normalized
+            prompt_attention_mask = attention_mask
+
+        # input control (tensor-level adapt) + normalize
+        steered_input_ids, steered_attention_mask = self._prepare_inputs(
+            input_ids=prompt_input_ids,
+            attention_mask=prompt_attention_mask,
             runtime_kwargs=runtime_kwargs,
+            skip_adapt=message_level_handled,
         )
 
         # state control
@@ -317,35 +521,65 @@ class SteeringPipeline:
 
         # output control
         with self.state_control:  # hooks live only for duration of decoding
-            output_ids = self.output_control.generate(
+            full_output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
-                attention_mask=attention_mask,
+                attention_mask=steered_attention_mask,
                 runtime_kwargs=runtime_kwargs,
                 model=self.model,
                 **gen_kwargs
             )
 
-        if not return_full_sequence:
-            output_ids = output_ids[:, steered_input_ids.size(1):]
+        prompt_len = steered_input_ids.size(1)
+        new_tokens = full_output_ids[:, prompt_len:]
+        returned_ids = full_output_ids if return_full_sequence else new_tokens
 
-        return output_ids
+        # build Output (always — used for return_output=True and to expose adapted_input_ids for introspection)
+        finish_reason = self._infer_finish_reason(new_tokens, gen_kwargs)
+        output = Output(
+            output_ids=new_tokens,
+            adapted_input_ids=steered_input_ids,
+            runtime_kwargs=runtime_kwargs or None,
+            finish_reason=finish_reason,
+            metadata=None,
+        )
 
-    def generate_text(self, *args, **kwargs) -> str | list[str]:
-        """Generate text and decode to string(s).
+        # shape return per modality + flag
+        if return_output:
+            if is_single:
+                return output
+            return [
+                Output(
+                    output_ids=output.output_ids[i:i + 1],
+                    adapted_input_ids=output.adapted_input_ids[i:i + 1] if output.adapted_input_ids is not None else None,
+                    runtime_kwargs=output.runtime_kwargs,
+                    finish_reason=output.finish_reason,
+                    metadata=output.metadata,
+                )
+                for i in range(output.output_ids.size(0))
+            ]
 
-        Convenience wrapper that calls generate() and decodes the output tokens.
+        if modality == "tensor":
+            return returned_ids
 
-        Args:
-            *args: Arguments passed to generate()
-            **kwargs: Keyword arguments passed to generate()
+        # text / chat → decode
+        decoded = self.tokenizer.batch_decode(
+            returned_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
+        if is_single:
+            return decoded[0]
+        return decoded
 
-        Returns:
-            Decoded text string (single prompt) or list of strings (batch)
+    @staticmethod
+    def _infer_finish_reason(new_tokens: torch.Tensor, gen_kwargs: dict) -> str | None:
+        """Best-effort finish-reason inference from generated token IDs and gen_kwargs.
+
+        We don't have direct access to HuggingFace's stopping criteria result here, so we use heuristics:
+        if the generated length equals `max_new_tokens` exactly, mark `"length"`; otherwise None.
         """
-        ids = self.generate(*args, **kwargs)
-        if ids.ndim == 1:
-            return self.tokenizer.decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-        return self.tokenizer.batch_decode(ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
+        max_new = gen_kwargs.get("max_new_tokens")
+        if max_new is not None and new_tokens.size(1) >= max_new:
+            return "length"
+        return None
 
     def compute_logprobs(
             self,

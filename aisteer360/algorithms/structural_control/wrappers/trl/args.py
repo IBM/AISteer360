@@ -14,6 +14,7 @@ class TRLArgs(BaseArgs):
     base_model_name_or_path: str | None = None
     tokenizer_name_or_path: str | None = None
     hf_model_kwargs: dict[str, Any] = field(default_factory=dict)
+    trust_remote_code: bool = False
 
     # datasets / collators
     train_dataset: Any | None = None
