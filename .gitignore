@@ -18,6 +18,9 @@ examples/**/profiles/
 examples/**/profiles_*/
 /examples/notebooks/**/figures/*.png
 **/trl_models/
+**/mergekit_models/
+**/trainer_output
+**/tmp
 **/profiles/
 .claude/
 **/CLAUDE.md
