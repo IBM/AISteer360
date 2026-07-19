@@ -113,6 +113,43 @@ class ActivationBias(StateControl):
         }
 ```
 
+## Position tracking in hooks
+
+Scoped controls (those honoring `token_scope="after_prompt"` or `"from_position"`) need to know each hook
+invocation's absolute position in the full sequence. During prefill the hook sees the whole prompt
+(`seq_len == prompt_len`); during KV-cached decode it sees only the newly generated token(s)
+(`seq_len == 1`). Do **not** infer the phase by comparing `seq_len` to the prompt length — a length-1 prompt
+makes prefill and decode indistinguishable, so steering silently never fires. Instead, track the phase
+explicitly with a first-call flag, resetting it in both `reset()` and `get_hooks()`:
+
+```python
+def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._position_offset: int = 0
+    self._prefill_seen: bool = False
+
+def reset(self):
+    self._position_offset = 0
+    self._prefill_seen = False
+
+# inside the hook function:
+seq_len = hidden.size(1)
+if self._prefill_seen:            # decode step (or a later chunk)
+    position_offset = self._position_offset
+    self._position_offset += seq_len
+else:                             # first pass since reset() == prefill
+    position_offset = 0
+    self._position_offset = seq_len
+    self._prefill_seen = True
+
+mask = make_token_mask(self.token_scope, seq_len=seq_len, prompt_lens=prompt_lens,
+                       position_offset=position_offset)
+```
+
+If a control registers several hooks per pass (e.g. one per layer), designate a single hook to advance the
+shared counter and gate both the advance and the flag flip on it, so earlier hooks in the same prefill pass
+still read `position_offset = 0`. See `angular_steering` and `directional_ablation` for that variant.
+
 The hooks are then registered into the model via the `register_hooks` method in the state control base class
 (`aisteer360/algorithms/state_control/base.py`) such that they can be run on every `generate` call. The control can
 then be called via:

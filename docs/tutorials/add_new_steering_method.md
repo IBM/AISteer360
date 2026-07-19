@@ -214,4 +214,4 @@ should contain the following:
 - A simple example of it working; it's helpful to illustrate how the steered behavior compares with the baseline
 (non-steered) behavior
 
-See the [DeAL notebook](`../examples/notebooks/control_deal/deal.ipynb`) for an example.
+See the [DeAL notebook](`../examples/notebooks/deal.ipynb`) for an example.
