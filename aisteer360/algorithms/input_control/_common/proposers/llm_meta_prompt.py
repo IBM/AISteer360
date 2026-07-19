@@ -90,7 +90,7 @@ class LLMMetaPromptProposer(BaseProposer):
         if pad_id is not None:
             gen_kwargs.setdefault("pad_token_id", pad_id)
 
-        # Greedy / beam-1 decoding does not support `num_return_sequences > 1`. In those cases call
+        # greedy / beam-1 decoding does not support `num_return_sequences > 1`. In those cases call
         # `generate` sequentially. (Greedy with n > 1 is mostly useful for tests; in production callers
         # pass `do_sample=True` so the parallel path applies.)
         do_sample = gen_kwargs.get("do_sample", False)

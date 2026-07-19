@@ -108,7 +108,7 @@ class ThinkingIntervention(OutputControl):
                         p_i[k] = v
                 params_per_example.append(p_i)
         else:
-            # Simple case: same params dict for every example
+            # simple case: same params dict for every example
             params_per_example = [params_agg] * batch_size
 
         # build modified prompts

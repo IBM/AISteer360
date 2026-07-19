@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import random
 import re
@@ -7,6 +8,8 @@ from typing import Any
 
 from aisteer360.evaluation.use_cases.base import UseCase
 from aisteer360.evaluation.utils.generation_utils import batch_retry_generate
+
+logger = logging.getLogger(__name__)
 
 _EVALUATION_REQ_KEYS = [
     "question",
@@ -92,7 +95,7 @@ class CommonsenseMCQA(UseCase):
         """
 
         if not self.evaluation_data:
-            print('No evaluation data provided.')
+            logger.warning("No evaluation data provided.")
             return []
         gen_kwargs = dict(gen_kwargs or {})
         batch_size: int = int(kwargs["batch_size"])

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import copy
-from typing import Callable, Optional
+from typing import Callable
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
+from aisteer360.utils.tokenization import infer_attention_mask_from_ids
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.output_control.deal.args import DeALArgs
 
@@ -188,7 +189,7 @@ class DeAL(OutputControl):
             "max_iterations": self.max_iterations,
         }
 
-        original_max_tokens: Optional[int] = gen_kwargs.pop("max_new_tokens", None)
+        original_max_tokens: int | None = gen_kwargs.pop("max_new_tokens", None)
 
         # search loop
         best_beam: torch.Tensor | None = None
@@ -199,7 +200,7 @@ class DeAL(OutputControl):
         while iteration < self.max_iterations:
             iteration += 1
 
-            attention_mask = (current_input_ids != self.tokenizer.pad_token_id).long()
+            attention_mask = infer_attention_mask_from_ids(current_input_ids, self.tokenizer.pad_token_id)
             gen_args = copy.deepcopy(gen_kwargs)
             gen_args.update(
                 {

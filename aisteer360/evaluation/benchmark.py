@@ -14,7 +14,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from aisteer360.algorithms.core.specs import ControlSpec
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.utils.tokenization import ensure_pad_token
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.evaluation.use_cases.base import UseCase
 from aisteer360.evaluation.utils.data_utils import _hash_params, to_jsonable
@@ -116,7 +116,6 @@ class Benchmark:
                 profiles = json.load(f)
             n_runs = sum(len(runs) for runs in profiles.values())
             logger.info("Resumed from checkpoint: %d run(s) across %d pipeline(s)", n_runs, len(profiles))
-            print(f"Resumed from checkpoint: {n_runs} run(s) across {len(profiles)} pipeline(s).", flush=True)
             return profiles
         except (json.JSONDecodeError, OSError):
             logger.warning("Could not read checkpoint file; starting fresh.", exc_info=True)
@@ -162,7 +161,6 @@ class Benchmark:
         for pipeline_name, pipeline in self.steering_pipelines.items():
             pipeline = pipeline or []
 
-            print(f"Running pipeline: {pipeline_name}...", flush=True)
             logger.info("Running pipeline: %s", pipeline_name)
 
             has_specs = any(isinstance(control, ControlSpec) for control in pipeline)
@@ -185,7 +183,6 @@ class Benchmark:
 
             profiles[pipeline_name] = runs
             logger.info("Pipeline %s complete", pipeline_name)
-            print("done.", flush=True)
 
             self._save_checkpoint(profiles)
             self._try_export(profiles)
@@ -288,7 +285,7 @@ class Benchmark:
             # cleanup controls that may hold GPU resources (e.g., reward models)
             if pipeline is not None:
                 for control in (pipeline.structural_control, pipeline.input_control,
-                                pipeline.state_control, pipeline.output_control):
+                                *pipeline.state_controls, pipeline.output_control):
                     cleanup_fn = getattr(control, "cleanup", None)
                     if callable(cleanup_fn):
                         try:
@@ -378,12 +375,10 @@ class Benchmark:
             cached = self._runs_for_config(existing_runs, config_id)
             if cached:
                 logger.info("Skipping configuration %d (config=%s); already complete", combo_id + 1, config_id)
-                print(f"  Skipping config {config_id}; restored {len(cached)} run(s) from checkpoint.", flush=True)
                 runs.extend(cached)
                 continue
 
             logger.info("Running configuration %d", combo_id + 1)
-            print(f"Running configuration {combo_id + 1}...", flush=True)
 
             # instantiate controls only when we actually need to run
             controls: list[Any] = []

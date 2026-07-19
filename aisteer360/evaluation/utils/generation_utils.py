@@ -1,32 +1,38 @@
 """Generation utilities for use cases."""
 
+import logging
 from typing import Any, Callable, Sequence
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
+from aisteer360.utils.rendering import has_chat_template, render_for_model, render_messages
+
+logger = logging.getLogger(__name__)
 
 
-def apply_chat_template(tokenizer, batch, **kwargs) -> list:
+def render_inference_prompts(tokenizer, batch, **kwargs) -> list:
     """
     Constructs template prompts for each batch element based on following cases:
     1. If the model's tokenizer does not support chat_template, return the string as is.
     2. If it supports chat_template:
         Check each instance of the batch to construct chat messages if needed. Cases:
-        - Plain string -> convert as 'content' of 'user'
-        - List of dictionaries with 'role' and 'content'. Continue
-        Then apply chat template and return
+        - Plain string -> rendered as the 'user' turn via `render_for_model`.
+        - List of dictionaries with 'role' and 'content'; continue
+
+    The returned strings already contain the template's special tokens, so callers
+    must tokenize them with add_special_tokens=False.
     """
 
     template_prompts = []
     for idx, item in enumerate(batch):
         prompt_obj = item["prompt"]
-        if not hasattr(tokenizer, "apply_chat_template"):
+        if not has_chat_template(tokenizer):
             template_prompts.append(str(prompt_obj))
         else:
             if isinstance(prompt_obj, str):
-                messages = [{"role": "user", "content": prompt_obj}]
+                chat_str = render_for_model(tokenizer, prompt=prompt_obj, mode="chat_prompt")
             elif (
                 isinstance(prompt_obj, list)
                 and prompt_obj
@@ -36,18 +42,13 @@ def apply_chat_template(tokenizer, batch, **kwargs) -> list:
                     raise ValueError(
                         f"Prompt {idx}: every chat message dict must have 'role' and 'content' keys."
                     )
-                messages = prompt_obj
+                chat_str = render_messages(tokenizer, prompt_obj, add_generation_prompt=True)
             else:
                 raise TypeError(
                     f"Prompt {idx}: must be str or list of chat messages as list[dict[str, str]] "
                     f"(got {type(prompt_obj).__name__})."
                 )
 
-            chat_str = tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
             template_prompts.append(chat_str)
     return template_prompts
 
@@ -67,7 +68,7 @@ def chat_generate_model(
     - Dict with the chat template already applied ('role' and 'content' keys)
     """
 
-    prompts = apply_chat_template(tokenizer, batch)
+    prompts = render_inference_prompts(tokenizer, batch)
     decoded_outputs = []
 
     for i in range(0, len(prompts), batch_size):
@@ -75,7 +76,7 @@ def chat_generate_model(
 
         try:
             inputs = tokenizer(
-                batch_prompts, return_tensors="pt", padding=True, truncation=True
+                batch_prompts, return_tensors="pt", padding=True, truncation=True, add_special_tokens=False
             ).to(device)
             with torch.no_grad():
                 outputs = model.generate(
@@ -89,8 +90,10 @@ def chat_generate_model(
             decoded_outputs.extend(batch_decoded)
 
         except Exception as e:
-            print(f"Issue with model generation at batch {i//batch_size}: {e}")
-            print("Hint - Do not apply chat template to your prompts.")
+            logger.warning(
+                "Issue with model generation at batch %d: %s. Hint: do not apply a chat template to your prompts.",
+                i // batch_size, e,
+            )
             raise
 
     return decoded_outputs
@@ -144,7 +147,7 @@ def chat_generate_pipeline(
         if not runtime_kwargs_by_var:
             runtime_kwargs_by_var = None
 
-    prompts = apply_chat_template(tokenizer, batch)
+    prompts = render_inference_prompts(tokenizer, batch)
     decoded_outputs: list[str] = []
 
     pipeline_supports_batching: bool = getattr(pipeline, "supports_batching", False)
@@ -154,7 +157,7 @@ def chat_generate_pipeline(
         current_batch_size = len(batch_prompts)
 
         inputs = tokenizer(
-            batch_prompts, padding=True, truncation=True, return_tensors="pt"
+            batch_prompts, padding=True, truncation=True, return_tensors="pt", add_special_tokens=False
         ).to(device)
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]

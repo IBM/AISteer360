@@ -26,7 +26,6 @@ See Also:
 """
 from abc import ABC, abstractmethod
 from dataclasses import fields
-from typing import Type
 
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
@@ -42,7 +41,8 @@ class StructuralControl(ABC):
         steer(model, tokenizer, **kwargs) -> PreTrainedModel: Training logic (required)
     """
 
-    Args: Type[BaseArgs] | None = None
+    Args: type[BaseArgs] | None = None
+    RUNTIME_KWARGS_SCHEMA: list[dict] = []
 
     enabled: bool = True
     supports_batching: bool = True

@@ -11,6 +11,7 @@ from transformers import (
 )
 
 from aisteer360.evaluation.metrics.base import Metric
+from aisteer360.utils.rendering import has_chat_template, render_messages
 
 
 _FORMAT_INSTRUCTIONS = (
@@ -162,7 +163,7 @@ class LLMJudgeMetric(Metric):
             self.device = next(self.model.parameters()).device
             self.model.eval()
 
-        self.use_chat = hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template is not None
+        self.use_chat = has_chat_template(self.tokenizer)
 
         gen_kwargs = dict(gen_kwargs or {})
         gen_kwargs.setdefault("temperature", 0.0)
@@ -216,11 +217,7 @@ class LLMJudgeMetric(Metric):
         """
         if self.use_chat:
             messages = [{"role": "user", "content": prompt}]
-            return self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            return render_messages(self.tokenizer, messages, add_generation_prompt=True)
         return prompt
 
     @staticmethod
@@ -238,6 +235,7 @@ class LLMJudgeMetric(Metric):
                 prompts,
                 return_tensors="pt",
                 padding=True,
+                add_special_tokens=not self.use_chat,
             ).to(self.model.device)
 
             gen_kwargs = dict(self.gen_kwargs)

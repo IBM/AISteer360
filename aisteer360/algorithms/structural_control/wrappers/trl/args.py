@@ -62,6 +62,9 @@ class TRLArgs(BaseArgs):
 
     def __post_init__(self) -> None:
 
+        # default transient artifacts under ./tmp so nothing lands at the repository root
+        self.output_dir = self.output_dir or self.training_args.get("output_dir") or "./tmp/trainer_output"
+
         # compose training args
         base_training_args = {
             "output_dir": self.output_dir,

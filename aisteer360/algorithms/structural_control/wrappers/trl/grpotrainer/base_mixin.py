@@ -5,7 +5,7 @@ from peft import LoraConfig, PeftType
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.utils.tokenization import ensure_pad_token
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
 from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import (

@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import fields
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -57,7 +57,8 @@ class InputControl(ABC):
     via the `memory` attribute, e.g., see `TextMemory`. 
     """
 
-    Args: Type[BaseArgs] | None = None
+    Args: type[BaseArgs] | None = None
+    RUNTIME_KWARGS_SCHEMA: list[dict] = []
 
     enabled: bool = True
     supports_batching: bool = False

@@ -25,22 +25,22 @@ _DOUBLE_RING_SHAPES = ["o", "s", "^", "h", "D", "v"]
 
 # markers for fixed (non-swept) reference pipelines overlaid on scatter-type plots (plot_tradeoff, plot_tradeoff_scatter)
 _FIXED_PIPELINE_MARKERS = [
-    {"marker": "X", "color": "black"},      # baseline
-    {"marker": "s", "color": "#E24A33"},     # red square
-    {"marker": "D", "color": "#348ABD"},     # blue diamond
-    {"marker": "^", "color": "#988ED5"},     # purple triangle
-    {"marker": "P", "color": "#8EBA42"},     # green plus
-    {"marker": "v", "color": "#FBC15E"},     # amber down-triangle
+    {"marker": "X", "color": "black"},  # baseline
+    {"marker": "s", "color": "#E24A33"},  # red square
+    {"marker": "D", "color": "#348ABD"},  # blue diamond
+    {"marker": "^", "color": "#988ED5"},  # purple triangle
+    {"marker": "P", "color": "#8EBA42"},  # green plus
+    {"marker": "v", "color": "#FBC15E"},  # amber down-triangle
 ]
 
 # line styles for fixed reference pipelines overlaid on sensitivity plots
 _FIXED_PIPELINE_STYLES = [
     {"color": "#555555", "linestyle": "--"},  # baseline grey
-    {"color": "#E24A33", "linestyle": ":"},   # red
+    {"color": "#E24A33", "linestyle": ":"},  # red
     {"color": "#348ABD", "linestyle": "-."},  # blue
-    {"color": "#988ED5", "linestyle": ":"},   # purple
+    {"color": "#988ED5", "linestyle": ":"},  # purple
     {"color": "#8EBA42", "linestyle": "-."},  # green
-    {"color": "#FBC15E", "linestyle": ":"},   # amber
+    {"color": "#FBC15E", "linestyle": ":"},  # amber
 ]
 
 

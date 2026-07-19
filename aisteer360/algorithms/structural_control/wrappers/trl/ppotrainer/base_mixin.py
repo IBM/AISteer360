@@ -9,7 +9,7 @@ from transformers import (
 )
 from trl import PPOConfig, PPOTrainer
 
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.utils.tokenization import ensure_pad_token
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
 from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import (
@@ -89,7 +89,7 @@ class PPOTrainerMixin(TRLMixin, StructuralControl):
                 peft_config=peft_config,
             )
             trainer.train()
-            
+
             # recover the trained policy so it can be used for generation
             trained_model = trainer.accelerator.unwrap_model(trainer.model)
             self.model = getattr(trained_model, "policy", trained_model)

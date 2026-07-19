@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import copy
-from typing import Callable, Optional
+import logging
+from typing import Callable
 
 import pandas as pd
 import torch
@@ -18,6 +19,8 @@ from transformers.generation.stopping_criteria import StoppingCriteriaList
 
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.output_control.sasa.args import SASAArgs
+
+logger = logging.getLogger(__name__)
 
 
 class SASA(OutputControl):
@@ -91,7 +94,7 @@ class SASA(OutputControl):
         self.model = model
         self.tokenizer = tokenizer or getattr(model, "tokenizer", None)
         if self.tokenizer.pad_token_id is None:
-            print("pad_token is absent. Setting it to eos_token or '<pad>'.")
+            logger.info("pad_token is absent; setting it to eos_token or '<pad>'.")
             if self.tokenizer.eos_token_id is not None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -103,10 +106,10 @@ class SASA(OutputControl):
         self.base_generate = model.generate
         self.device = next(model.parameters()).device
         if getattr(self, "wv_path", None):
-            print("Loading SASA steer (wv)......")
+            logger.info("Loading SASA steer (wv).")
             self.wv = torch.load(self.wv_path, map_location="cpu")
         else:
-            print("Creating SASA steer (wv)......")
+            logger.info("Creating SASA steer (wv).")
             self._setup_wv()
             # self.wv =  {k: v.cpu() for k, v in self.wv.item().items()}
             torch.save(self.wv, 'tmp/steer_wv.pt')
@@ -164,16 +167,16 @@ class SASA(OutputControl):
             pooled_result = last_hidden[range(len(last_hidden)), batch['attention_mask'].sum(-1) - 1]
             return pooled_result.cpu()
 
-        # Load dataset
+        # load dataset
         import os
 
         os.makedirs(self.gen_wv_data_path, exist_ok=True)
         if self.gen_wv_data is not None:
-            print(f"Data found in: {self.gen_wv_data}")
+            logger.info("Data found in: %s", self.gen_wv_data)
             pos = self.gen_wv_data['pos']
             neg = self.gen_wv_data['neg']
         elif os.path.exists(os.path.join(self.gen_wv_data_path, "all_data.csv")):
-            print(f"Dataset found in: {self.gen_wv_data_path}")
+            logger.info("Dataset found in: %s", self.gen_wv_data_path)
             dataset = pd.read_csv(os.path.join(self.gen_wv_data_path, "all_data.csv"))
             pos = [row for i, row in dataset['comment_text'].items() if isinstance(row, str) and dataset['toxicity'][i] == 0]
             neg = [row for i, row in dataset['comment_text'].items() if isinstance(row, str) and dataset['toxicity'][i] > 0]
@@ -189,18 +192,18 @@ class SASA(OutputControl):
             )
 
         num = len(pos) + len(neg)
-        print(f"There are overall {len(pos)} positive sentences and {len(neg)} negative sentences.")
+        logger.debug("There are overall %d positive sentences and %d negative sentences.", len(pos), len(neg))
         if self.gen_wv_length > 0 and self.gen_wv_length < num:
             num_pos = int(self.gen_wv_length / num * len(pos))
             num_neg = self.gen_wv_length - num_pos
             pos = pos[:num_pos]
             neg = neg[:num_neg]
-        print(f"Generating wv via {len(pos)} positive sentences and {len(neg)} negative sentences.")
+        logger.debug("Generating wv via %d positive sentences and %d negative sentences.", len(pos), len(neg))
 
         sorted_pos = sorted(pos, key=lambda z: -len(z))
         sorted_neg = sorted(neg, key=lambda z: -len(z))
 
-        # Gather embeddings
+        # gather embeddings
         embeddings_pos = []
         embeddings_neg = []
         for ii in tqdm(range(0, len(sorted_pos), self.gen_wv_batch_size), desc="Embedding POS"):
@@ -215,7 +218,7 @@ class SASA(OutputControl):
         X1_train = X1_train[~torch.isnan(X1_train).any(dim=1)]
         X2_train = X2_train[~torch.isnan(X2_train).any(dim=1)]
 
-        # Obtain closed-form Bayes optimal classifier
+        # obtain closed-form Bayes optimal classifier
         mu_1 = torch.mean(X1_train, axis=0)
         cov = torch.cov(X1_train.T) * (X1_train.shape[0] - 1)
         mu_2 = torch.mean(X2_train, axis=0)
@@ -391,16 +394,16 @@ class SASA(OutputControl):
         beta = self.beta
         wv = self.wv
 
-        # # If vanilla decoding, allow opt-out
+        # if vanilla decoding, allow opt-out
         # if not runtime_kwargs.get("sasa_enabled", True):
         #     return self.base_generate(input_ids=input_ids, **gen_kwargs)
 
         inputs: torch.Tensor = input_ids
 
-        generation_config: Optional[GenerationConfig] = gen_kwargs.pop("generation_config", None)
-        logits_processor: Optional[LogitsProcessorList] = gen_kwargs.pop("logits_processor", None)
-        stopping_criteria: Optional[StoppingCriteriaList] = gen_kwargs.pop("stopping_criteria", None)
-        prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], list[int]]] = gen_kwargs.pop(
+        generation_config: GenerationConfig | None = gen_kwargs.pop("generation_config", None)
+        logits_processor: LogitsProcessorList | None = gen_kwargs.pop("logits_processor", None)
+        stopping_criteria: StoppingCriteriaList | None = gen_kwargs.pop("stopping_criteria", None)
+        prefix_allowed_tokens_fn: Callable[[int, torch.Tensor], list[int]] | None = gen_kwargs.pop(
             "prefix_allowed_tokens_fn", None)
 
         # priority: `generation_config` argument > `model.generation_config` (the default generation config)
@@ -417,12 +420,12 @@ class SASA(OutputControl):
         )
         generation_config.validate()
 
-        # Set generation parameters if not already defined
+        # set generation parameters if not already defined
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
         stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()
         kwargs_has_attention_mask = model_kwargs.get("attention_mask", None) is not None
 
-        # Define model inputs
+        # define model inputs
         # input_ids has to be defined
         # all model-specific keyword inputs are removed from `model_kwargs`
         input_ids, _, model_kwargs = self.model._prepare_model_inputs(
@@ -432,12 +435,12 @@ class SASA(OutputControl):
         device = input_ids.device
         self.model._prepare_special_tokens(generation_config, kwargs_has_attention_mask, device=device)
 
-        # Prepare `max_length` depending on other stopping criteria.
+        # prepare `max_length` depending on other stopping criteria.
         input_ids_seq_length = input_ids.shape[-1]
         if generation_config.max_new_tokens is not None:
             generation_config.max_length = generation_config.max_new_tokens + input_ids_seq_length
 
-        # Prepare logits processor, stopping criteria
+        # prepare logits processor, stopping criteria
         logits_processor = self.model._get_logits_processor(
             generation_config=generation_config,
             input_ids_seq_length=input_ids_seq_length,
@@ -447,10 +450,10 @@ class SASA(OutputControl):
             model_kwargs=model_kwargs,
         )
         stopping_criteria = self.model._get_stopping_criteria(
-            generation_config=generation_config, stopping_criteria=stopping_criteria, **gen_kwargs
+            generation_config=generation_config, stopping_criteria=stopping_criteria
         )
 
-        # Expand input_ids with `num_return_sequences` additional sequences per batch
+        # expand input_ids with `num_return_sequences` additional sequences per batch
         input_ids, model_kwargs = self.model._expand_inputs_for_generation(
             input_ids=input_ids,
             expand_size=generation_config.num_return_sequences,
@@ -458,7 +461,7 @@ class SASA(OutputControl):
             **model_kwargs,
         )
 
-        # Run sample
+        # run sample
         # init values
         scores = ()
         mv = None
@@ -515,7 +518,7 @@ class SASA(OutputControl):
                     else:
                         # fallback: use cache_position to infer length
                         cache_length = model_kwargs_temp['cache_position'][0].item()
-                    # Trim attention_mask to match cache length for gemma
+                    # trim attention_mask to match cache length for gemma
                     model_kwargs_temp['attention_mask'] = model_kwargs_temp['attention_mask'][:, :cache_length]
 
                     original_cache_pos = model_kwargs_temp['cache_position']

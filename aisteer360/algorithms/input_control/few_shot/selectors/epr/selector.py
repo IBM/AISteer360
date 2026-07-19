@@ -70,7 +70,7 @@ class EPRSelector(DenseRetrievalSelector):
         output_field: str = "output",
         device: Any = None,
     ) -> None:
-        # Skip DenseRetrievalSelector's __init__ — we own the encoder and create it later in prepare().
+        # skip DenseRetrievalSelector's __init__; we own the encoder and create it later in prepare()
         self.encoder = None  # filled in prepare()
         self.similarity = "cosine"
         self.item_to_text = self._format_item
@@ -95,7 +95,7 @@ class EPRSelector(DenseRetrievalSelector):
         return str(item)
 
     def _extract_query_text(self, query: Any) -> str:
-        # When called from FewShot.adapt_messages, `query` is the chat (a list of dicts).
+        # when called from FewShot.adapt_messages, `query` is the chat (a list of dicts).
         if isinstance(query, list) and query and isinstance(query[0], dict):
             for msg in reversed(query):
                 if msg.get("role") == "user":
@@ -154,7 +154,7 @@ class EPRSelector(DenseRetrievalSelector):
             device=self.device,
         )
 
-        # Pre-compute pool embeddings into PoolMemory metadata for inference-time lookup.
+        # pre-compute pool embeddings into PoolMemory metadata for inference-time lookup.
         embeddings = [self.encoder.encode(self._format_item(item)) for item in items]
         if isinstance(data, PoolMemory):
             data.metadata[self.embedding_key] = embeddings
