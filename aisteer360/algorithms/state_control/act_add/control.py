@@ -1,21 +1,17 @@
 """ActAdd (Activation Addition) control implementation."""
 from __future__ import annotations
 
-from functools import partial
-
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control._common.estimators import SinglePairEstimator
 from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control._common.hook_utils import (
-    get_model_layer_list,
-    extract_hidden_states,
-    replace_hidden_states,
-)
+from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.runtime import TransformHookRuntime
 from aisteer360.algorithms.state_control._common.selectors import FixedLayerSelector, FractionalDepthSelector
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens
 from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform, NormPreservingTransform
 
 from .args import ActAddArgs
@@ -45,6 +41,8 @@ class ActAdd(StateControl):
         self._layer_names: list[str] = []
         self._layer_id: int = 0
         self._gate = AlwaysOpenGate()
+        self._pad_token_id: int | None = None
+        self._runtime = TransformHookRuntime(hook_point="layer_input")
 
     def steer(
         self,
@@ -78,7 +76,8 @@ class ActAdd(StateControl):
             )
 
         device = next(model.parameters()).device
-        sv = sv.to(device, dtype=model.dtype)
+        # clone before any in-place move/normalize so a caller-supplied vector is never mutated
+        sv = sv.clone().to(device, dtype=model.dtype)
 
         # resolve layer_id via selector
         if self.layer_id is not None:
@@ -101,13 +100,16 @@ class ActAdd(StateControl):
 
         # build transform
         transform = AdditiveTransform(
-            directions=sv.directions,
+            sv.directions,
             strength=self.multiplier,
             alignment=self.alignment,
         )
         if self.use_norm_preservation:
             transform = NormPreservingTransform(transform)
         self._transform = transform
+
+        # store tokenizer info for hook generation
+        self._pad_token_id = getattr(tokenizer, "pad_token_id", None) if tokenizer else None
 
         return model
 
@@ -119,12 +121,15 @@ class ActAdd(StateControl):
     ) -> dict[str, list]:
         """Register a pre-hook on the target layer.
 
-        The paper's Algorithm 1 specifies adding the steering vector to the
-        residual stream *before* the target layer processes it (h_l input),
-        not after (h_l output). Using a pre-hook ensures correct layer alignment.
+        The paper's Algorithm 1 specifies adding the steering vector to the residual stream
+        *before* the target layer processes it (h_l input), not after (h_l output); a pre-hook
+        ensures correct layer alignment. The token scope is always `"all"` — spatial control comes
+        from the transform's alignment-based positional injection, not the mask. Prefill-only
+        injection emerges from that geometry: each decode pass sees `seq_len == 1`, and the
+        alignment window never intersects it, so the runtime's position bookkeeping is unused here.
 
         Args:
-            input_ids: Input token IDs (used only for mask computation).
+            input_ids: Input token IDs (used only to size prompt lengths).
             runtime_kwargs: Unused.
 
         Returns:
@@ -134,60 +139,26 @@ class ActAdd(StateControl):
         if ids.ndim == 1:
             ids = ids.unsqueeze(0)
 
-        # for ActAdd, token_scope is effectively "all" — the alignment-based
-        # positioning in the transform handles spatial control, and the
-        # mask just provides a uniform gate.
-        mask = torch.ones(ids.size(0), ids.size(1), dtype=torch.bool, device=ids.device)
+        prompt_lens = compute_prompt_lens(ids, self._pad_token_id)
+        self._runtime.reset(prompt_lens)
 
-        hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
-
-        hooks["pre"].append({
-            "module": self._layer_names[self._layer_id],
-            "hook_func": partial(
-                self._pre_hook,
-                layer_id=self._layer_id,
-                transform=self._transform,
-                gate=self._gate,
-                token_mask=mask,
-            ),
-        })
-
-        return hooks
-
-    def _pre_hook(
-        self,
-        module,
-        args,
-        kwargs,
-        *,
-        layer_id: int,
-        transform,
-        gate,
-        token_mask: torch.BoolTensor,
-    ):
-        """Apply positional activation addition to the layer input (residual stream)."""
-        hidden = extract_hidden_states(args, kwargs)
-        if hidden is None:
-            return args, kwargs
-
-        # during KV-cached generation, the mask from get_hooks() was sized
-        # for the full prompt. Resize to current seq_len.
-        seq_len = hidden.size(1)
-        batch_size = hidden.size(0)
-        if token_mask.size(1) != seq_len:
-            token_mask = torch.ones(
-                batch_size, seq_len, dtype=torch.bool, device=hidden.device,
-            )
-
-        if gate.is_open():
-            hidden = transform.apply(
-                hidden,
-                layer_id=layer_id,
-                token_mask=token_mask,
-            )
-
-        return replace_hidden_states(args, kwargs, hidden)
+        return {
+            "pre": [{
+                "module": self._layer_names[self._layer_id],
+                "hook_func": self._runtime.build_behavior_hook(
+                    layer_id=self._layer_id,
+                    transform=self._transform,
+                    gate=self._gate,
+                    token_scope="all",
+                    is_pass_opener=True,  # single-layer control: its only hook opens the pass
+                ),
+            }],
+            "forward": [],
+            "backward": [],
+        }
 
     def reset(self):
         """Reset internal state between generation calls."""
         self._gate.reset()
+        if self._runtime._prompt_lens is not None:
+            self._runtime.reset(self._runtime._prompt_lens)

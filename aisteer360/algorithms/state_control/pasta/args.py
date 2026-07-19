@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Union
+from typing import Literal
 
 from aisteer360.algorithms.core.base_args import BaseArgs
 
@@ -7,11 +7,11 @@ from aisteer360.algorithms.core.base_args import BaseArgs
 @dataclass
 class PASTAArgs(BaseArgs):
 
-    substrings: Optional[List[Union[str, List[str]]]] = field(
+    substrings: list[str | list[str]] | None = field(
         default=None,
         metadata={"help": "List of substrings or groups of substrings to steer attention toward or away from."}
     )
-    head_config: Union[Dict[int, List[int]], List[int]] = field(
+    head_config: dict[int, list[int]] | list[int] = field(
         default_factory=lambda: [0, 1],
         metadata={"help": "Either a list of layer indices (to steer all heads), or a dict mapping layer index -> list of head indices."}
     )
@@ -44,7 +44,7 @@ class PASTAArgs(BaseArgs):
                     raise ValueError("Each substring must be a string or a list of strings.")
 
         if isinstance(self.head_config, dict):
-            converted: Dict[int, List[int]] = {}
+            converted: dict[int, list[int]] = {}
             for key, val in self.head_config.items():
                 try:
                     layer_idx = int(key)

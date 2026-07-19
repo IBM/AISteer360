@@ -1,17 +1,16 @@
 """Inference-Time Intervention (ITI) state control."""
 from __future__ import annotations
 
-from functools import partial
-
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
-from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.model_layout import resolve_model_layout
+from aisteer360.algorithms.state_control._common.runtime import TransformHookRuntime
 from aisteer360.algorithms.state_control._common.selectors import TopKHeadSelector
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
-from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens, make_token_mask
+from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens
 from aisteer360.algorithms.state_control._common.transforms import HeadAdditiveTransform, NormPreservingTransform
 
 from .args import ITIArgs
@@ -59,11 +58,7 @@ class ITI(StateControl):
         self._active_layer_ids: set[int] = set()
         self._gate = AlwaysOpenGate()
         self._pad_token_id: int | None = None
-
-        # tracks cumulative position for KV-cached generation
-        self._position_offset: int = 0
-        self._initial_seq_len: int = 0
-        self._current_mask: torch.BoolTensor | None = None
+        self._runtime = TransformHookRuntime(hook_point="layer_input")
 
     def steer(
         self,
@@ -81,18 +76,9 @@ class ITI(StateControl):
             The input model, unchanged.
         """
         device = next(model.parameters()).device
-        _, layer_names = get_model_layer_list(model)
-        self._layer_names = layer_names
-
-        # determine o_proj suffix based on architecture
-        if layer_names[0].startswith("model.layers"):
-            oproj_suffix = ".self_attn.o_proj"
-        elif layer_names[0].startswith("transformer.h"):
-            oproj_suffix = ".attn.c_proj"
-        else:
-            raise ValueError(f"Unrecognized model architecture: {layer_names[0]}")
-
-        self._oproj_names = [name + oproj_suffix for name in layer_names]
+        layout = resolve_model_layout(model)
+        self._layer_names = layout.layer_names
+        self._oproj_names = layout.oproj_names
 
         # resolve steering vector
         if self.steering_vector is not None:
@@ -126,7 +112,7 @@ class ITI(StateControl):
 
         # build transform
         transform = HeadAdditiveTransform(
-            steering_vector=sv,
+            sv,
             active_heads=active_heads,
             strength=self.alpha,
         )
@@ -145,12 +131,13 @@ class ITI(StateControl):
         runtime_kwargs: dict | None,  # noqa: ARG002
         **__,
     ) -> dict[str, list]:
-        """Create pre-hooks on o_proj modules for pre-projection intervention.
+        """Create pre-hooks on active o_proj modules for pre-projection intervention.
 
-        Registers pre-hooks on each active layer's o_proj. The pre-hook modifies
-        the input to o_proj (the concatenated per-head attention outputs) by adding
-        direction vectors to the appropriate head slices. This matches the paper's
-        intervention point: after Att, before Q^h_l (the output projection).
+        Registers a pre-hook on each active layer's o_proj. Each pre-hook modifies the input to
+        o_proj (the concatenated per-head attention outputs) by adding direction vectors to the
+        appropriate head slices, at the positions selected by `token_scope`. This matches the
+        paper's intervention point: after Att, before Q^h_l (the output projection). Position
+        bookkeeping is delegated to the shared runtime (the lowest active layer opens the pass).
 
         Args:
             input_ids: Input token IDs.
@@ -164,135 +151,33 @@ class ITI(StateControl):
             ids = ids.unsqueeze(0)
 
         prompt_lens = compute_prompt_lens(ids, self._pad_token_id)
-
-        self._initial_seq_len = ids.size(1)
-        self._position_offset = 0
-        self._current_mask = None
+        self._runtime.reset(prompt_lens)
 
         hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
 
-        if not self._active_layer_ids:
+        active = sorted(self._active_layer_ids)
+        if not active:
             return hooks
 
-        # pre-hook on the earliest active o_proj for mask computation
-        earliest_layer = min(self._active_layer_ids)
-        hooks["pre"].append({
-            "module": self._oproj_names[earliest_layer],
-            "hook_func": partial(
-                self._mask_pre_hook,
-                prompt_lens=prompt_lens,
-                control_ref=self,
-            ),
-        })
-
-        # pre-hooks on each active o_proj to apply the head-level transform
-        for layer_id in sorted(self._active_layer_ids):
+        opener = active[0]
+        for layer_id in active:
             hooks["pre"].append({
                 "module": self._oproj_names[layer_id],
-                "hook_func": partial(
-                    self._transform_pre_hook,
+                "hook_func": self._runtime.build_behavior_hook(
                     layer_id=layer_id,
                     transform=self._transform,
                     gate=self._gate,
-                    control_ref=self,
+                    token_scope=self.token_scope,
+                    last_k=self.last_k,
+                    from_position=self.from_position,
+                    is_pass_opener=(layer_id == opener),
                 ),
             })
 
         return hooks
 
-    @staticmethod
-    def _mask_pre_hook(
-        _module,
-        args,
-        kwargs,
-        *,
-        prompt_lens: torch.LongTensor,
-        control_ref: "ITI",
-    ):
-        """Pre-hook on o_proj to compute token mask once per forward pass.
-
-        This hook fires first (on the earliest active o_proj) and computes the
-        token mask that all transform pre-hooks will use. It also handles position
-        offset tracking for KV-cached generation.
-
-        Args:
-            prompt_lens: Per-batch prompt lengths.
-            control_ref: Reference to the ITI control for state management.
-
-        Returns:
-            None (does not modify inputs).
-        """
-        # o_proj input is the first positional arg: [B, T, num_heads * head_dim]
-        hidden = args[0] if args else None
-        if hidden is None:
-            return None
-
-        seq_len = hidden.size(1)
-
-        if seq_len < control_ref._initial_seq_len:
-            position_offset = control_ref._position_offset
-            control_ref._position_offset += seq_len
-        else:
-            position_offset = 0
-            control_ref._position_offset = seq_len
-
-        control_ref._current_mask = make_token_mask(
-            control_ref.token_scope,
-            seq_len=seq_len,
-            prompt_lens=prompt_lens.to(hidden.device),
-            last_k=control_ref.last_k,
-            from_position=control_ref.from_position,
-            position_offset=position_offset,
-        )
-
-        return None
-
-    @staticmethod
-    def _transform_pre_hook(
-        _module,
-        args,
-        kwargs,
-        *,
-        layer_id: int,
-        transform,
-        gate,
-        control_ref: "ITI",
-    ):
-        """Pre-hook on o_proj to apply head-level intervention to the o_proj input.
-
-        Modifies the concatenated per-head attention outputs before the output
-        projection, matching the paper's intervention point.
-
-        Args:
-            layer_id: Index of the target layer.
-            transform: The head additive transform to apply.
-            gate: The gate (always open for ITI).
-            control_ref: Reference to the ITI control for cached mask access.
-
-        Returns:
-            Modified (args, kwargs) tuple or None if no modification needed.
-        """
-        hidden = args[0] if args else None
-        if hidden is None:
-            return None
-
-        mask = control_ref._current_mask
-        if mask is None:
-            return None
-
-        if gate.is_open():
-            modified = transform.apply(
-                hidden,
-                layer_id=layer_id,
-                token_mask=mask,
-            )
-            # return modified args tuple so o_proj sees the steered input
-            return (modified,) + args[1:], kwargs
-
-        return None
-
     def reset(self):
         """Reset internal state between generation calls."""
         self._gate.reset()
-        self._position_offset = 0
-        self._current_mask = None
+        if self._runtime._prompt_lens is not None:
+            self._runtime.reset(self._runtime._prompt_lens)
