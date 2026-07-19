@@ -2,6 +2,8 @@
 import torch
 from transformers import PreTrainedModel
 
+from .model_layout import resolve_model_layout
+
 
 def get_model_layer_list(model: PreTrainedModel) -> tuple[list, list[str]]:
     """Return (layer_modules, layer_name_strings) for a HuggingFace model.
@@ -18,19 +20,43 @@ def get_model_layer_list(model: PreTrainedModel) -> tuple[list, list[str]]:
     Raises:
         ValueError: If model architecture is not recognized.
     """
-    if hasattr(model, "model") and hasattr(model.model, "layers"):
-        modules = list(model.model.layers)
-        prefix = "model.layers"
-    elif hasattr(model, "transformer") and hasattr(model.transformer, "h"):
-        modules = list(model.transformer.h)
-        prefix = "transformer.h"
-    else:
-        raise ValueError(
-            f"Cannot determine layer list for {type(model).__name__}. "
-            f"Expected model.model.layers or model.transformer.h."
-        )
-    names = [f"{prefix}.{i}" for i in range(len(modules))]
+    layout = resolve_model_layout(model)
+    names = layout.layer_names
+    modules = [model.get_submodule(name) for name in names]
     return modules, names
+
+
+def get_norm_module_names(model: PreTrainedModel) -> list[tuple[int, str]]:
+    """Return (layer_id, module_path) pairs for the per-layer normalization sub-modules.
+
+    Angular steering rotates the residual stream entering each normalization layer (the paper
+    intervenes after every norm, before Attention and before the MLP). Supports:
+
+    - llama/mistral/qwen/gemma-style (`model.model.layers[i]`): `input_layernorm`,
+        `post_attention_layernorm`.
+    - GPT-2-style (`model.transformer.h[i]`): `ln_1`, `ln_2`.
+
+    Only names that exist on the module are returned, sorted by (layer_id, module_path).
+
+    Args:
+        model: A HuggingFace causal LM.
+
+    Returns:
+        List of `(layer_id, dotted_module_path)` pairs, one per normalization sub-module.
+
+    Raises:
+        ValueError: If the model architecture is not recognized.
+    """
+    layout = resolve_model_layout(model)
+
+    result: list[tuple[int, str]] = []
+    for layer_id, layer_name in enumerate(layout.layer_names):
+        layer = model.get_submodule(layer_name)
+        for attr in layout.norm_attrs:
+            if hasattr(layer, attr) and getattr(layer, attr) is not None:
+                result.append((layer_id, f"{layer_name}.{attr}"))
+    result.sort(key=lambda pair: (pair[0], pair[1]))
+    return result
 
 
 def extract_hidden_states(input_args: tuple, input_kwargs: dict) -> torch.Tensor | None:

@@ -1,8 +1,16 @@
 """Head-level additive transform for activation steering."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Mapping
+
 import torch
 
+from ..sources import ArtifactSource
 from ..steering_vector import SteeringVector
 from .base import BaseTransform
+
+if TYPE_CHECKING:
+    from .context import TransformContext
 
 
 class HeadAdditiveTransform(BaseTransform):
@@ -19,25 +27,64 @@ class HeadAdditiveTransform(BaseTransform):
     per layer, with num_heads and head_dim metadata set. Only head indices
     present in ``active_heads`` are applied; other heads are left untouched.
 
+    A bare directions mapping cannot carry the required `num_heads`/`head_dim` metadata and is
+    rejected; supply a `SteeringVector` (or an `ArtifactSource` resolving to one).
+
     Args:
-        steering_vector: Unified SteeringVector with per-head directions.
+        artifact: A `SteeringVector` with per-head directions and `num_heads`/`head_dim` metadata,
+            or an `ArtifactSource` (unbound until `bind(ctx)`). Required.
         active_heads: Mapping from layer_id to set of head indices to intervene on.
         strength: Global scaling factor (alpha in ITI).
     """
 
     def __init__(
         self,
-        steering_vector: SteeringVector,
+        artifact: SteeringVector | Mapping[int, torch.Tensor] | ArtifactSource,
         active_heads: dict[int, set[int]],
         strength: float = 1.0,
     ):
-        if steering_vector.num_heads is None or steering_vector.head_dim is None:
-            raise ValueError("HeadAdditiveTransform requires num_heads and head_dim metadata on the SteeringVector.")
-        self.steering_vector = steering_vector
         self.active_heads = active_heads
-        self.num_heads = steering_vector.num_heads
-        self.head_dim = steering_vector.head_dim
         self.strength = strength
+        self._source: ArtifactSource | None = None
+        self.steering_vector: SteeringVector | None = None
+        self.num_heads: int | None = None
+        self.head_dim: int | None = None
+
+        if isinstance(artifact, ArtifactSource):
+            self._source = artifact
+        elif isinstance(artifact, SteeringVector):
+            self.steering_vector = artifact
+            self._validate_artifact()
+        elif isinstance(artifact, Mapping):
+            raise ValueError(
+                "HeadAdditiveTransform requires num_heads and head_dim metadata on the SteeringVector; "
+                "a bare directions mapping cannot carry it."
+            )
+        else:
+            raise TypeError(
+                f"HeadAdditiveTransform artifact must be a SteeringVector or an ArtifactSource; got "
+                f"{type(artifact).__name__} (did you mean strength=?)."
+            )
+
+    def _validate_artifact(self) -> None:
+        """Validate the artifact carries num_heads/head_dim metadata."""
+        if self.steering_vector.num_heads is None or self.steering_vector.head_dim is None:
+            raise ValueError("HeadAdditiveTransform requires num_heads and head_dim metadata on the SteeringVector.")
+        self.num_heads = self.steering_vector.num_heads
+        self.head_dim = self.steering_vector.head_dim
+
+    @property
+    def is_bound(self) -> bool:
+        return self.steering_vector is not None
+
+    def bind(self, ctx: "TransformContext") -> "HeadAdditiveTransform":
+        if self.is_bound:
+            return self
+        return HeadAdditiveTransform(ctx.resolve(self._source), active_heads=self.active_heads, strength=self.strength)
+
+    @property
+    def covered_layer_ids(self) -> set[int] | None:
+        return set(self.steering_vector.directions.keys()) if self.steering_vector is not None else None
 
     def apply(
         self,
@@ -58,6 +105,7 @@ class HeadAdditiveTransform(BaseTransform):
         Returns:
             Modified hidden states, same shape as input.
         """
+        self._require_bound()
         heads = self.active_heads.get(layer_id)
         if not heads:
             return hidden_states

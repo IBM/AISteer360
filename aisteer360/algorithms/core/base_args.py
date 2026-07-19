@@ -2,7 +2,7 @@
 Base argument validation for steering method configuration.
 """
 from dataclasses import dataclass
-from typing import Any, Mapping, Type, TypeVar
+from typing import Any, Mapping, TypeVar
 
 T = TypeVar("T", bound="BaseArgs")
 
@@ -12,7 +12,7 @@ class BaseArgs:
     """Base class for all method's args classes."""
 
     @classmethod
-    def validate(cls: Type[T], _init_data: Any | None = None, **kwargs) -> T:
+    def validate(cls: type[T], _init_data: Any | None = None, **kwargs) -> T:
         """Create and validate an Args instance from dict, kwargs, or existing instance.
 
         Args:

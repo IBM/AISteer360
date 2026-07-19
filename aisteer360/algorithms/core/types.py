@@ -20,7 +20,7 @@ class Output:
         adapted_input_ids: The `input_ids` actually fed to the model after all input-control transformations.
             Useful for inspection/debugging (e.g., to see the steered prompt). None if not provided by the pipeline.
         runtime_kwargs: The `runtime_kwargs` that produced this output. May be None if no runtime overrides were used.
-        finish_reason: `"length"` if generation reached `max_new_tokens`, else None.
+        finish_reason: How generation ended; one of `"eos"`, `"length"`, `"stop_token"`, or None if not tracked.
         metadata: Open-ended dict for pipeline-attached extras (resolved gen_kwargs, timing, token counts).
             Keys are not part of the stable contract.
     """

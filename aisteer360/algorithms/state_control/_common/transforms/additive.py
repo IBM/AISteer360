@@ -1,7 +1,16 @@
 """Additive activation steering transform."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Mapping
+
 import torch
 
+from ..sources import ArtifactSource
+from ..steering_vector import SteeringVector
 from .base import BaseTransform
+
+if TYPE_CHECKING:
+    from .context import TransformContext
 
 
 class AdditiveTransform(BaseTransform):
@@ -25,7 +34,9 @@ class AdditiveTransform(BaseTransform):
         prefill-only semantics emerge from the geometry.
 
     Args:
-        directions: Per-layer direction tensors. Shape [T, H] per layer.
+        artifact: The steering artifact — a `SteeringVector`, a per-layer directions mapping
+            (`Mapping[int, Tensor]`, each `[T, H]`), or an `ArtifactSource` (unbound until
+            `bind(ctx)`). Required.
         strength: Global scaling factor.
         alignment: Starting position for positional injection (default: 0).
             Only used when T > 1.
@@ -33,13 +44,39 @@ class AdditiveTransform(BaseTransform):
 
     def __init__(
         self,
-        directions: dict[int, torch.Tensor],
+        artifact: SteeringVector | Mapping[int, torch.Tensor] | ArtifactSource,
         strength: float = 1.0,
         alignment: int = 0,
     ):
-        self.directions = directions
         self.strength = strength
         self.alignment = alignment
+        self._source: ArtifactSource | None = None
+        self.directions: dict[int, torch.Tensor] | None = None
+
+        if isinstance(artifact, ArtifactSource):
+            self._source = artifact
+        elif isinstance(artifact, SteeringVector):
+            self.directions = artifact.directions
+        elif isinstance(artifact, Mapping):
+            self.directions = dict(artifact)
+        else:
+            raise TypeError(
+                f"AdditiveTransform artifact must be a SteeringVector, a Mapping[int, Tensor], or an "
+                f"ArtifactSource; got {type(artifact).__name__} (did you mean strength=?)."
+            )
+
+    @property
+    def is_bound(self) -> bool:
+        return self.directions is not None
+
+    def bind(self, ctx: "TransformContext") -> "AdditiveTransform":
+        if self.is_bound:
+            return self
+        return AdditiveTransform(ctx.resolve(self._source), strength=self.strength, alignment=self.alignment)
+
+    @property
+    def covered_layer_ids(self) -> set[int] | None:
+        return set(self.directions.keys()) if self.directions is not None else None
 
     def apply(
         self,
@@ -60,6 +97,7 @@ class AdditiveTransform(BaseTransform):
         Returns:
             Modified hidden states, same shape as input.
         """
+        self._require_bound()
         direction = self.directions.get(layer_id)
         if direction is None:
             return hidden_states

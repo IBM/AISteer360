@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import torch
@@ -56,12 +57,118 @@ class SteeringVector:
         return self.num_tokens > 1
 
     def to(self, device: torch.device | str, dtype: torch.dtype | None = None) -> "SteeringVector":
-        """Move all direction tensors to device/dtype. Returns self for chaining."""
+        """Move all direction tensors to device/dtype.
+
+        This mutates `self.directions` in place and returns `self` (so callers may chain).
+        To leave the original untouched, `clone()` first.
+        """
         self.directions = {
             k: v.to(device=device, dtype=dtype) if dtype else v.to(device=device)
             for k, v in self.directions.items()
         }
         return self
+
+    def clone(self) -> "SteeringVector":
+        """Return a deep copy with independent direction tensors and metadata dicts.
+
+        Use this before `to()` / normalization when the vector is caller-supplied and may be
+        reused (e.g., shared across controls or across a `Benchmark`/`ControlSpec` sweep).
+        """
+        return SteeringVector(
+            model_type=self.model_type,
+            directions={k: v.clone() for k, v in self.directions.items()},
+            num_heads=self.num_heads,
+            head_dim=self.head_dim,
+            explained_variances=dict(self.explained_variances) if self.explained_variances is not None else None,
+            probe_accuracies=dict(self.probe_accuracies) if self.probe_accuracies is not None else None,
+        )
+
+    def normalized(self) -> "SteeringVector":
+        """Return a per-layer L2-normalized deep clone.
+
+        Each direction tensor is normalized by its own L2 norm (over all elements). Rows with a
+        zero (or near-zero) norm are left unchanged. This is the bound-mode twin of
+        `ContrastiveFit(normalize=True)`: the original vector is untouched, so a shared/caller-held
+        vector stays intact.
+
+        Returns:
+            A new `SteeringVector` with normalized directions and copied metadata.
+        """
+        clone = self.clone()
+        for layer_id, direction in clone.directions.items():
+            norm = direction.norm()
+            if norm > 0:
+                clone.directions[layer_id] = direction / norm
+        return clone
+
+    def scaled_to_norms(
+        self,
+        target_norms: Mapping[int, float],
+        scale: float = 1.0,
+    ) -> "SteeringVector":
+        """Return a deep clone whose per-layer directions are rescaled to a target L2 norm.
+
+        At each layer present in both `target_norms` and `self.directions`, the direction is rescaled
+        to L2 norm `scale * target_norms[layer]` while keeping its orientation. This is the additive
+        counterpart of `normalized()`: `normalized()` scales every direction to unit norm, this scales
+        each to a caller-chosen (typically residual-norm-relative) magnitude. The original vector is
+        untouched (same ownership contract as `normalized()`).
+
+        Semantics are defined for broadcast directions only (`K == 1`): the same vector is added at
+        every steered token of a layer.
+
+        Args:
+            target_norms: Mapping from layer id to the per-layer base norm to scale to (e.g. the
+                output of `measure_residual_norms`). Layers absent from either `target_norms` or
+                `self.directions` are dropped from the result.
+            scale: Multiplier applied to each target norm (the "dose"). Must be positive.
+
+        Returns:
+            A new `SteeringVector` covering the intersection of `target_norms` and `self.directions`,
+            each direction stored as `[1, H]`, with metadata copied from the original.
+
+        Raises:
+            ValueError: If `scale <= 0`, any covered target norm is non-positive, a covered source
+                direction is positional (`K > 1`) or has zero norm, or the layer intersection is
+                empty.
+        """
+        if scale <= 0:
+            raise ValueError(f"scale must be positive, got {scale}.")
+
+        covered = [lid for lid in target_norms if lid in self.directions]
+        if not covered:
+            raise ValueError(
+                "scaled_to_norms: no overlap between target_norms layers "
+                f"{sorted(target_norms.keys())} and vector layers {sorted(self.directions.keys())}."
+            )
+
+        clone = self.clone()
+        scaled: dict[int, torch.Tensor] = {}
+        for lid in covered:
+            target = float(target_norms[lid])
+            if target <= 0:
+                raise ValueError(f"target norm for layer {lid} must be positive, got {target}.")
+
+            direction = clone.directions[lid]
+            if direction.ndim == 2 and direction.shape[0] == 1:
+                direction = direction.squeeze(0)
+            elif direction.ndim != 1:
+                raise ValueError(
+                    f"scaled_to_norms is defined for broadcast directions (K=1); layer {lid} has "
+                    f"shape {tuple(clone.directions[lid].shape)}."
+                )
+
+            source_norm = direction.norm()
+            if source_norm <= 0:
+                raise ValueError(
+                    f"layer {lid} has a zero-norm source direction; a target norm is unreachable "
+                    "from the zero vector."
+                )
+
+            scaled[lid] = (direction * (scale * target / source_norm)).unsqueeze(0)  # [1, H]
+
+        clone.directions = scaled
+        return clone
 
     def validate(self) -> None:
         """Validate that required fields are populated.
