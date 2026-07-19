@@ -137,7 +137,7 @@ class MockSteeringPipeline:
         self._is_steered = False
         controls_merged = merge_controls(self.controls)
         self.structural_control = controls_merged["structural_control"]
-        self.state_control = controls_merged["state_control"]
+        self.state_controls = controls_merged["state_controls"]
         self.input_control = controls_merged["input_control"]
         self.output_control = controls_merged["output_control"]
 
@@ -147,7 +147,7 @@ class MockSteeringPipeline:
 
     @property
     def supports_batching(self):
-        controls = (self.structural_control, self.state_control,
+        controls = (self.structural_control, *self.state_controls,
                     self.input_control, self.output_control)
         return all(
             getattr(c, "supports_batching", False)
@@ -157,7 +157,7 @@ class MockSteeringPipeline:
     def steer(self, **kwargs):
         if self._is_steered:
             return
-        for control in (self.structural_control, self.state_control,
+        for control in (self.structural_control, *self.state_controls,
                         self.input_control, self.output_control):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):

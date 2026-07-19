@@ -7,6 +7,7 @@ import torch
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.algorithms.core.types import Output
 from aisteer360.algorithms.input_control.base import InputControl
+from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 TINY_MODEL = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
@@ -217,3 +218,45 @@ class TestInputControlAppliedExactlyOnce:
             out.adapted_input_ids[0], skip_special_tokens=True
         )
         assert prompt_text.count("injected") == 1
+
+
+@pytest.fixture(scope="module")
+def tiny_pipeline():
+    """Hub-free steered pipeline for the return-semantics regression (CPU-only, offline)."""
+    torch.manual_seed(0)
+    model = tiny_llama(num_layers=2, hidden=16, heads=2)
+    tokenizer = wordlevel_tokenizer()
+    pipeline = SteeringPipeline(lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+    return pipeline
+
+
+class TestReturnSemantics:
+    """WS5: tensor return is continuation-only by default; `return_full_sequence` includes the prompt.
+
+    Guards against re-introducing the notebook bug of slicing a continuation-only result by prompt
+    length (which discards generated tokens).
+    """
+
+    def test_default_is_continuation_only(self, tiny_pipeline):
+        ids = torch.tensor([[3, 4, 5, 6]])
+        prompt_len = ids.size(1)
+        k = 5
+        cont = tiny_pipeline.generate(ids, max_new_tokens=k, do_sample=False)
+        full = tiny_pipeline.generate(
+            ids, max_new_tokens=k, do_sample=False, return_full_sequence=True
+        )
+        # continuation-only excludes the prompt; full includes it
+        assert full.shape[1] == prompt_len + cont.shape[1]
+        assert cont.shape[1] == full.shape[1] - prompt_len
+        # the two agree on the continuation tokens
+        assert torch.equal(full[:, prompt_len:], cont)
+
+    def test_continuation_length_matches_max_new_tokens(self, tiny_pipeline):
+        ids = torch.tensor([[3, 4, 5]])
+        for k in (1, 3, 6):
+            cont = tiny_pipeline.generate(ids, max_new_tokens=k, do_sample=False)
+            # tiny model won't emit EOS deterministically here, so the full budget is used
+            assert cont.shape[1] == k

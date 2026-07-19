@@ -440,3 +440,163 @@ class TestControlLifecycle:
 
         assert control._generate_called
         assert output is not None
+
+
+# Real StateControl.register_hooks unwind (Issue 8) + beam-expansion mask (Issue 4)
+import torch.nn as nn  # noqa: E402
+
+from aisteer360.algorithms.state_control.base import StateControl as RealStateControl  # noqa: E402
+
+
+class _ProbeStateControl(RealStateControl):
+    """Minimal concrete state control that registers a caller-supplied hook spec list."""
+
+    Args = None
+
+    def __init__(self, hook_specs):
+        super().__init__()
+        # the null-control (Args=None) branch of the base __init__ skips these; set them so the
+        # provided register_hooks/remove_hooks machinery works
+        self.hooks = {"pre": [], "forward": [], "backward": []}
+        self.registered = []
+        self._specs = hook_specs
+
+    def get_hooks(self, input_ids, runtime_kwargs, **kwargs):
+        return self._specs
+
+
+class _TinyModel(nn.Module):
+    """Two named submodules to hook, with a no-op forward."""
+
+    def __init__(self):
+        super().__init__()
+        self.good = nn.Identity()
+        self.also_good = nn.Identity()
+
+    def forward(self, x):
+        return x
+
+
+class TestRegisterHooksUnwind:
+    """register_hooks must not leak handles when registration fails partway (Issue 8)."""
+
+    def _noop_pre_hook(self, module, args, kwargs):
+        return None
+
+    def test_partial_failure_removes_valid_handles(self):
+        model = _TinyModel()
+        control = _ProbeStateControl({
+            "pre": [
+                {"module": "good", "hook_func": self._noop_pre_hook},
+                {"module": "does_not_exist", "hook_func": self._noop_pre_hook},
+            ],
+            "forward": [],
+            "backward": [],
+        })
+        control.set_hooks(control.get_hooks(None, None))
+
+        with pytest.raises(AttributeError):
+            control.register_hooks(model)
+
+        # the valid module has no lingering hooks and the registry is empty
+        assert len(model.good._forward_pre_hooks) == 0
+        assert len(model.good._forward_hooks) == 0
+        assert control.registered == []
+
+    def test_successful_registration_then_removal(self):
+        model = _TinyModel()
+        control = _ProbeStateControl({
+            "pre": [
+                {"module": "good", "hook_func": self._noop_pre_hook},
+                {"module": "also_good", "hook_func": self._noop_pre_hook},
+            ],
+            "forward": [],
+            "backward": [],
+        })
+        control.set_hooks(control.get_hooks(None, None))
+        control.register_hooks(model)
+        assert len(control.registered) == 2
+        assert len(model.good._forward_pre_hooks) == 1
+
+        control.remove_hooks()
+        assert control.registered == []
+        assert len(model.good._forward_pre_hooks) == 0
+
+
+class TestBeamExpansionMask:
+    """CAA under batched beam search: masks align to the repeat_interleave-expanded batch (Issue 4)."""
+
+    def test_caa_batch2_beams2_completes_and_steers(self):
+        from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
+        from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+        from aisteer360.algorithms.state_control.caa.control import CAA
+        from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+        torch.manual_seed(0)
+        hidden, layers = 32, 4
+        model = tiny_llama(num_layers=layers, hidden=hidden)
+        tokenizer = wordlevel_tokenizer()
+
+        g = torch.Generator().manual_seed(1)
+        sv = SteeringVector(
+            model_type="llama",
+            directions={lid: torch.randn(1, hidden, generator=g) for lid in range(layers)},
+        )
+        applied = {"count": 0, "batches": []}
+        control = CAA(steering_vector=sv, layer_id=1, multiplier=1.0, token_scope="after_prompt")
+
+        pipeline = SteeringPipeline(controls=[control], lazy_init=True)
+        pipeline.model = model
+        pipeline.tokenizer = tokenizer
+        pipeline.steer()
+
+        inner = control._transform
+
+        class _Spy:
+            def apply(self, hidden_states, *, layer_id, token_mask, **kw):
+                # the mask must have been aligned to the hidden batch (no broadcast mismatch)
+                assert token_mask.size(0) == hidden_states.size(0)
+                applied["count"] += 1
+                applied["batches"].append(hidden_states.size(0))
+                return inner.apply(hidden_states, layer_id=layer_id, token_mask=token_mask, **kw)
+
+        control._transform = _Spy()
+
+        input_ids = torch.tensor([[3, 4, 5, 6], [7, 8, 9, 3]], dtype=torch.long)
+        out = pipeline.generate(
+            input_ids=input_ids,
+            max_new_tokens=4,
+            num_beams=2,
+            do_sample=False,
+            eos_token_id=None,
+        )
+
+        assert out.size(0) == 2  # two prompts in, two sequences out
+        assert applied["count"] > 0
+        # during decode the hidden batch is expanded to batch * beams = 4
+        assert 4 in applied["batches"]
+
+    def test_plain_batch2_no_beams_unchanged(self):
+        from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
+        from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+        from aisteer360.algorithms.state_control.caa.control import CAA
+        from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+        torch.manual_seed(0)
+        hidden, layers = 32, 4
+        model = tiny_llama(num_layers=layers, hidden=hidden)
+        tokenizer = wordlevel_tokenizer()
+        g = torch.Generator().manual_seed(2)
+        sv = SteeringVector(
+            model_type="llama",
+            directions={lid: torch.randn(1, hidden, generator=g) for lid in range(layers)},
+        )
+        control = CAA(steering_vector=sv, layer_id=1, token_scope="after_prompt")
+        pipeline = SteeringPipeline(controls=[control], lazy_init=True)
+        pipeline.model = model
+        pipeline.tokenizer = tokenizer
+        pipeline.steer()
+
+        input_ids = torch.tensor([[3, 4, 5, 6], [7, 8, 9, 3]], dtype=torch.long)
+        out = pipeline.generate(input_ids=input_ids, max_new_tokens=4, do_sample=False, eos_token_id=None)
+        assert out.size(0) == 2

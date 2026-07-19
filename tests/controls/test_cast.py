@@ -76,3 +76,192 @@ def test_cast(model_and_tokenizer, device: torch.device, conf: dict):
     assert isinstance(out_ids, torch.Tensor), "Output is not torch.Tensor"
     assert out_ids.ndim == 2, "Expected (batch, seq_len) tensor"
     assert out_ids.size(1) >= 1, "No new tokens generated"
+
+
+# behavior_transform slot: args validation, construction, and application (hub-free tiny Llama)
+
+HIDDEN = 32
+LAYERS = 4
+
+
+def _unit_vector(seed: int, dim: int = HIDDEN) -> torch.Tensor:
+    g = torch.Generator().manual_seed(seed)
+    v = torch.randn(dim, generator=g)
+    return v / v.norm()
+
+
+def _steering_vector(seed: int, layers) -> SteeringVector:
+    return SteeringVector(
+        model_type="llama",
+        directions={l: _unit_vector(seed + l).unsqueeze(0) for l in layers},
+        explained_variances={l: 0.5 for l in layers},
+    )
+
+
+def _tiny_pipeline(control, seed: int = 0):
+    from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+    torch.manual_seed(seed)
+    model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=4)
+    tokenizer = wordlevel_tokenizer()
+    pipeline = SteeringPipeline(controls=[control], lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+    return pipeline, model, tokenizer
+
+
+class _ProbeAblation:
+    """Wraps a transform, recording the direction-projection of masked rows before/after each apply.
+
+    Records at a single target layer so the pre/post projections describe the same hidden state.
+    """
+
+    def __init__(self, inner, direction: torch.Tensor, target_layer: int = 0):
+        self._inner = inner
+        self._unit = direction / direction.norm()
+        self._target_layer = target_layer
+        self.pre_projections: list[float] = []
+        self.post_projections: list[float] = []
+
+    def apply(self, hidden_states, *, layer_id, token_mask, **kwargs):
+        out = self._inner.apply(hidden_states, layer_id=layer_id, token_mask=token_mask, **kwargs)
+        if layer_id == self._target_layer and token_mask.any():
+            unit = self._unit.to(out.device, out.dtype)
+            self.pre_projections.append(float((hidden_states[token_mask] @ unit).abs().max()))
+            self.post_projections.append(float((out[token_mask] @ unit).abs().max()))
+        return out
+
+    @property
+    def covered_layer_ids(self):
+        return self._inner.covered_layer_ids
+
+
+class TestBehaviorTransformValidation:
+    def _base(self, **overrides):
+        from aisteer360.algorithms.state_control.cast.args import CASTArgs
+
+        kwargs = dict()
+        kwargs.update(overrides)
+        return CASTArgs(**kwargs)
+
+    def _ablation(self, layers=(0, 1), **kwargs):
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+
+        return DirectionalAblationTransform(_steering_vector(seed=100, layers=layers), **kwargs)
+
+    def test_transform_plus_vector_raises(self):
+        with pytest.raises(ValueError, match="carries its own artifact"):
+            self._base(behavior_transform=self._ablation(), behavior_vector=_steering_vector(1, [0]))
+
+    def test_transform_plus_data_raises(self):
+        with pytest.raises(ValueError, match="carries its own artifact"):
+            self._base(
+                behavior_transform=self._ablation(),
+                behavior_data={"positives": ["a"], "negatives": ["b"]},
+            )
+
+    def test_transform_plus_strength_raises(self):
+        with pytest.raises(ValueError, match="strength"):
+            self._base(behavior_transform=self._ablation(), behavior_vector_strength=2.0)
+
+    def test_transform_plus_explained_variance_raises(self):
+        with pytest.raises(ValueError, match="use_explained_variance"):
+            self._base(behavior_transform=self._ablation(), use_explained_variance=True)
+
+    def test_transform_plus_ooi_normalization_raises(self):
+        with pytest.raises(ValueError, match="NormPreservingTransform"):
+            self._base(behavior_transform=self._ablation(), use_ooi_preventive_normalization=True)
+
+    def test_nondefault_behavior_fit_is_inert(self):
+        # behavior_fit is only read when fitting from behavior_data (absent here), so it does not raise
+        from aisteer360.algorithms.state_control._common.specs import VectorTrainSpec
+
+        args = self._base(
+            behavior_transform=self._ablation(),
+            behavior_fit=VectorTrainSpec(method="mean_diff", accumulate="last_token"),
+        )
+        assert args.behavior_transform is not None
+
+    def test_all_sources_absent_raises_three_way(self):
+        with pytest.raises(ValueError, match="behavior_vector, behavior_data, or behavior_transform"):
+            self._base()
+
+    def test_non_transform_non_callable_raises_type_error(self):
+        with pytest.raises(TypeError, match="behavior_transform must be a BaseTransform"):
+            self._base(behavior_transform=42)
+
+
+class TestBehaviorTransformApplication:
+    def test_bound_instance_ablates_along_direction(self):
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+
+        direction = _unit_vector(7)
+        transform = DirectionalAblationTransform({0: direction.unsqueeze(0), 1: _unit_vector(8).unsqueeze(0)})
+        control = CAST(behavior_transform=transform, behavior_layer_ids=[0, 1])
+        pipeline, _, _ = _tiny_pipeline(control)
+
+        assert isinstance(control._transform, DirectionalAblationTransform)
+        assert control._transform is transform  # bound at construction -> used as-is
+
+        probe = _ProbeAblation(control._transform, direction, target_layer=0)
+        control._transform = probe
+        pipeline.generate(input_ids=torch.tensor([[3, 4, 5, 6]]), max_new_tokens=3)
+
+        assert probe.post_projections, "transform never applied at a masked position"
+        # the un-ablated hidden state has a non-trivial component along the direction ...
+        assert max(probe.pre_projections) > 1e-2
+        # ... and ablation drives that component down by orders of magnitude at masked positions
+        for pre, post in zip(probe.pre_projections, probe.post_projections):
+            assert post < 0.02 * pre + 1e-6
+
+    def test_source_carrying_transform_bound_after_steer(self):
+        from aisteer360.algorithms.state_control._common.sources import ContrastiveFit
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+
+        source_transform = DirectionalAblationTransform(
+            ContrastiveFit(
+                data={"positives": ["yes indeed", "sure absolutely"], "negatives": ["no thanks", "never decline"]},
+                method="mean_diff",
+                accumulate="last_token",
+                prompt_format="raw",
+            )
+        )
+        assert source_transform.is_bound is False
+        control = CAST(behavior_transform=source_transform, behavior_layer_ids=[0, 1])
+        pipeline, _, _ = _tiny_pipeline(control)
+
+        assert control._transform is not source_transform  # a fresh bound instance
+        assert control._transform.is_bound is True
+        assert source_transform.is_bound is False  # the arg stays unbound
+        pipeline.generate(input_ids=torch.tensor([[3, 4, 5]]), max_new_tokens=2)
+
+    def test_factory_receives_context_and_result_applied(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            DirectionalAblationTransform,
+            TransformContext,
+        )
+
+        seen = {}
+
+        def _factory(ctx: TransformContext):
+            seen["ctx"] = ctx
+            sv = _steering_vector(11, ctx.layer_ids)
+            return DirectionalAblationTransform(ctx.resolve(sv), alpha=1.0)
+
+        control = CAST(behavior_transform=_factory, behavior_layer_ids=[0, 1])
+        pipeline, _, _ = _tiny_pipeline(control)
+
+        ctx = seen["ctx"]
+        assert sorted(ctx.layer_ids) == [0, 1]
+        assert isinstance(control._transform, DirectionalAblationTransform)
+        assert control._transform.is_bound is True
+        pipeline.generate(input_ids=torch.tensor([[3, 4, 5]]), max_new_tokens=2)
+
+    def test_coverage_error_when_transform_misses_behavior_layer(self):
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+
+        transform = DirectionalAblationTransform(_steering_vector(seed=100, layers=[0]))  # missing layer 1
+        control = CAST(behavior_transform=transform, behavior_layer_ids=[0, 1])
+        with pytest.raises(ValueError, match="no direction for layer"):
+            _tiny_pipeline(control)

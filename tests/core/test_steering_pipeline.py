@@ -12,11 +12,16 @@ Tests cover:
 - Supports batching property
 - Error handling
 """
+import contextlib
+import logging
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
+
+from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline as RealSteeringPipeline
+from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 from tests.conftest import (  # Base classes; Mock controls; Utilities
     InputControl,
@@ -59,7 +64,7 @@ class MockSteeringPipeline:
         controls_merged = merge_controls(self.controls)
         self.structural_control = controls_merged["structural_control"]
         self.input_control = controls_merged["input_control"]
-        self.state_control = controls_merged["state_control"]
+        self.state_controls = controls_merged["state_controls"]
         self.output_control = controls_merged["output_control"]
 
         # Mock model and tokenizer
@@ -77,7 +82,7 @@ class MockSteeringPipeline:
         controls = (
             self.structural_control,
             self.input_control,
-            self.state_control,
+            *self.state_controls,
             self.output_control,
         )
         return all(
@@ -94,7 +99,7 @@ class MockSteeringPipeline:
         for control in (
             self.structural_control,
             self.input_control,
-            self.state_control,
+            *self.state_controls,
             self.output_control
         ):
             steer_fn = getattr(control, "steer", None)
@@ -155,10 +160,11 @@ class MockSteeringPipeline:
             **kwargs,
     ) -> None:
         """Configure state control hooks for the current forward/generate call."""
-        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **kwargs)
-        self.state_control.set_hooks(hooks)
-        self.state_control._model_ref = self.model
-        self.state_control.reset()
+        for state_control in self.state_controls:
+            hooks = state_control.get_hooks(steered_input_ids, runtime_kwargs, **kwargs)
+            state_control.set_hooks(hooks)
+            state_control._model_ref = self.model
+            state_control.reset()
 
     def generate(
         self,
@@ -184,7 +190,9 @@ class MockSteeringPipeline:
         self._setup_state_control(steered_input_ids, runtime_kwargs, **gen_kwargs)
 
         # Output control: generate with hooks active
-        with self.state_control:
+        with contextlib.ExitStack() as stack:
+            for state_control in self.state_controls:
+                stack.enter_context(state_control)
             output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
                 attention_mask=attention_mask,
@@ -247,7 +255,9 @@ class MockSteeringPipeline:
         # Forward pass under state control context
         is_encoder_decoder = getattr(self.model.config, "is_encoder_decoder", False)
 
-        with self.state_control:
+        with contextlib.ExitStack() as stack:
+            for state_control in self.state_controls:
+                stack.enter_context(state_control)
             with torch.no_grad():
                 if is_encoder_decoder:
                     outputs = self.model(
@@ -312,7 +322,7 @@ class TestPipelineInitialization:
         )
 
         assert pipeline.input_control is input_ctrl
-        assert pipeline.state_control is state_ctrl
+        assert pipeline.state_controls == [state_ctrl]
         assert isinstance(pipeline.structural_control, NoStructuralControl)
         assert isinstance(pipeline.output_control, NoOutputControl)
 
@@ -330,7 +340,7 @@ class TestPipelineInitialization:
 
         assert pipeline.input_control is input_ctrl
         assert pipeline.structural_control is structural_ctrl
-        assert pipeline.state_control is state_ctrl
+        assert pipeline.state_controls == [state_ctrl]
         assert pipeline.output_control is output_ctrl
 
     def test_lazy_initialization(self):
@@ -1118,3 +1128,48 @@ class TestPipelineIntegration:
             )
             assert logprobs is not None
             assert logprobs.shape == (1, 3)
+
+
+# Duplicate-BOS guard (WS3): uses the REAL SteeringPipeline with a tiny hub-free model.
+class TestDuplicateBosGuard:
+    """`warn_if_duplicate_bos` warns once when a prompt starts with two BOS tokens."""
+
+    def _steered_pipeline(self):
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=2, hidden=16, heads=2)
+        tokenizer = wordlevel_tokenizer()  # bos_token_id == 0
+        pipeline = RealSteeringPipeline(lazy_init=True)
+        pipeline.model = model
+        pipeline.tokenizer = tokenizer
+        pipeline.steer()
+        return pipeline, tokenizer
+
+    def test_double_bos_warns_once_across_two_calls(self, caplog):
+        pipeline, tokenizer = self._steered_pipeline()
+        bos = tokenizer.bos_token_id
+        ids = torch.tensor([[bos, bos, 3, 4]])
+        with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
+            pipeline.generate(ids, max_new_tokens=1)
+            pipeline.generate(ids, max_new_tokens=1)
+        dup_warnings = [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
+        assert len(dup_warnings) == 1  # warn-once per pipeline lifecycle
+
+    def test_single_bos_does_not_warn(self, caplog):
+        pipeline, tokenizer = self._steered_pipeline()
+        bos = tokenizer.bos_token_id
+        ids = torch.tensor([[bos, 3, 4]])
+        with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
+            pipeline.generate(ids, max_new_tokens=1)
+        assert not [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
+
+    def test_left_padded_double_bos_warns(self, caplog):
+        # a left-padded batch [pad, pad, bos, bos, x] with the correct mask must still fire the guard,
+        # proving the first-real-token (argmax) logic rather than a fixed position-0 check
+        pipeline, tokenizer = self._steered_pipeline()
+        bos = tokenizer.bos_token_id
+        pad = tokenizer.pad_token_id
+        ids = torch.tensor([[pad, pad, bos, bos, 3]])
+        attention_mask = torch.tensor([[0, 0, 1, 1, 1]])
+        with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
+            pipeline.generate(ids, attention_mask=attention_mask, max_new_tokens=1)
+        assert [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
