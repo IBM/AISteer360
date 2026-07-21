@@ -5,7 +5,7 @@ from peft import LoraConfig, PeftType
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.utils.tokenization import ensure_pad_token
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
 from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import (
@@ -20,8 +20,8 @@ class GRPOTrainerMixin(TRLMixin, StructuralControl):
     The reward comes from one or more callables in `reward_funcs`, each called as
     `reward_func(prompts, completions, **kwargs)` and returning one float per completion. The trainer
     reads a text `"prompt"` column directly and samples `num_generations` completions per prompt, so
-    the dataset is only standardized to a prompt column (not tokenized into `input_ids` the way the PPO
-    wrapper does).
+    the dataset is only standardized to a prompt column and is not tokenized into an `input_ids`
+    column.
     """
 
     train_dataset: Any | None = None

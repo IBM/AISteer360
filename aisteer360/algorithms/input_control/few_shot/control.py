@@ -18,6 +18,7 @@ from aisteer360.algorithms.input_control._common.selectors.base import (
 )
 from aisteer360.algorithms.input_control.few_shot.args import FewShotArgs
 from aisteer360.algorithms.input_control.few_shot.selectors import selector_from_arg
+from aisteer360.utils.rendering import has_chat_template, render_messages
 
 
 class FewShot(InputControl):
@@ -123,9 +124,8 @@ class FewShot(InputControl):
     ) -> list[int] | torch.Tensor:
         """Add few-shot examples to the model's prompt and return adapted token ids.
 
-        Both the chat-template path and the no-template fallback are routed through the resolved
-        `BaseFormatter`, so token-level (`adapt`) and message-level (`adapt_messages`) calls produce
-        structurally identical example blocks from the same pool.
+        Both the chat-template path and the no-template fallback route through the resolved
+        `BaseFormatter`, which renders the example block from the pool.
 
         Assumes `input_ids` represents the user's prompt before any chat templating. Pre-templated
         input will be re-templated and produce malformed output; use `adapt_messages` for chat input.
@@ -182,7 +182,7 @@ class FewShot(InputControl):
                 batch_input_ids = input_ids
                 single_sequence = False
 
-        has_chat_template = bool(getattr(self.tokenizer, "chat_template", None))
+        use_chat_template = has_chat_template(self.tokenizer)
 
         adapted_batch: list[list[int]] = []
         for input_ids_single in batch_input_ids:
@@ -207,16 +207,11 @@ class FewShot(InputControl):
                 "directive": self.directive or "",
             })
 
-            if has_chat_template:
+            if use_chat_template:
                 chat = [{"role": "user", "content": original_text}]
                 adapted_chat = self._formatter.apply_to_messages([chat], slot_memory)[0]
-                ids = self.tokenizer.apply_chat_template(
-                    adapted_chat,
-                    tokenize=True,
-                    return_tensors="pt",
-                    add_generation_prompt=True,
-                )
-                adapted_tokens = ids[0].tolist()
+                rendered = render_messages(self.tokenizer, adapted_chat, add_generation_prompt=True)
+                adapted_tokens = self.tokenizer(rendered, add_special_tokens=False)["input_ids"]
             else:
                 input_tensor = torch.tensor(input_ids_single, dtype=torch.long).unsqueeze(0)
                 adapted_tensor = self._formatter.apply_to_ids(input_tensor, slot_memory, self.tokenizer)

@@ -11,6 +11,7 @@ from transformers import (
 )
 
 from aisteer360.evaluation.metrics.base import Metric
+from aisteer360.utils.rendering import has_chat_template, render_messages
 
 
 _FORMAT_INSTRUCTIONS = (
@@ -61,8 +62,8 @@ def build_structured_parser(scale):
         scale (tuple[float, float]): A ``(low, high)`` tuple specifying the valid inclusive range for the score.
 
     Returns:
-        A tuple of ``(format_instructions: str, parse_fn)`` where *format_instructions*
-        is the instruction string to append to the judge prompt and *parse_fn(text, scale)*
+        A tuple of ``(format_instructions: str, parse_fn)`` where `format_instructions`
+        is the instruction string to append to the judge prompt and `parse_fn(text, scale)`
         returns a clamped float score.
     """
     low, high = scale
@@ -162,7 +163,7 @@ class LLMJudgeMetric(Metric):
             self.device = next(self.model.parameters()).device
             self.model.eval()
 
-        self.use_chat = hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template is not None
+        self.use_chat = has_chat_template(self.tokenizer)
 
         gen_kwargs = dict(gen_kwargs or {})
         gen_kwargs.setdefault("temperature", 0.0)
@@ -216,11 +217,7 @@ class LLMJudgeMetric(Metric):
         """
         if self.use_chat:
             messages = [{"role": "user", "content": prompt}]
-            return self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            return render_messages(self.tokenizer, messages, add_generation_prompt=True)
         return prompt
 
     @staticmethod
@@ -238,6 +235,7 @@ class LLMJudgeMetric(Metric):
                 prompts,
                 return_tensors="pt",
                 padding=True,
+                add_special_tokens=not self.use_chat,
             ).to(self.model.device)
 
             gen_kwargs = dict(self.gen_kwargs)
@@ -278,8 +276,8 @@ class LLMJudgeMetric(Metric):
     def score_rendered(self, rendered_prompts: list[str]) -> dict[str, Any]:
         """Run the judge LM on already-rendered prompts and parse scores.
 
-        Used internally by ``compute()``. Bypasses prompt-template formatting and format-instructions
-        injection — assumes the caller has done both already.
+        Used internally by ``compute()``. Prompt-template formatting and format-instructions
+        injection are skipped, so the caller must have applied both already.
 
         Args:
             rendered_prompts: Prompts already formatted (template-substituted and chat-wrapped if applicable).

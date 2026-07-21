@@ -12,7 +12,7 @@ from aisteer360.algorithms.state_control._common.estimators.utils import (
     select_at_positions,
     tokenize_texts,
 )
-from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.model_layout import resolve_model_layout
 from aisteer360.algorithms.state_control._common.specs import LabeledExamples, VectorTrainSpec
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
@@ -67,7 +67,19 @@ class ProbeMassShiftEstimator(BaseEstimator[SteeringVector]):
         model_type = getattr(model.config, "model_type", "unknown")
         num_heads = model.config.num_attention_heads
         hidden_size = model.config.hidden_size
-        head_dim = hidden_size // num_heads
+        # some architectures define an independent head_dim (not hidden_size // num_heads)
+        head_dim = getattr(model.config, "head_dim", None) or hidden_size // num_heads
+
+        # sanity-check the per-head slicing matches the o_proj input width (else the reshape corrupts)
+        layout = resolve_model_layout(model)
+        o_proj = model.get_submodule(layout.oproj_names[0])
+        in_features = getattr(o_proj, "in_features", None)
+        if in_features is not None and num_heads * head_dim != in_features:
+            raise ValueError(
+                f"ITI head slicing mismatch: num_heads ({num_heads}) * head_dim ({head_dim}) = "
+                f"{num_heads * head_dim} != o_proj.in_features ({in_features}). "
+                f"Set model.config.head_dim to the correct per-head dimension."
+            )
 
         pos_texts = list(data.positives)
         neg_texts = list(data.negatives)
@@ -195,16 +207,9 @@ class ProbeMassShiftEstimator(BaseEstimator[SteeringVector]):
         attention_mask = enc.get("attention_mask")
         N = input_ids.size(0)
 
-        layer_modules, layer_names = get_model_layer_list(model)
-        num_layers = len(layer_modules)
-
-        # determine o_proj module suffix based on architecture
-        if layer_names[0].startswith("model.layers"):
-            oproj_suffix = ".self_attn.o_proj"
-        elif layer_names[0].startswith("transformer.h"):
-            oproj_suffix = ".attn.c_proj"
-        else:
-            raise ValueError(f"Unrecognized model architecture: {layer_names[0]}")
+        layout = resolve_model_layout(model)
+        oproj_names = layout.oproj_names
+        num_layers = layout.num_layers
 
         storage: dict[int, list[torch.Tensor]] = {i: [] for i in range(num_layers)}
         handles: list[torch.utils.hooks.RemovableHandle] = []
@@ -217,8 +222,8 @@ class ProbeMassShiftEstimator(BaseEstimator[SteeringVector]):
             return hook
 
         try:
-            for layer_id, layer_name in enumerate(layer_names):
-                oproj_module = model.get_submodule(layer_name + oproj_suffix)
+            for layer_id, oproj_name in enumerate(oproj_names):
+                oproj_module = model.get_submodule(oproj_name)
                 handle = oproj_module.register_forward_pre_hook(make_pre_hook(layer_id), with_kwargs=True)
                 handles.append(handle)
 

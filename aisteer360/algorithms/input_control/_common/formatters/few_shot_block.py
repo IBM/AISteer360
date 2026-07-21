@@ -1,4 +1,4 @@
-"""FewShotBlockFormatter — render `memory['examples']` as a labeled system-message block."""
+"""Render `memory['examples']` as a labeled system-message block."""
 from __future__ import annotations
 
 import torch

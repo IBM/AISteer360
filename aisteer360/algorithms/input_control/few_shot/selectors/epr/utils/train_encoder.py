@@ -167,7 +167,7 @@ def train_encoder(
     return encoder
 
 
-# Convenience name aligning with the design doc: `train_encoder.train(...)`.
+# convenience name aligning with the design doc: `train_encoder.train(...)`.
 def train(
     labeled,
     items,

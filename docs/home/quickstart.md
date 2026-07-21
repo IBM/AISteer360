@@ -7,75 +7,87 @@ This guide will walk you through how to run a simple control in AISteer360.
     run the toolkit from a machine that has enough GPU memory for both the base checkpoint and the extra overhead your
     steering method/pipeline adds.
 
-The first step in steering any model is to define how you want to steer, i.e., the control. For this guide, we will
-implement a simple `FewShot` control in which we influence model behavior via few-shot examples. The desired target
-behavior for this example is "conciseness".
+The first step in steering any model is to define how you want to steer, i.e., the control. For this guide, we will use
+an `ActivationAdapter`, a state control that edits the model's internal activations at inference time. The desired
+target behavior for this example is "positivity".
 
-The `FewShot` control requires specification of example pools to draw from. A set of positive example, i.e., in which
-the model provided a concise answer, are defined as follows:
+An activation adapter is assembled from a few slots: a **transform** that carries the steering artifact and edits the
+activation, a **selector** (or explicit layer ids) that chooses which layer(s) to steer, and optionally a gate and a
+token scope. Here we use the simplest configuration: an additive transform at a single layer.
+
+The transform's artifact is a steering direction. We obtain it from a contrast between examples of the target behavior
+(positive, upbeat text) and its opposite (negative, downbeat text). A `ContrastiveFit` holds these pairs and the
+extraction settings, and fits one direction per layer when the adapter steers:
 
 ```python
-positive_example_pool = [
-    {"question": "What's the capital of France?", "answer": "Paris"},
-    {"question": "How many miles is it to the moon?", "answer": "238,855"},
-    {"question": "What's 15% of 200?", "answer": "30"},
-    {"question": "What's the boiling point of water?", "answer": "100°C"},
-    {"question": "How many days in a leap year?", "answer": "366"},
-    {"question": "What's the speed of light?", "answer": "299,792,458 m/s"},
-    {"question": "How many continents are there?", "answer": "7"},
-    {"question": "What's the atomic number of gold?", "answer": "79"}
-]
+from aisteer360.algorithms.state_control._common.sources import ContrastiveFit
+from aisteer360.algorithms.state_control._common.specs import ContrastivePairs
+
+pairs = ContrastivePairs(
+    positives=[
+        "What a wonderful day, everything is going so well!",
+        "I love this, it makes me incredibly happy.",
+        "This is fantastic news, I couldn't be more thrilled.",
+        "You did an amazing job, I'm so proud of you.",
+    ],
+    negatives=[
+        "What an awful day, everything is going so badly.",
+        "I hate this, it makes me miserable.",
+        "This is terrible news, I couldn't be more upset.",
+        "You did a dreadful job, I'm so disappointed in you.",
+    ],
+)
+
+positivity = ContrastiveFit(data=pairs, method="mean_diff", accumulate="last_token", prompt_format="raw")
 ```
 
-Similarly, we define the following negative examples where the model was not concise:
-```python
-negative_example_pool = [
-    {"question": "What's the capital of France?", "answer": "The capital of France is Paris."},
-    {"question": "How many miles is it to the moon?", "answer": "The Moon is an average of 238,855 miles (384,400 kilometers) away from Earth."},
-    {"question": "What's the boiling point of water?", "answer": "Water boils at 100 degrees Celsius or 212 degrees Fahrenheit at sea level."},
-    {"question": "How many days in a leap year?", "answer": "A leap year contains 366 days, which is one day more than a regular year."},
-    {"question": "What's the speed of light?", "answer": "The speed of light in vacuum is approximately 299,792,458 meters per second."},
-    {"question": "What's 15% of 200?", "answer": "Fifteen percent of 200 can be calculated by multiplying 200 by 0.15, which gives 30."},
-    {"question": "How many continents are there?", "answer": "There are seven continents on Earth: Africa, Antarctica, Asia, Europe, North America, Oceania, and South America."},
-    {"question": "What's the atomic number of gold?", "answer": "Gold has the atomic number 79 on the periodic table of elements."}
-]
-```
+We wrap the fitted direction in an `AdditiveTransform`, which adds a scaled copy of it to the residual stream. A
+positive `strength` pushes activations toward the positive examples; a negative `strength` pushes the other way. That
+transform, placed at a single layer, defines the control:
 
-Using these pools, we define the `FewShot` control as follows:
 ```python
-from aisteer360.algorithms.input_control.few_shot.control import FewShot
+from aisteer360.algorithms.state_control.activation_adapter.control import ActivationAdapter
+from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
 
-few_shot = FewShot(
-    selector="random",
-    positive_example_pool=positive_example_pool,
-    negative_example_pool=negative_example_pool,
-    k_positive=4,
-    k_negative=4
+activation_adapter = ActivationAdapter(
+    transform=AdditiveTransform(positivity, strength=1.0),
+    layer_ids=16,
+    token_scope="all",
 )
 ```
 
+An additive edit is measured against the residual-stream norm, which varies by model and layer, so
+`strength` is the knob to tune first: too small and the effect is invisible, too large and the
+output degenerates into repetition. Start near `1.0` and adjust for your model and layer.
+
 We can then define a `SteeringPipeline` on a given base model using the above control:
+
 ```python
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 
 MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
-few_shot_pipeline = SteeringPipeline(
+adapter_pipeline = SteeringPipeline(
     model_name_or_path=MODEL_NAME,
-    controls=[few_shot],
-    device_map="auto"
+    controls=[activation_adapter],
+    device_map="auto",
 )
-few_shot_pipeline.steer()
+adapter_pipeline.steer()
 ```
 
+Calling `steer()` fits the direction (one forward pass over the contrastive pairs) and binds it to the transform.
 Inference can now be run on the steered pipeline as follows:
+
 ```python
-prompt = "How many feet are in a mile?"
-print(few_shot_pipeline.generate(prompt, max_new_tokens=100, temperature=0.7))
+prompt = "Tell me about your day."
+print(adapter_pipeline.generate(prompt, max_new_tokens=100))
 ```
 
 `SteeringPipeline.generate` is polymorphic: it accepts a `str`, `list[str]`, chat messages, or a pre-tokenized
 tensor, and returns the matching shape (decoded text for text/chat input, tensor for tensor input). Pass
 `return_output=True` to get an `Output` object instead.
 
-And there you have it, a simple few-shot steering control. For more complex controls, as well as examples on how
-controls can be compared on a given task, please see the [example notebooks](../examples/index.md).
+Swapping the transform for a projection (`DirectionalAblationTransform`), the explicit `layer_ids` for a
+`layer_selector`, or adding a gate turns this same adapter into other steering methods without writing a new control
+class. And there you
+have it, a simple activation-steering control. For a full walkthrough of the adapter's slots, as well as examples on
+how controls can be compared on a given task, please see the [example notebooks](../examples/index.md).

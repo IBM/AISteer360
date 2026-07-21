@@ -498,7 +498,11 @@ _DEFAULT_FACTORIES: dict[type, type] = {
 
 
 def merge_controls(supplied) -> dict[str, object]:
-    """Sort supplied controls by category and ensure at most one per category."""
+    """Sort supplied controls by category.
+
+    The state category admits any number of controls (returned as an ordered list under
+    `"state_controls"`); the other categories admit at most one each.
+    """
     bucket: dict[type, list] = defaultdict(list)
     for control in supplied:
         for category in _DEFAULT_FACTORIES:
@@ -509,17 +513,19 @@ def merge_controls(supplied) -> dict[str, object]:
             raise TypeError(f"Unknown control type: {type(control)}")
 
     for category, controls in bucket.items():
-        if len(controls) > 1:
+        if category is not StateControl and len(controls) > 1:
             names = [type(c).__name__ for c in controls]
             raise ValueError(f"Multiple {category.__name__}s supplied: {names}")
 
     out: dict[str, object] = {}
     for category, factory in _DEFAULT_FACTORIES.items():
+        if category is StateControl:
+            out["state_controls"] = bucket.get(category) or [factory()]
+            continue
         instance = bucket.get(category, [factory()])[0]
         out_key = (
             "input_control" if category is InputControl else
             "structural_control" if category is StructuralControl else
-            "state_control" if category is StateControl else
             "output_control"
         )
         out[out_key] = instance

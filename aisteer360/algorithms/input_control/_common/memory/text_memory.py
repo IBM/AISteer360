@@ -1,4 +1,4 @@
-"""TextMemory — named text slots, JSON-serializable."""
+"""Named text slots, JSON-serializable."""
 from __future__ import annotations
 
 import json

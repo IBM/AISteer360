@@ -120,7 +120,7 @@ class RewardScore(Metric):
         elif self.score_transform == "identity":
             return logits[:, self.label_index]
         elif self.score_transform == "sigmoid":
-            # Rarely meaningful for multi-logit heads, but keep for completeness
+            # rarely meaningful for multi-logit heads, but keep for completeness
             return torch.sigmoid(logits[:, self.label_index])
         else:
             raise ValueError(f"Unknown score_transform: {self.score_transform}")
@@ -149,7 +149,7 @@ class RewardScore(Metric):
         if not responses:
             return {"mean_reward": 0.0, "rewards": []}
 
-        # Normalize input: allow either list[str] or list[dict]
+        # normalize input: allow either list[str] or list[dict]
         if isinstance(responses[0], Mapping):
             gen_dicts = responses
             texts = [d.get("response", "") for d in gen_dicts]

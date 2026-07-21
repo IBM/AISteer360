@@ -1,4 +1,4 @@
-"""RolloutBudget — counter for capping the number of rollouts an optimizer may consume."""
+"""Counter for capping the number of rollouts an optimizer may consume."""
 from __future__ import annotations
 
 

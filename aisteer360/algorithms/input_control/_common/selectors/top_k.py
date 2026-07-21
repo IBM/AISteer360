@@ -1,4 +1,4 @@
-"""TopKSelector — score items via a `BaseScorer` and return the top-k."""
+"""Score items via a `BaseScorer` and return the top-k."""
 from __future__ import annotations
 
 from typing import Any, Sequence, TypeVar

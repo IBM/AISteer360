@@ -63,9 +63,9 @@ class ShortAnswerMatch(Metric):
     collapsed); `exact_match` is then 1.0 iff the normalized strings are identical, and `f1` is the
     token-overlap F1 between them.
 
-    F1's precision term penalizes verbose answers that merely *contain* the gold span (e.g.
-    "The capital of France is Paris." against "Paris"), so it provides a smooth, non-saturating signal
-    that rewards concise, correct answers. 
+    F1's precision term penalizes verbose answers that merely contain the gold span (e.g.
+    "The capital of France is Paris." against "Paris"), giving a smooth, non-saturating signal
+    that rewards concise, correct answers.
 
     Each reference may be a single string or a list of acceptable strings. Scores are returned as 
     fractions in `[0, 1]`.

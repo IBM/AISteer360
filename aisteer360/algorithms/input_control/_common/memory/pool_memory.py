@@ -1,4 +1,4 @@
-"""PoolMemory — typed pool with parallel-indexed metadata."""
+"""Typed pool with parallel-indexed metadata."""
 from __future__ import annotations
 
 import pickle

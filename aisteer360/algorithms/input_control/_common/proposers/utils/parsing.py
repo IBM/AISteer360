@@ -118,13 +118,13 @@ def parse_concise_instruction(text: str) -> list[str]:
 
     Reduce a free-text LLM response to a single short instruction:
 
-    1. Split into paragraphs; skip leading *preamble* paragraphs (single-line cue/lead-in/
+    1. Split into paragraphs; skip leading preamble paragraphs (single-line cue/lead-in/
        acknowledgement) as long as a later paragraph exists; keep the first remaining paragraph.
     2. Strip a leading enumerator/bullet ("1. ", "2) ", "- ") from the kept paragraph.
     3. Drop a leading label line ("Refined prompt:") inside the kept paragraph.
     4. If >= 2 sentences and the last lacks terminal punctuation, drop the trailing fragment.
     5. Balance quotes AFTER fragment-dropping (matching pair, else orphaned edge quote).
-    6. Reject degenerate results: preamble-only, fewer than 2 words, or an *unterminated*
+    6. Reject degenerate results: preamble-only, fewer than 2 words, or an unterminated
        candidate longer than `_MAX_UNTERMINATED_WORDS` (max_new_tokens truncation junk).
 
     Returns `[instruction]` for accepted content, else `[]` (so callers drop the candidate).

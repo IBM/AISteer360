@@ -9,7 +9,7 @@ from transformers import (
 )
 from trl import PPOConfig, PPOTrainer
 
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token
+from aisteer360.utils.tokenization import ensure_pad_token
 from aisteer360.algorithms.structural_control.base import StructuralControl
 from aisteer360.algorithms.structural_control.wrappers.trl.base_mixin import TRLMixin
 from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema import (
@@ -20,12 +20,13 @@ from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema i
 class PPOTrainerMixin(TRLMixin, StructuralControl):
     """PPO structural control backed by TRL's `PPOTrainer`.
 
-    Reward and value models are sequence-classification models. The wrapper loads a fresh value
-    model from the same path as the reward model when `value_model_name_or_path` is not provided —
-    TRL's `PPOTrainer` wraps the value model into its policy and rejects `value_model=None`.
+    Reward and value models are sequence-classification models. When
+    `value_model_name_or_path` is not provided, the wrapper loads a fresh value model from the same
+    path as the reward model, since TRL's `PPOTrainer` wraps the value model into its policy and
+    rejects `value_model=None`.
 
     The standardized prompt-only training dataset is tokenized into an `input_ids` column before
-    being passed to the trainer (TRL reads `data["input_ids"]` directly).
+    being passed to the trainer, which reads `data["input_ids"]` directly.
 
     Note: reward and value models must share the policy's tokenizer/vocabulary. The wrapper guards
     this with an error.
@@ -89,7 +90,7 @@ class PPOTrainerMixin(TRLMixin, StructuralControl):
                 peft_config=peft_config,
             )
             trainer.train()
-            
+
             # recover the trained policy so it can be used for generation
             trained_model = trainer.accelerator.unwrap_model(trainer.model)
             self.model = getattr(trained_model, "policy", trained_model)

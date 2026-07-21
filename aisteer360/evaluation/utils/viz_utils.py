@@ -25,22 +25,22 @@ _DOUBLE_RING_SHAPES = ["o", "s", "^", "h", "D", "v"]
 
 # markers for fixed (non-swept) reference pipelines overlaid on scatter-type plots (plot_tradeoff, plot_tradeoff_scatter)
 _FIXED_PIPELINE_MARKERS = [
-    {"marker": "X", "color": "black"},      # baseline
-    {"marker": "s", "color": "#E24A33"},     # red square
-    {"marker": "D", "color": "#348ABD"},     # blue diamond
-    {"marker": "^", "color": "#988ED5"},     # purple triangle
-    {"marker": "P", "color": "#8EBA42"},     # green plus
-    {"marker": "v", "color": "#FBC15E"},     # amber down-triangle
+    {"marker": "X", "color": "black"},  # baseline
+    {"marker": "s", "color": "#E24A33"},  # red square
+    {"marker": "D", "color": "#348ABD"},  # blue diamond
+    {"marker": "^", "color": "#988ED5"},  # purple triangle
+    {"marker": "P", "color": "#8EBA42"},  # green plus
+    {"marker": "v", "color": "#FBC15E"},  # amber down-triangle
 ]
 
 # line styles for fixed reference pipelines overlaid on sensitivity plots
 _FIXED_PIPELINE_STYLES = [
     {"color": "#555555", "linestyle": "--"},  # baseline grey
-    {"color": "#E24A33", "linestyle": ":"},   # red
+    {"color": "#E24A33", "linestyle": ":"},  # red
     {"color": "#348ABD", "linestyle": "-."},  # blue
-    {"color": "#988ED5", "linestyle": ":"},   # purple
+    {"color": "#988ED5", "linestyle": ":"},  # purple
     {"color": "#8EBA42", "linestyle": "-."},  # green
-    {"color": "#FBC15E", "linestyle": ":"},   # amber
+    {"color": "#FBC15E", "linestyle": ":"},  # amber
 ]
 
 
@@ -98,10 +98,10 @@ def _draw_error_bars(
     y_std_col: str | None = None,
     **kwargs: Any,
 ) -> None:
-    """Draw thin black error bars for every row in *df*.
+    """Draw thin black error bars for every row in `df`.
 
-    This is the standard error-bar style shared across scatter-type plots:
-    thin black lines with small end-caps, drawn behind data points.
+    Bars are drawn as thin black lines with small end-caps, positioned behind
+    the data points.
 
     Args:
         ax: Axes to draw on.
@@ -150,7 +150,7 @@ def _draw_double_ring(
     """Draw double-ring markers at the given coordinates.
 
     Renders three scatter layers per point: an outer ring, an inner ring, and
-    optionally a color-filled centre. All three use the same *marker* shape so
+    optionally a color-filled centre. All three use the same `marker` shape so
     the visual generalises from circles to squares, triangles, hexagons, etc.
 
     Args:
@@ -159,7 +159,7 @@ def _draw_double_ring(
         y: Y coordinates.
         marker: Marker shape.
         fill_color: Color for centre fill (ignored when ``fill=False``).
-        cmap: Colormap name when *fill_color* is numeric.
+        cmap: Colormap name when `fill_color` is numeric.
         outer_s: Size of outer ring.
         inner_s: Size of inner ring.
         center_s: Size of centre marker.
@@ -170,7 +170,7 @@ def _draw_double_ring(
         **center_kwargs: Extra kwargs for the centre scatter call.
 
     Returns:
-        The centre ``PathCollection`` when *fill_color* is a numeric array
+        The centre ``PathCollection`` when `fill_color` is a numeric array
         (useful for creating a colorbar), otherwise ``None``.
     """
     x = np.asarray(x)
@@ -223,7 +223,7 @@ def _style_colorbar(
 ) -> None:
     """Apply the standard AXIS_GREY styling to a colorbar.
 
-    When *values* is provided and all entries are integer-like with ≤10 unique
+    When `values` is provided and all entries are integer-like with ≤10 unique
     values, the colorbar ticks are snapped to those discrete values.
     """
     cbar.outline.set_visible(False)
@@ -246,13 +246,13 @@ def _build_refs_list(
     """Build and validate a merged list of fixed reference pipelines.
 
     Handles both the deprecated ``baseline`` / ``baseline_row`` parameter
-    (prepended with *baseline_label*) and the newer ``compare_to_pipelines``
+    (prepended with `baseline_label`) and the newer ``compare_to_pipelines``
     list.  Each entry is validated to contain at most one configuration.
 
     Args:
-        baseline: Optional baseline data — a ``pd.DataFrame`` (one or more rows
-            sharing a single config) or a ``pd.Series`` (single row, converted
-            to a one-row DataFrame).
+        baseline: Optional baseline data, either a ``pd.DataFrame`` (one or more
+            rows sharing a single config) or a ``pd.Series`` (single row,
+            converted to a one-row DataFrame).
         compare_to_pipelines: Optional list of ``(label, summary_df)`` tuples.
         baseline_label: Legend label for the baseline entry.
 
@@ -890,8 +890,8 @@ def plot_sensitivity(
             for fixed pipelines to overlay as horizontal reference lines.
         per_trial_data: Optional per-trial DataFrame for scatter overlay.
         ax: Matplotlib axes.  If ``None``, a new figure is created.
-        metric_label: Y-axis label.  Defaults to *metric*.
-        sweep_label: X-axis label.  Defaults to *sweep_col*.
+        metric_label: Y-axis label.  Defaults to `metric`.
+        sweep_label: X-axis label.  Defaults to `sweep_col`.
         title: Plot title.  Defaults to ``"{metric_label} sensitivity"``.
         xlim: Optional ``(min, max)`` for x-axis limits.
         ylim: Optional ``(min, max)`` for y-axis limits.
@@ -1003,9 +1003,9 @@ def plot_tradeoff(
             pipelines to overlay as distinct markers.
         per_trial_data: Optional per-trial DataFrame for scatter overlay.
         ax: Matplotlib axes.  If ``None``, a new figure is created.
-        x_label: X-axis label.  Defaults to *x_metric*.
-        y_label: Y-axis label.  Defaults to *y_metric*.
-        sweep_label: Colorbar label.  Defaults to *sweep_col*.
+        x_label: X-axis label.  Defaults to `x_metric`.
+        y_label: Y-axis label.  Defaults to `y_metric`.
+        sweep_label: Colorbar label.  Defaults to `sweep_col`.
         title: Plot title.
         cmap: Colormap for scatter points.
         show_pareto: Whether to overlay the Pareto frontier.
@@ -1123,16 +1123,16 @@ def create_tradeoff_figure(
         3. Right: x_metric vs y_metric tradeoff scatter
 
     Args:
-        summary: DataFrame with metric columns and *sweep_col*.
+        summary: DataFrame with metric columns and `sweep_col`.
         x_metric: Metric for x-axis of tradeoff and first sensitivity panel.
         y_metric: Metric for y-axis of tradeoff and second sensitivity panel.
         sweep_col: Column name for the swept parameter.
         baseline_pipeline: Name of the baseline pipeline in the ``"pipeline"``
             column.
         title: Optional overall figure title.
-        x_label: Label for *x_metric*.
-        y_label: Label for *y_metric*.
-        sweep_label: Label for *sweep_col*.
+        x_label: Label for `x_metric`.
+        y_label: Label for `y_metric`.
+        sweep_label: Label for `sweep_col`.
         figsize: Figure size as ``(width, height)``.
         save_path: Optional path to save the figure (150 dpi).
 
@@ -1192,8 +1192,8 @@ def plot_pareto_frontier(
 ) -> tuple[plt.Axes, list[tuple[float, float]]]:
     """Overlay Pareto frontier on an existing or new scatter plot.
 
-    Draws the frontier line with a midpoint ``"frontier"`` annotation,
-    delegating to :func:`_overlay_pareto_frontier`.
+    Computes the Pareto-optimal points and draws the frontier line with a
+    midpoint ``"frontier"`` annotation.
 
     Args:
         summary: DataFrame with ``{x_metric}_mean`` and ``{y_metric}_mean``.

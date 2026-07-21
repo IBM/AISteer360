@@ -156,6 +156,99 @@ class TestSteeringVector:
         assert vec.num_tokens == 0
         assert vec.is_positional is False
 
+    def test_normalized_unit_norm_clone(self):
+        """normalized() returns a unit-norm deep clone; the original is untouched."""
+        vec = SteeringVector(
+            model_type="llama",
+            directions={0: torch.tensor([3.0, 4.0]), 1: torch.zeros(2)},
+        )
+        original = {k: v.clone() for k, v in vec.directions.items()}
+        norm_vec = vec.normalized()
+
+        assert norm_vec is not vec
+        assert float(norm_vec.directions[0].norm()) == pytest.approx(1.0, abs=1e-6)
+        assert torch.equal(norm_vec.directions[1], vec.directions[1])  # zero-norm row left as-is
+        for k, d in original.items():
+            assert torch.equal(vec.directions[k], d)  # original unchanged
+
+    def test_scaled_to_norms_sets_target_norms(self):
+        """Each covered direction is rescaled to scale * target_norms[layer]."""
+        vec = SteeringVector(
+            model_type="llama",
+            directions={0: torch.tensor([3.0, 4.0]), 1: torch.tensor([0.0, 2.0])},
+        )
+        out = vec.scaled_to_norms({0: 10.0, 1: 4.0}, scale=0.5)
+        assert float(out.directions[0].norm()) == pytest.approx(5.0, abs=1e-5)
+        assert float(out.directions[1].norm()) == pytest.approx(2.0, abs=1e-5)
+        # orientation preserved
+        torch.testing.assert_close(
+            out.directions[0] / out.directions[0].norm(),
+            (vec.directions[0] / vec.directions[0].norm()).unsqueeze(0),
+        )
+
+    def test_scaled_to_norms_original_untouched(self):
+        """The source vector is not mutated (ownership contract, mirrors normalized())."""
+        vec = SteeringVector(model_type="llama", directions={0: torch.tensor([3.0, 4.0])})
+        snapshot = vec.directions[0].clone()
+        _ = vec.scaled_to_norms({0: 100.0})
+        assert torch.equal(vec.directions[0], snapshot)
+
+    def test_scaled_to_norms_stores_row_vector(self):
+        """Both [H] and [1, H] inputs yield [1, H] storage."""
+        vec_1d = SteeringVector(model_type="llama", directions={0: torch.tensor([3.0, 4.0])})
+        vec_2d = SteeringVector(model_type="llama", directions={0: torch.tensor([[3.0, 4.0]])})
+        assert vec_1d.scaled_to_norms({0: 1.0}).directions[0].shape == (1, 2)
+        assert vec_2d.scaled_to_norms({0: 1.0}).directions[0].shape == (1, 2)
+
+    def test_scaled_to_norms_covers_intersection_only(self):
+        """The result covers exactly the intersection of target_norms and directions keys."""
+        vec = SteeringVector(
+            model_type="llama",
+            directions={0: torch.tensor([1.0, 0.0]), 1: torch.tensor([0.0, 1.0]), 2: torch.tensor([1.0, 1.0])},
+        )
+        out = vec.scaled_to_norms({1: 2.0, 2: 3.0, 99: 1.0})
+        assert set(out.directions.keys()) == {1, 2}
+
+    def test_scaled_to_norms_empty_intersection_raises(self):
+        vec = SteeringVector(model_type="llama", directions={0: torch.tensor([1.0, 1.0])})
+        with pytest.raises(ValueError, match="no overlap"):
+            vec.scaled_to_norms({5: 1.0})
+
+    def test_scaled_to_norms_positional_raises(self):
+        """K > 1 (positional) directions are rejected."""
+        vec = SteeringVector(model_type="llama", directions={0: torch.randn(3, 4)})
+        with pytest.raises(ValueError, match="broadcast directions"):
+            vec.scaled_to_norms({0: 1.0})
+
+    def test_scaled_to_norms_bad_scale_raises(self):
+        vec = SteeringVector(model_type="llama", directions={0: torch.tensor([1.0, 1.0])})
+        with pytest.raises(ValueError, match="scale must be positive"):
+            vec.scaled_to_norms({0: 1.0}, scale=0.0)
+
+    def test_scaled_to_norms_nonpositive_target_raises(self):
+        vec = SteeringVector(model_type="llama", directions={0: torch.tensor([1.0, 1.0])})
+        with pytest.raises(ValueError, match="target norm for layer"):
+            vec.scaled_to_norms({0: 0.0})
+
+    def test_scaled_to_norms_zero_source_raises(self):
+        """Unlike normalized(), a zero-norm source is unreachable and raises."""
+        vec = SteeringVector(model_type="llama", directions={0: torch.zeros(2)})
+        with pytest.raises(ValueError, match="zero-norm source"):
+            vec.scaled_to_norms({0: 1.0})
+
+    def test_scaled_to_norms_preserves_metadata(self):
+        vec = SteeringVector(
+            model_type="llama",
+            directions={0: torch.tensor([3.0, 4.0])},
+            num_heads=8,
+            head_dim=16,
+            explained_variances={0: 0.9},
+        )
+        out = vec.scaled_to_norms({0: 1.0})
+        assert out.model_type == "llama"
+        assert out.num_heads == 8 and out.head_dim == 16
+        assert out.explained_variances == {0: 0.9}
+
 
 class TestContrastivePairs:
     """Tests for ContrastivePairs dataclass."""
@@ -584,7 +677,7 @@ class TestCacheOnceGate:
         gate = CacheOnceGate(inner)
 
         gate.update(0.6, key=0)  # inner becomes ready and passes
-        assert gate._cached is True
+        assert gate._cached is not None and bool(gate._cached.all())  # frozen [num_rows] tensor
         assert gate.is_open() is True
 
         # even after reset of inner (via update), cached stays
@@ -599,7 +692,7 @@ class TestCacheOnceGate:
         gate = CacheOnceGate(inner)
 
         gate.update(0.6, key=0)
-        assert gate._cached is True
+        assert gate._cached is not None and bool(gate._cached.all())
 
         gate.reset()
         assert gate._cached is None
@@ -619,7 +712,7 @@ class TestCacheOnceGate:
         assert gate._cached is None  # not ready yet
 
         gate.update(0.7, key=1)  # passes, now ready
-        assert gate._cached is True  # any(False, True) = True
+        assert gate._cached is not None and bool(gate._cached.all())  # any(False, True) = True
         assert gate.is_ready() is True
 
 
@@ -628,7 +721,7 @@ class TestProjectedCosineSimilarity:
 
     def test_known_values(self):
         """Test against known values."""
-        from aisteer360.algorithms.state_control._common.gates.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.gates.utils.scores import projected_cosine_similarity
 
         # create a simple case
         hidden = torch.tensor([1.0, 0.0, 0.0])
@@ -646,7 +739,7 @@ class TestProjectedCosineSimilarity:
 
     def test_orthogonal_vectors(self):
         """Test with orthogonal vectors."""
-        from aisteer360.algorithms.state_control._common.gates.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.gates.utils.scores import projected_cosine_similarity
 
         hidden = torch.tensor([1.0, 0.0, 0.0])
         direction = torch.tensor([0.0, 1.0, 0.0])
@@ -838,6 +931,141 @@ class TestNormPreservingTransform:
             transform.apply(torch.ones(1, 1, 1), layer_id=0, token_mask=mask)
 
 
+class TestTransformBinding:
+    """Binding protocol across the six transforms (is_bound / bind / covered_layer_ids / guards)."""
+
+    HIDDEN = 8
+
+    def _sv(self, k=1):
+        return SteeringVector(model_type="x", directions={0: torch.randn(k, self.HIDDEN), 1: torch.randn(k, self.HIDDEN)})
+
+    def _stub_source(self, sv):
+        from aisteer360.algorithms.state_control._common.sources import _Precomputed
+        return _Precomputed(sv)
+
+    def _ctx(self, resolve_result=None):
+        """A minimal TransformContext whose resolve returns a fixed vector (or coerces its input)."""
+        from aisteer360.algorithms.state_control._common.sources import _as_artifact_source
+        from aisteer360.algorithms.state_control._common.transforms.context import TransformContext
+
+        def resolve(artifact):
+            if resolve_result is not None:
+                return resolve_result.clone()
+            return _as_artifact_source(artifact).resolve(None, None)
+
+        return TransformContext(
+            layer_ids=[0, 1], num_layers=4, hidden_size=self.HIDDEN, num_heads=2, head_dim=4,
+            dtype=torch.float32, device=torch.device("cpu"), resolve=resolve,
+        )
+
+    def test_additive_bound_from_dict_and_sv(self):
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
+        sv = self._sv()
+        assert AdditiveTransform(sv).is_bound is True
+        assert AdditiveTransform(sv).covered_layer_ids == {0, 1}
+        assert AdditiveTransform({0: torch.randn(1, self.HIDDEN)}).covered_layer_ids == {0}
+
+    def test_additive_bound_bind_returns_self(self):
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
+        t = AdditiveTransform(self._sv(), strength=2.0)
+        assert t.bind(self._ctx()) is t
+
+    def test_additive_source_binds_functionally(self):
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
+        sv = self._sv()
+        src = self._stub_source(sv)
+        t = AdditiveTransform(src, strength=2.0)
+        assert t.is_bound is False and t.covered_layer_ids is None
+        bound = t.bind(self._ctx())
+        assert bound is not t and bound.is_bound is True
+        assert bound.strength == 2.0 and bound.covered_layer_ids == {0, 1}
+        assert t.is_bound is False  # template untouched
+
+    def test_unbound_apply_raises(self):
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
+        t = AdditiveTransform(self._stub_source(self._sv()))
+        with pytest.raises(RuntimeError, match="unbound"):
+            t.apply(torch.randn(1, 3, self.HIDDEN), layer_id=0, token_mask=torch.ones(1, 3, dtype=torch.bool))
+
+    def test_directional_ablation_junk_positional(self):
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+        with pytest.raises(TypeError, match="alpha"):
+            DirectionalAblationTransform(0.5)
+
+    def test_additive_junk_positional(self):
+        from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform
+        with pytest.raises(TypeError, match="strength"):
+            AdditiveTransform(2.0)
+
+    def test_fresh_caches_per_bound_instance(self):
+        """One template bound against two ctxs with different directions -> independent bases."""
+        from aisteer360.algorithms.state_control._common.transforms import DirectionalAblationTransform
+        src = self._stub_source(self._sv())
+        template = DirectionalAblationTransform(src, alpha=1.0)
+
+        sv_a = SteeringVector(model_type="x", directions={0: torch.tensor([[1.0, 0, 0, 0, 0, 0, 0, 0]])})
+        sv_b = SteeringVector(model_type="x", directions={0: torch.tensor([[0, 1.0, 0, 0, 0, 0, 0, 0]])})
+        a = template.bind(self._ctx(resolve_result=sv_a))
+        b = template.bind(self._ctx(resolve_result=sv_b))
+        assert a is not b and a._basis_cache is not b._basis_cache
+
+        hidden = torch.ones(1, 1, self.HIDDEN)
+        mask = torch.ones(1, 1, dtype=torch.bool)
+        out_a = a.apply(hidden, layer_id=0, token_mask=mask)
+        out_b = b.apply(hidden, layer_id=0, token_mask=mask)
+        assert not torch.allclose(out_a, out_b)  # different ablated components
+
+    def test_rotation_deferred_validation(self):
+        """A [1, H] (non-basis-pair) resolve errors at bind, matching the concrete __init__ error."""
+        from aisteer360.algorithms.state_control._common.transforms import RotationTransform
+        bad = SteeringVector(model_type="x", directions={0: torch.randn(1, self.HIDDEN)})
+        # concrete bad shape errors at __init__
+        with pytest.raises(ValueError, match=r"\[2, H\]"):
+            RotationTransform(bad)
+        # deferred: source resolving to a bad shape errors at bind
+        t = RotationTransform(self._stub_source(bad))
+        assert t.is_bound is False
+        with pytest.raises(ValueError, match=r"\[2, H\]"):
+            t.bind(self._ctx())
+
+    def test_head_additive_rejects_bare_mapping(self):
+        from aisteer360.algorithms.state_control._common.transforms import HeadAdditiveTransform
+        with pytest.raises(ValueError, match="num_heads and head_dim"):
+            HeadAdditiveTransform({0: torch.randn(2, 4)}, active_heads={0: {0}})
+
+    def test_norm_preserving_delegates_binding(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            AdditiveTransform,
+            NormPreservingTransform,
+        )
+        inner = AdditiveTransform(self._stub_source(self._sv()))
+        wrapper = NormPreservingTransform(inner)
+        assert wrapper.is_bound is False and wrapper.covered_layer_ids is None
+        bound = wrapper.bind(self._ctx())
+        assert bound is not wrapper and bound.is_bound is True
+        assert bound.covered_layer_ids == {0, 1}
+
+    def test_alignment_adaptive_two_part_binding(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            AdditiveTransform,
+            AlignmentAdaptiveTransform,
+        )
+        sv = self._sv()
+        # own concrete, inner unbound -> not bound (inner unbound)
+        inner_unbound = AdditiveTransform(self._stub_source(sv))
+        t1 = AlignmentAdaptiveTransform(inner_unbound, sv)
+        assert t1.is_bound is False
+        # own source, inner bound -> not bound (own unbound)
+        t2 = AlignmentAdaptiveTransform(AdditiveTransform(sv), self._stub_source(sv))
+        assert t2.is_bound is False
+        # both concrete -> bound
+        t3 = AlignmentAdaptiveTransform(AdditiveTransform(sv), sv)
+        assert t3.is_bound is True
+        # binding resolves both, delegates coverage to inner
+        bound = t1.bind(self._ctx())
+        assert bound.is_bound is True and bound.covered_layer_ids == {0, 1}
+
+
 class TestLayerHeuristics:
     """Tests for layer heuristics functions."""
 
@@ -856,3 +1084,148 @@ class TestLayerHeuristics:
         # 3 layers -> last third is layer 2
         result = late_third(3)
         assert result == [2]
+
+
+class TestResolveTransformSlot:
+    """Unit tests for the shared `resolve_transform_slot` helper (hub-free tiny Llama)."""
+
+    HIDDEN = 32
+    LAYERS = 4
+    HEADS = 4
+
+    def _model(self):
+        from tests.utils.tiny_models import tiny_llama
+
+        return tiny_llama(num_layers=self.LAYERS, hidden=self.HIDDEN, heads=self.HEADS)
+
+    def _sv(self, layers=(0, 1), k=1):
+        return SteeringVector(
+            model_type="llama",
+            directions={l: torch.randn(k, self.HIDDEN) for l in layers},
+        )
+
+    def _stub_source(self, sv):
+        from aisteer360.algorithms.state_control._common.sources import _Precomputed
+
+        return _Precomputed(sv)
+
+    def test_bound_instance_passes_through(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            AdditiveTransform,
+            resolve_transform_slot,
+        )
+
+        transform = AdditiveTransform(self._sv(layers=(0, 1)), strength=1.5)
+        built = resolve_transform_slot(transform, self._model(), None, [0, 1])
+        assert built is transform  # already bound -> used as-is
+
+    def test_source_carrying_instance_comes_back_bound(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            DirectionalAblationTransform,
+            resolve_transform_slot,
+        )
+
+        template = DirectionalAblationTransform(self._stub_source(self._sv(layers=(0, 1))), alpha=0.7)
+        assert template.is_bound is False
+        built = resolve_transform_slot(template, self._model(), None, [0, 1])
+        assert built is not template
+        assert built.is_bound is True
+        assert built.alpha == 0.7
+        assert template.is_bound is False  # template untouched
+
+    def test_factory_returning_bound_transform(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            AdditiveTransform,
+            resolve_transform_slot,
+        )
+
+        sv = self._sv(layers=(0, 1))
+        built = resolve_transform_slot(
+            lambda ctx: AdditiveTransform(ctx.resolve(sv), strength=2.0),
+            self._model(), None, [0, 1],
+        )
+        assert isinstance(built, AdditiveTransform)
+        assert built.is_bound is True and built.strength == 2.0
+
+    def test_factory_returning_source_carrying_transform_is_bound(self):
+        # strict superset over old adapter behavior: an unbound factory result is bound here
+        from aisteer360.algorithms.state_control._common.transforms import (
+            DirectionalAblationTransform,
+            resolve_transform_slot,
+        )
+
+        source = self._stub_source(self._sv(layers=(0, 1)))
+        built = resolve_transform_slot(
+            lambda ctx: DirectionalAblationTransform(source, alpha=1.0),
+            self._model(), None, [0, 1],
+        )
+        assert isinstance(built, DirectionalAblationTransform)
+        assert built.is_bound is True
+
+    def test_factory_returning_non_transform_raises(self):
+        from aisteer360.algorithms.state_control._common.transforms import resolve_transform_slot
+
+        with pytest.raises(TypeError, match="must return a BaseTransform"):
+            resolve_transform_slot(lambda ctx: object(), self._model(), None, [0, 1])
+
+    def test_coverage_passes_when_layers_covered(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            DirectionalAblationTransform,
+            resolve_transform_slot,
+        )
+
+        transform = DirectionalAblationTransform(self._sv(layers=(0, 1, 2)))
+        built = resolve_transform_slot(transform, self._model(), None, [0, 1])
+        assert built is transform
+
+    def test_coverage_raises_when_layer_missing(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            DirectionalAblationTransform,
+            resolve_transform_slot,
+        )
+
+        transform = DirectionalAblationTransform(self._sv(layers=(0,)))
+        with pytest.raises(ValueError, match="no direction for layer"):
+            resolve_transform_slot(transform, self._model(), None, [0, 1])
+
+    def test_coverage_opts_out_when_none(self):
+        # a transform reporting covered_layer_ids=None is not coverage-checked
+        from aisteer360.algorithms.state_control._common.transforms import resolve_transform_slot
+        from aisteer360.algorithms.state_control._common.transforms.base import BaseTransform
+
+        class _NoCoverage(BaseTransform):
+            def apply(self, hidden_states, *, layer_id, token_mask, **kwargs):
+                return hidden_states
+
+        transform = _NoCoverage()
+        assert transform.covered_layer_ids is None
+        built = resolve_transform_slot(transform, self._model(), None, [0, 1])
+        assert built is transform
+
+    def test_context_exposes_resolved_layers_and_working_resolve(self):
+        from aisteer360.algorithms.state_control._common.transforms import (
+            AdditiveTransform,
+            resolve_transform_slot,
+        )
+
+        seen = {}
+
+        def _factory(ctx):
+            seen["ctx"] = ctx
+            sv = self._sv(layers=tuple(ctx.layer_ids))
+            resolved = ctx.resolve(sv)  # round-trip a vector through resolve
+            assert set(resolved.directions.keys()) == set(ctx.layer_ids)
+            for d in resolved.directions.values():
+                assert d.device == ctx.device and d.dtype == ctx.dtype
+            return AdditiveTransform(resolved, strength=1.0)
+
+        model = self._model()
+        resolve_transform_slot(_factory, model, None, [1, 2])
+        ctx = seen["ctx"]
+        assert ctx.layer_ids == [1, 2]
+        assert ctx.num_layers == self.LAYERS
+        assert ctx.hidden_size == self.HIDDEN
+        assert ctx.num_heads == self.HEADS
+        assert ctx.head_dim == self.HIDDEN // self.HEADS
+        assert ctx.device == next(model.parameters()).device
+        assert ctx.dtype == model.dtype

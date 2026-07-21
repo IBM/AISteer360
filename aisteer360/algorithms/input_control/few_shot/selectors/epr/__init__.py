@@ -1,4 +1,4 @@
-"""EPR — Efficient Prompt Retrieval (Rubin, Herzig, Berant 2021).
+"""EPR, Efficient Prompt Retrieval (Rubin, Herzig, Berant 2021).
 
 Reference:
 

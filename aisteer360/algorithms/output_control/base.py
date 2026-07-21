@@ -27,7 +27,6 @@ See Also:
 """
 from abc import ABC, abstractmethod
 from dataclasses import fields
-from typing import Type
 
 import torch
 from transformers import PreTrainedModel
@@ -45,7 +44,8 @@ class OutputControl(ABC):
         steer(model, tokenizer, **kwargs) -> None: One-time preparation (optional)
     """
 
-    Args: Type[BaseArgs] | None = None
+    Args: type[BaseArgs] | None = None
+    RUNTIME_KWARGS_SCHEMA: list[dict] = []
 
     enabled: bool = True
     supports_batching: bool = False

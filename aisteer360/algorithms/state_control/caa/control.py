@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from functools import partial
-
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
 from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
+from aisteer360.algorithms.state_control._common.runtime import TransformHookRuntime
 from aisteer360.algorithms.state_control._common.selectors import FixedLayerSelector, FractionalDepthSelector
-from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens, make_token_mask
+from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens
 from aisteer360.algorithms.state_control._common.transforms import AdditiveTransform, NormPreservingTransform
 
-from aisteer360.algorithms.state_control._common.estimators import MeanDifferenceEstimator
+from aisteer360.algorithms.state_control._common.estimators import ContrastiveDirectionEstimator, MeanDifferenceEstimator
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 from .args import CAAArgs
@@ -55,10 +54,7 @@ class CAA(StateControl):
         self._layer_id: int = 0
         self._gate = AlwaysOpenGate()
         self._pad_token_id: int | None = None
-
-        # tracks cumulative position for KV-cached generation
-        self._position_offset: int = 0
-        self._initial_seq_len: int = 0
+        self._runtime = TransformHookRuntime(hook_point="layer_output")
 
     def steer(
         self,
@@ -84,11 +80,14 @@ class CAA(StateControl):
         if self.steering_vector is not None:
             sv = self.steering_vector
         else:
-            estimator = MeanDifferenceEstimator()
+            if self.train_spec.method == "pca_pairwise":
+                estimator = ContrastiveDirectionEstimator()
+            else:
+                estimator = MeanDifferenceEstimator()
             sv = estimator.fit(model, tokenizer, data=self.data, spec=self.train_spec)
 
-        # move to device
-        sv = sv.to(device, dtype=model.dtype)
+        # clone before the in-place move/normalize so a caller-supplied vector is never mutated
+        sv = sv.clone().to(device, dtype=model.dtype)
 
         # optionally normalize the vector
         if self.normalize_vector:
@@ -113,7 +112,7 @@ class CAA(StateControl):
 
         # build transform
         transform = AdditiveTransform(
-            directions=sv.directions,
+            sv.directions,
             strength=self.multiplier,
         )
         if self.use_norm_preservation:
@@ -148,113 +147,27 @@ class CAA(StateControl):
             ids = ids.unsqueeze(0)
 
         prompt_lens = compute_prompt_lens(ids, self._pad_token_id)
+        self._runtime.reset(prompt_lens)
 
-        # store initial sequence length for position tracking
-        self._initial_seq_len = ids.size(1)
-        self._position_offset = 0
-
-        hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
-
-        # register forward hook on the target layer to modify its output
-        hooks["forward"].append({
-            "module": self._layer_names[self._layer_id],
-            "hook_func": partial(
-                self._forward_hook,
-                layer_id=self._layer_id,
-                transform=self._transform,
-                gate=self._gate,
-                token_scope=self.token_scope,
-                prompt_lens=prompt_lens,
-                last_k=self.last_k,
-                from_position=self.from_position,
-                control_ref=self,
-            ),
-        })
-
-        return hooks
-
-    def _forward_hook(
-        self,
-        module,
-        args,
-        kwargs,
-        output,
-        *,
-        layer_id: int,
-        transform,
-        gate,
-        token_scope: str,
-        prompt_lens: torch.LongTensor,
-        last_k: int | None,
-        from_position: int | None,
-        control_ref: "CAA",
-    ):
-        """Apply activation addition to the layer output.
-
-        Args:
-            module: The layer module being hooked.
-            args: Positional arguments passed to the forward call.
-            kwargs: Keyword arguments passed to the forward call.
-            output: The layer's output (hidden_states, ...) or just hidden_states.
-            layer_id: Index of the target layer.
-            transform: The additive transform to apply.
-            gate: The gate (always open for CAA).
-            token_scope: Which tokens to steer.
-            prompt_lens: Per-batch prompt lengths.
-            last_k: Number of last tokens when token_scope is "last_k".
-            from_position: Starting position when token_scope is "from_position".
-            control_ref: Reference to the CAA control for position tracking.
-
-        Returns:
-            Modified output with steering vector added to hidden states.
-        """
-        # extract hidden states from layer output
-        # transformer layers return (hidden_states, ...) or just hidden_states
-        if isinstance(output, tuple):
-            hidden = output[0]
-        else:
-            hidden = output
-
-        if hidden is None:
-            return output
-
-        seq_len = hidden.size(1)
-
-        # determine position offset for KV-cached generation
-        # during the first forward pass, seq_len == initial_seq_len and offset is 0
-        # during subsequent passes with KV cache, seq_len is typically 1 (or small)
-        # and we need to compute the absolute position
-        if seq_len < control_ref._initial_seq_len:
-            # KV-cached generation mode
-            position_offset = control_ref._position_offset
-            control_ref._position_offset += seq_len
-        else:
-            # first forward pass or non-cached generation
-            position_offset = 0
-            control_ref._position_offset = seq_len
-
-        mask = make_token_mask(
-            token_scope,
-            seq_len=seq_len,
-            prompt_lens=prompt_lens.to(hidden.device),
-            last_k=last_k,
-            from_position=from_position,
-            position_offset=position_offset,
-        )
-
-        if gate.is_open():
-            hidden = transform.apply(
-                hidden,
-                layer_id=layer_id,
-                token_mask=mask,
-            )
-
-        # return modified output in the same format
-        if isinstance(output, tuple):
-            return (hidden,) + output[1:]
-        return hidden
+        return {
+            "pre": [],
+            "forward": [{
+                "module": self._layer_names[self._layer_id],
+                "hook_func": self._runtime.build_behavior_hook(
+                    layer_id=self._layer_id,
+                    transform=self._transform,
+                    gate=self._gate,
+                    token_scope=self.token_scope,
+                    last_k=self.last_k,
+                    from_position=self.from_position,
+                    is_pass_opener=True,  # single-layer control: its only hook opens the pass
+                ),
+            }],
+            "backward": [],
+        }
 
     def reset(self):
         """Reset internal state between generation calls."""
         self._gate.reset()
-        self._position_offset = 0
+        if self._runtime._prompt_lens is not None:
+            self._runtime.reset(self._runtime._prompt_lens)

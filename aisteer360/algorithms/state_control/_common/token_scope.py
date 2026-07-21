@@ -92,3 +92,32 @@ def make_token_mask(
         return absolute_positions >= from_position
     else:
         raise ValueError(f"Unknown token scope: {scope!r}")
+
+
+def align_mask_to_batch(mask: torch.BoolTensor, hidden_batch: int) -> torch.BoolTensor:
+    """Expand a `[B, T]` mask to the hidden-state batch dimension.
+
+    Masks are built with `B` = prompt batch size, but HuggingFace `generate` expands hidden
+    states to `B * num_beams` via `repeat_interleave` for beam search. Row order is therefore
+    `[item0, item0, ..., item1, item1, ...]`; this replicates the mask the same way so it aligns
+    when a transform broadcasts it against the expanded hidden states.
+
+    Args:
+        mask: Boolean mask of shape `[B, T]`.
+        hidden_batch: The batch size of the hidden states the mask will be applied to.
+
+    Returns:
+        A `[hidden_batch, T]` mask (the input unchanged when `hidden_batch == B`).
+
+    Raises:
+        RuntimeError: If `hidden_batch` is not a multiple of `B` (unexpected generation expansion).
+    """
+    B = mask.size(0)
+    if hidden_batch == B:
+        return mask
+    if hidden_batch % B == 0:
+        return mask.repeat_interleave(hidden_batch // B, dim=0)
+    raise RuntimeError(
+        f"Hidden batch {hidden_batch} is not a multiple of the prompt batch {B}; "
+        f"cannot align steering mask (unexpected generation expansion)."
+    )

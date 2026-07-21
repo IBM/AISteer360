@@ -1,6 +1,8 @@
 """
 Core steering pipeline for composing and applying multiple LLM control methods.
 """
+import contextlib
+import logging
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,12 +12,27 @@ import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 
-from aisteer360.algorithms.core.steering_utils import ensure_pad_token, merge_controls, to_left_pad
+from aisteer360.algorithms.core.utils.controls import (
+    merge_controls,
+    warn_if_adapt_messages_bypassed,
+)
+from aisteer360.algorithms.core.utils.generation import (
+    apply_adapt_messages_and_tokenize,
+    infer_finish_reason,
+)
 from aisteer360.algorithms.core.types import Output
+from aisteer360.utils.tokenization import (
+    ensure_pad_token,
+    infer_attention_mask_from_ids,
+    to_left_pad,
+    warn_if_duplicate_bos,
+)
 from aisteer360.algorithms.input_control.base import InputControl
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.structural_control.base import StructuralControl
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -27,17 +44,18 @@ class SteeringPipeline:
 
     Workflow:
 
-    1. Instantiate with a base model checkpoint and/or control objects
-    2. Call `steer()` once to apply all controls in order (structural → input → state → output)
-    3. Use `generate()` for inference with steering applied (polymorphic across str / list[str] / chat / tensor)
+    1. Instantiate with a base model checkpoint and/or control objects.
+    2. Call `steer()` once to apply all controls in order (structural, input, state, output).
+    3. Use `generate()` for inference with steering applied, accepting str, list[str], chat, or tensor input.
 
     Args:
         model_name_or_path (str or pathlib.Path, optional): HuggingFace model hub name or local directory.
             Required when `lazy_init=False`. Ignored when `lazy_init=True` and the structural
             control returns a model.
         controls (Sequence[StructuralControl | StateControl | InputControl | OutputControl], optional):
-            Controls for the steering pipeline, max one control per category. Omitted categories
-            fall back to no-op controls (see control base classes).
+            Controls for the steering pipeline. The state category accepts any number of controls
+            (applied in list order); the input, structural, and output categories accept at most one
+            each. Omitted categories fall back to no-op controls (see control base classes).
         tokenizer_name_or_path (str, optional): Tokenizer location. Defaults to `model_name_or_path`.
         device_map (str or dict[str, int], optional): Device map (passed to
             `transformers.AutoModelForCausalLM.from_pretrained`). Defaults to `"auto"`.
@@ -59,8 +77,16 @@ class SteeringPipeline:
 
     Note:
 
-    - Maximum one control per category; omitted categories use no-op defaults
+    - The state category accepts multiple controls; the other categories accept at most one each.
+        Omitted categories use no-op defaults.
     - Controls with a `tokenizer` attribute will have it auto-injected if not already set
+
+    For the state category, list order in `controls` defines the composition surface. List order sets
+    `steer()` order, hook registration order, and execution order for hooks on the same module. PyTorch
+    forward hooks chain, so a later hook receives the previous hook's returned output and pre-hooks chain
+    likewise on inputs. Combinations that do not commute, such as ablate after add versus add after
+    ablate, therefore produce order-sensitive results. A gated or condition-scoring control placed after
+    another observes activations already edited at earlier layers by upstream list entries.
     """
 
     # construction args
@@ -79,11 +105,12 @@ class SteeringPipeline:
 
     structural_control: StructuralControl = field(init=False)
     input_control: InputControl = field(init=False)
-    state_control: StateControl = field(init=False)
+    state_controls: list[StateControl] = field(init=False)
     output_control: OutputControl = field(init=False)
 
     _is_steered: bool = field(default=False, init=False, repr=False)
     _warned_tensor_with_adapt_messages: bool = field(default=False, init=False, repr=False)
+    _warned_duplicate_bos: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self) -> None:
 
@@ -91,7 +118,7 @@ class SteeringPipeline:
         controls_merged = merge_controls(self.controls)
         self.structural_control = controls_merged["structural_control"]
         self.input_control = controls_merged["input_control"]
-        self.state_control = controls_merged["state_control"]
+        self.state_controls = controls_merged["state_controls"]
         self.output_control = controls_merged["output_control"]
 
         # load HF artifacts
@@ -131,10 +158,20 @@ class SteeringPipeline:
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
         # late‑inject tokenizer into controls that accept it
-        controls_iter = (self.structural_control, self.input_control, self.state_control, self.output_control)
+        controls_iter = (self.structural_control, self.input_control, *self.state_controls, self.output_control)
         for control in controls_iter:
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer") is None:
                 setattr(control, "tokenizer", self.tokenizer)
+
+    @property
+    def state_control(self) -> StateControl:
+        """Deprecated: use `state_controls`. Returns the sole state control; raises if multiple."""
+        warnings.warn("`state_control` is deprecated; use `state_controls`.", DeprecationWarning, stacklevel=2)
+        if len(self.state_controls) != 1:
+            raise RuntimeError(
+                f"Pipeline has {len(self.state_controls)} state controls; use `state_controls`."
+            )
+        return self.state_controls[0]
 
     @property
     def supports_batching(self) -> bool:
@@ -143,7 +180,7 @@ class SteeringPipeline:
         controls = (
             self.structural_control,
             self.input_control,
-            self.state_control,
+            *self.state_controls,
             self.output_control,
         )
         return all(
@@ -171,7 +208,7 @@ class SteeringPipeline:
             return
 
         # steer each control (bottom-up order: structural -> input -> state -> output)
-        for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
+        for control in (self.structural_control, self.input_control, *self.state_controls, self.output_control):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
                 maybe_new_model = steer_fn(self.model, tokenizer=self.tokenizer, **steer_kwargs)
@@ -197,7 +234,7 @@ class SteeringPipeline:
             except Exception as exception:
                 raise RuntimeError("Failed to resolve tokenizer post‑steer.") from exception
 
-        for control in (self.structural_control, self.input_control, self.state_control, self.output_control):
+        for control in (self.structural_control, self.input_control, *self.state_controls, self.output_control):
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer", None) is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
@@ -258,34 +295,45 @@ class SteeringPipeline:
 
         if attention_mask is None:
             if self.tokenizer is not None and self.tokenizer.pad_token_id is not None:
-                attention_mask = (steered_input_ids != self.tokenizer.pad_token_id).long()
+                attention_mask = infer_attention_mask_from_ids(steered_input_ids, self.tokenizer.pad_token_id)
             else:
                 attention_mask = torch.ones_like(steered_input_ids, dtype=torch.long)
 
         attention_mask = attention_mask.to(dtype=steered_input_ids.dtype, device=device)
 
+        self._warned_duplicate_bos = warn_if_duplicate_bos(
+            steered_input_ids, attention_mask, self.tokenizer, self._warned_duplicate_bos
+        )
+
         return steered_input_ids, attention_mask
 
-    def _setup_state_control(
+    def _setup_state_controls(
             self,
             steered_input_ids: torch.Tensor,
             runtime_kwargs: dict | None,
+            attention_mask: torch.Tensor | None = None,
             **kwargs,
     ) -> None:
-        """Configure state control hooks for the current forward/generate call.
+        """Configure every state control's hooks for the current forward/generate call.
 
-        Prepares the state control by computing hooks based on the (already transformed) input and setting up the model
-        reference for the context manager.
+        Prepares each state control (in list order) by computing hooks based on the (already
+        transformed) input and setting up the model reference for the context manager.
 
         Args:
             steered_input_ids: Input token IDs after input control transformation
-            runtime_kwargs: Per-call parameters for state control
+            runtime_kwargs: Per-call parameters for state controls
+            attention_mask: The prompt attention mask matching `steered_input_ids`. Forwarded to
+                `get_hooks` so controls (e.g. CAST) score conditions on the real prompt tokens rather
+                than re-deriving a pad mask by token identity.
             **kwargs: Additional arguments passed to get_hooks()
         """
-        self.state_control.reset()  # reset before get_hooks() to clear state from previous generation
-        hooks = self.state_control.get_hooks(steered_input_ids, runtime_kwargs, **kwargs)
-        self.state_control.set_hooks(hooks)
-        self.state_control._model_ref = self.model
+        for state_control in self.state_controls:
+            state_control.reset()  # reset before get_hooks() to clear state from previous generation
+            hooks = state_control.get_hooks(
+                steered_input_ids, runtime_kwargs, attention_mask=attention_mask, **kwargs
+            )
+            state_control.set_hooks(hooks)
+            state_control._model_ref = self.model
 
     @staticmethod
     def _classify_inputs(
@@ -330,56 +378,6 @@ class SteeringPipeline:
                 return "tensor", False, torch.tensor([list(seq) for seq in inputs], dtype=torch.long)
 
         raise TypeError(f"Unsupported input type: {type(inputs).__name__}.")
-
-    def _maybe_warn_tensor_with_adapt_messages(self) -> None:
-        """Warn (once per pipeline lifecycle) if a control overrides `adapt_messages` but the caller used
-        tensor/text input, bypassing chat-template tokenization."""
-        if self._warned_tensor_with_adapt_messages:
-            return
-        cls = type(self.input_control)
-        if cls.adapt_messages is not InputControl.adapt_messages:
-            warnings.warn(
-                f"{cls.__name__} overrides `adapt_messages` but received tensor/text input; "
-                "the message-level adaptation will not run. Pass `list[dict]` or `list[list[dict]]` "
-                "to engage `adapt_messages`.",
-                UserWarning,
-            )
-            self._warned_tensor_with_adapt_messages = True
-
-    def _apply_adapt_messages_and_tokenize(
-            self,
-            messages_batch: list[list[dict]],
-            runtime_kwargs: dict,
-    ) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
-        """Run `input_control.adapt_messages` (if supplied) then chat-template tokenize.
-
-        Returns:
-            tuple[input_ids, attention_mask, handled] where `handled` is True iff the control's
-            `adapt_messages` returned a non-None result (i.e., the adaptation already happened at the
-            message level and the token-level `adapt()` must not run again for this call).
-        """
-        adapted = self.input_control.adapt_messages(
-            messages_batch,
-            runtime_kwargs=runtime_kwargs,
-        )
-        handled = adapted is not None
-        if handled:
-            messages_batch = adapted
-
-        encoded = self.tokenizer.apply_chat_template(
-            messages_batch,
-            return_tensors="pt",
-            padding=True,
-            add_generation_prompt=True,
-            return_dict=True,
-        )
-        input_ids = encoded["input_ids"]
-        attention_mask = encoded.get("attention_mask")
-        if input_ids.ndim == 1:
-            input_ids = input_ids.unsqueeze(0)
-            if attention_mask is not None and attention_mask.ndim == 1:
-                attention_mask = attention_mask.unsqueeze(0)
-        return input_ids, attention_mask, handled
 
     @overload
     def generate(
@@ -443,10 +441,14 @@ class SteeringPipeline:
         With `return_output=True`, the return is always `Output` (single) or `list[Output]` (batched), regardless
         of input modality.
 
+        NOTE: unlike `model.generate`, the returned token ids EXCLUDE the prompt by default. Do not
+        slice the result by prompt length, since that discards generated tokens. Pass
+        `return_full_sequence=True` to get HF-style prompt+continuation output.
+
         `attention_mask` is meaningful only for tensor inputs; it is ignored (with a warning) for text and chat
         inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to
         `adapt(input_ids, ...)`. For chat input, when `adapt_messages` returns a non-None result the token-level
-        `adapt()` is not called for that generation — the input control is applied exactly once per call.
+        `adapt()` is not called for that generation, so the input control is applied exactly once per call.
 
         Args:
             inputs: One of the modalities above.
@@ -465,7 +467,7 @@ class SteeringPipeline:
         if not self._is_steered:
             raise RuntimeError("Must call `.steer()` before `.generate()`.")
 
-        # Backwards-compatible keyword alias: callers may still pass `input_ids=` as the prompt.
+        # keyword alias: callers may pass `input_ids=` as the prompt
         if inputs is None and input_ids is not None:
             inputs = input_ids
         elif inputs is not None and input_ids is not None:
@@ -478,7 +480,7 @@ class SteeringPipeline:
 
         modality, is_single, normalized = self._classify_inputs(inputs)
 
-        # Resolve the prompt input_ids (and attention_mask) per modality
+        # resolve the prompt input_ids (and attention_mask) per modality
         message_level_handled = False
         if modality == "chat":
             if attention_mask is not None:
@@ -487,7 +489,7 @@ class SteeringPipeline:
                     UserWarning,
                 )
             prompt_input_ids, prompt_attention_mask, message_level_handled = (
-                self._apply_adapt_messages_and_tokenize(normalized, runtime_kwargs)
+                apply_adapt_messages_and_tokenize(self.input_control, self.tokenizer, normalized, runtime_kwargs)
             )
         elif modality == "text":
             if attention_mask is not None:
@@ -495,7 +497,9 @@ class SteeringPipeline:
                     "`attention_mask` is ignored for text input; it is rebuilt after tokenization.",
                     UserWarning,
                 )
-            self._maybe_warn_tensor_with_adapt_messages()
+            self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
+                self.input_control, self._warned_tensor_with_adapt_messages
+            )
             tokenized = self.tokenizer(
                 list(normalized),
                 return_tensors="pt",
@@ -504,7 +508,9 @@ class SteeringPipeline:
             prompt_input_ids = tokenized["input_ids"]
             prompt_attention_mask = tokenized.get("attention_mask")
         else:  # tensor
-            self._maybe_warn_tensor_with_adapt_messages()
+            self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
+                self.input_control, self._warned_tensor_with_adapt_messages
+            )
             prompt_input_ids = normalized
             prompt_attention_mask = attention_mask
 
@@ -516,11 +522,15 @@ class SteeringPipeline:
             skip_adapt=message_level_handled,
         )
 
-        # state control
-        self._setup_state_control(steered_input_ids, runtime_kwargs, **gen_kwargs)
+        # state controls
+        self._setup_state_controls(
+            steered_input_ids, runtime_kwargs, attention_mask=steered_attention_mask, **gen_kwargs
+        )
 
         # output control
-        with self.state_control:  # hooks live only for duration of decoding
+        with contextlib.ExitStack() as stack:  # hooks live only for duration of decoding
+            for state_control in self.state_controls:
+                stack.enter_context(state_control)
             full_output_ids = self.output_control.generate(
                 input_ids=steered_input_ids,
                 attention_mask=steered_attention_mask,
@@ -534,7 +544,7 @@ class SteeringPipeline:
         returned_ids = full_output_ids if return_full_sequence else new_tokens
 
         # build Output (always — used for return_output=True and to expose adapted_input_ids for introspection)
-        finish_reason = self._infer_finish_reason(new_tokens, gen_kwargs)
+        finish_reason = infer_finish_reason(new_tokens, gen_kwargs)
         output = Output(
             output_ids=new_tokens,
             adapted_input_ids=steered_input_ids,
@@ -569,18 +579,6 @@ class SteeringPipeline:
             return decoded[0]
         return decoded
 
-    @staticmethod
-    def _infer_finish_reason(new_tokens: torch.Tensor, gen_kwargs: dict) -> str | None:
-        """Best-effort finish-reason inference from generated token IDs and gen_kwargs.
-
-        We don't have direct access to HuggingFace's stopping criteria result here, so we use heuristics:
-        if the generated length equals `max_new_tokens` exactly, mark `"length"`; otherwise None.
-        """
-        max_new = gen_kwargs.get("max_new_tokens")
-        if max_new is not None and new_tokens.size(1) >= max_new:
-            return "length"
-        return None
-
     def compute_logprobs(
             self,
             input_ids: list[int] | torch.LongTensor,
@@ -590,9 +588,9 @@ class SteeringPipeline:
             **forward_kwargs: Any,
     ) -> torch.Tensor:
         """Compute per-token log-probabilities of ref_output_ids with structural, input, and state steering controls
-        applied. Note that output controls are *not* applied since they concern scoring, not generation.
+        applied. Output controls are not applied, since they concern scoring rather than generation.
 
-        The strategy below uses teacher forcing, computes log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
+        Uses teacher forcing to compute log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
         token in the reference sequence.
 
         When all pipeline controls support batching, a single batched forward pass is used (inputs are left-padded
@@ -653,11 +651,15 @@ class SteeringPipeline:
             if not is_encoder_decoder:
                 steered_input_ids, attention_mask = to_left_pad(steered_input_ids, attention_mask)
 
-            # state control
-            self._setup_state_control(steered_input_ids, runtime_kwargs, **forward_kwargs)
+            # state controls
+            self._setup_state_controls(
+                steered_input_ids, runtime_kwargs, attention_mask=attention_mask, **forward_kwargs
+            )
 
             # forward pass under state control context
-            with self.state_control:
+            with contextlib.ExitStack() as stack:
+                for state_control in self.state_controls:
+                    stack.enter_context(state_control)
                 with torch.no_grad():
                     if is_encoder_decoder:
                         outputs = self.model(
@@ -733,11 +735,15 @@ class SteeringPipeline:
                 runtime_kwargs=runtime_kwargs,
             )
 
-            # state control
-            self._setup_state_control(steered_input_ids, runtime_kwargs, **forward_kwargs)
+            # state controls
+            self._setup_state_controls(
+                steered_input_ids, runtime_kwargs, attention_mask=steered_attention_mask, **forward_kwargs
+            )
 
             # forward pass under state control context
-            with self.state_control:
+            with contextlib.ExitStack() as stack:
+                for state_control in self.state_controls:
+                    stack.enter_context(state_control)
                 with torch.no_grad():
                     if is_encoder_decoder:
                         outputs = self.model(

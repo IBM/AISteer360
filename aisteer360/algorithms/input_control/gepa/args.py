@@ -9,7 +9,7 @@ from aisteer360.algorithms.core.base_args import BaseArgs
 
 @dataclass
 class GEPAArgs(BaseArgs):
-    """Arguments for GEPA — reflective prompt optimization (single-system-prompt variant).
+    """Arguments for GEPA, reflective prompt optimization (single-system-prompt variant).
 
     Optimizes a single system prompt via GEPA's reflective genetic search (Agrawal et al.,
     2025). Scoring ingredients are supplied directly (`row_scorer`, optional `feedback_fn`,
@@ -21,7 +21,7 @@ class GEPAArgs(BaseArgs):
         train_set: Task instances (`list[dict]`); split internally into D_feedback and
             D_pareto. Rows are forwarded to `row_scorer`, `feedback_fn`, and `format_query`.
         row_scorer: Per-instance metric `(output: str, row: dict) -> float` (the paper's `µ`).
-            Required — Pareto selection needs per-instance scores.
+            Required, because Pareto selection needs per-instance scores.
         feedback_fn: Optional `(output: str, row: dict, score: float) -> str` returning the
             textual feedback GEPA reflects on (the paper's `µf`). Defaults to a stringified
             score when None.
@@ -34,7 +34,7 @@ class GEPAArgs(BaseArgs):
         budget: Maximum number of rollouts (sum of internal batch sizes) consumed by the
             search.
         minibatch_size: Size of D_feedback minibatch sampled per genetic step.
-        pareto_set_size: |D_pareto| — instances reserved for the persistent score matrix.
+        pareto_set_size: |D_pareto|, the instances reserved for the persistent score matrix.
         meta_prompt: Override the reflective meta-prompt template; defaults to
             `gepa.utils.reflective_meta_prompt.GEPA_DEFAULT` (the paper's Appendix C prompt,
             which asks the reflection LM to return the new instruction within fenced blocks).
@@ -100,7 +100,7 @@ class GEPAArgs(BaseArgs):
 
     pareto_set_size: int = field(
         default=30,
-        metadata={"help": "|D_pareto| — instances reserved for the persistent score matrix."},
+        metadata={"help": "|D_pareto|, the instances reserved for the persistent score matrix."},
     )
 
     meta_prompt: str | None = field(

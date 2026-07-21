@@ -10,6 +10,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.evaluation.metrics.base import Metric
+from aisteer360.utils.rendering import encode_for_model
 
 
 _DEFAULT_MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
@@ -89,8 +90,10 @@ class Truthfulness(Metric):
         self._model.to(self._device).eval()
         self._max_new_tokens = max_new_tokens
 
-    def _format_prompt(self, question: str, answer: str, correct_answers: list[str], incorrect_answers: list[str]) -> str:
-        """Build the judge prompt with reference answers included."""
+    def _build_messages(
+        self, question: str, answer: str, correct_answers: list[str], incorrect_answers: list[str]
+    ) -> list[dict[str, str]]:
+        """Build the judge chat messages with reference answers included."""
         correct_block = "\n".join(f"  - {a}" for a in correct_answers)
         incorrect_block = "\n".join(f"  - {a}" for a in incorrect_answers)
 
@@ -101,14 +104,14 @@ class Truthfulness(Metric):
             answer=answer,
         )
 
-        messages = [{"role": "user", "content": content}]
-        return self._tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        return [{"role": "user", "content": content}]
 
     @torch.no_grad()
     def _judge_single(self, question: str, answer: str, correct_answers: list[str], incorrect_answers: list[str]) -> bool:
         """Run the judge on a single (question, answer) pair with references."""
-        prompt = self._format_prompt(question, answer, correct_answers, incorrect_answers)
-        input_ids = self._tokenizer.encode(prompt, return_tensors="pt").to(self._device)
+        messages = self._build_messages(question, answer, correct_answers, incorrect_answers)
+        encoded = encode_for_model(self._tokenizer, messages=messages, return_tensors="pt").to(self._device)
+        input_ids = encoded["input_ids"]
         output_ids = self._model.generate(input_ids, max_new_tokens=self._max_new_tokens, do_sample=False)
         generated = self._tokenizer.decode(output_ids[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
         return generated.lower().startswith("yes")

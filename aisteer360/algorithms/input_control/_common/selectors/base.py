@@ -1,4 +1,4 @@
-"""BaseSelector — pick `k` items from a pool, optionally query-conditioned."""
+"""Pick `k` items from a pool, optionally query-conditioned."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

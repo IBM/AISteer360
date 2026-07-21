@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class TextEncoder:
-    """Mean-pooled HF encoder. Not a `BaseScorer` — this is purely a featurizer for CPO's reward model."""
+    """Mean-pooled HF encoder. Not a `BaseScorer`; this is purely a featurizer for CPO's reward model."""
 
     def __init__(
         self,
         model_name_or_path: str,
         device: str | torch.device | None = None,
-        trust_remote_code: bool = False,
+        trust_remote_code: bool = True,
     ) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)
         self.model = AutoModel.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)

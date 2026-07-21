@@ -1,4 +1,4 @@
-"""SystemPromptFormatter — set or replace the system message from `memory["instruction"]`."""
+"""Set or replace the system message from `memory["instruction"]`."""
 from __future__ import annotations
 
 import warnings

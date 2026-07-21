@@ -12,7 +12,7 @@ interventions.
 
 Steering pipelines are created using the `SteeringPipeline` class. The most common pattern is to specify a Hugging Face
 model name via `base_model_or_path` along with instantiated controls, e.g.,
-[`few_shot`](../examples/notebooks/control_few_shot/few_shot.ipynb) and [`dpo`](../examples/notebooks/wrapper_trl/trl_wrapper.ipynb), as follows:
+[`few_shot`](../examples/notebooks/few_shot.ipynb) and [`dpo`](../examples/notebooks/trl_wrapper.ipynb), as follows:
 
 ```python
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
@@ -30,8 +30,14 @@ The above chains the two controls into a single operation on the model.
     rather than with the `model_name_or_path` argument. This defers loading of the base model until the steer step.
 
 !!! note
-    We currently impose a constraint that the pipeline consists of at most one control per category. Extending
-    steering pipelines to contain more than one control per category is under active development.
+    A pipeline may contain **any number of state controls** (applied in list order); the input, structural, and
+    output categories are limited to at most one control each. When multiple state controls are supplied, list order
+    is the single, well-defined composition surface: list order = `steer()` order = hook registration order =
+    execution order for hooks on the same module. PyTorch forward hooks chain (a later hook receives the previous
+    hook's returned output; pre-hooks chain likewise on inputs), so a combination like "control A then control B at
+    layer 12" is well-defined, and non-commuting pairs (e.g. ablation ∘ addition vs. addition ∘ ablation) are
+    order-sensitive by design. An `ActivationAdapter` is the natural single-behavior atom here, i.e., steering with N
+    behaviors is N adapters in the `controls` list.
 
 ## Steering the pipeline
 
@@ -43,11 +49,9 @@ to as the *steer* step and is executed via:
 pipeline.steer()
 ```
 
-Calling the `steer()` method on a pipeline instance invokes the steering logic for each control in the pipeline in a
-*bottom-up* fashion (structural -> state -> input -> output). This ensures proper layering, e.g., we want to make sure
-that activation (state) steering is done with respect to any updated structure of the model.
-
-The `steer()` step can be resource-heavy, e.g., especially if any of the controls in the pipeline require any training.
+Calling the `steer()` method on a pipeline instance invokes the steering logic for every control in the pipeline. Methods are 
+steered independently; the effect of composing steered/trained controls is one of the main functionalities provided by the 
+toolkit. Note that the `steer()` step can be resource-heavy, e.g., especially if any of the controls in the pipeline require any training.
 Steering must be called exactly once before using the pipeline for inference.
 
 

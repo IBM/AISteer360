@@ -13,13 +13,13 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     Input control methods adapt the input (prompt) before the model is called. Current notebooks cover:
 
-    :octicons-arrow-right-24: [CPO](./notebooks/control_cpo/cpo.ipynb)
+    :octicons-arrow-right-24: [CPO](./notebooks/cpo.ipynb)
 
-    :octicons-arrow-right-24: [FewShot](./notebooks/control_few_shot/few_shot.ipynb)
+    :octicons-arrow-right-24: [FewShot](./notebooks/few_shot.ipynb)
 
-    :octicons-arrow-right-24: [GEPA](./notebooks/control_gepa/gepa.ipynb)
+    :octicons-arrow-right-24: [GEPA](./notebooks/gepa.ipynb)
 
-    :octicons-arrow-right-24: [PRewrite](./notebooks/control_prewrite/prewrite.ipynb)
+    :octicons-arrow-right-24: [PRewrite](./notebooks/prewrite.ipynb)
 
 -   __Structural control__
 
@@ -27,9 +27,9 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     Structural control methods adapt the model's weights/architecture. Current notebooks cover:
 
-    :octicons-arrow-right-24: [MergeKit wrapper](./notebooks/wrapper_mergekit/mergekit_wrapper.ipynb)
+    :octicons-arrow-right-24: [MergeKit wrapper](./notebooks/mergekit_wrapper.ipynb)
 
-    :octicons-arrow-right-24: [TRL wrapper](./notebooks/wrapper_trl/trl_wrapper.ipynb)
+    :octicons-arrow-right-24: [TRL wrapper](./notebooks/trl_wrapper.ipynb)
 
 -   __State control__
 
@@ -37,15 +37,15 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     State control methods influence the model's internal states (activation, attentions, etc.) at inference time. Current notebooks cover:
 
-    :octicons-arrow-right-24: [ActAdd](./notebooks/control_act_add/act_add.ipynb)
+    :octicons-arrow-right-24: [ActAdd](./notebooks/act_add.ipynb)
 
-    :octicons-arrow-right-24: [CAA](./notebooks/control_caa/caa.ipynb)
+    :octicons-arrow-right-24: [CAA](./notebooks/caa.ipynb)
 
-    :octicons-arrow-right-24: [CAST](./notebooks/control_cast/cast.ipynb)
+    :octicons-arrow-right-24: [CAST](./notebooks/cast.ipynb)
 
-    :octicons-arrow-right-24: [ITI](./notebooks/control_iti/iti.ipynb)
+    :octicons-arrow-right-24: [ITI](./notebooks/iti.ipynb)
 
-    :octicons-arrow-right-24: [PASTA](./notebooks/control_pasta/pasta.ipynb)
+    :octicons-arrow-right-24: [PASTA](./notebooks/pasta.ipynb)
 
 -   __Output control__
 
@@ -53,13 +53,13 @@ from wrappers), as well as demonstrations of more extensive benchmarks.
 
     Output control methods influence the model's behavior via the `generate()` method. Current notebooks cover:
 
-    :octicons-arrow-right-24: [DeAL](./notebooks/control_deal/deal.ipynb)
+    :octicons-arrow-right-24: [DeAL](./notebooks/deal.ipynb)
 
-    :octicons-arrow-right-24: [RAD](./notebooks/control_rad/rad.ipynb)
+    :octicons-arrow-right-24: [RAD](./notebooks/rad.ipynb)
 
-    :octicons-arrow-right-24: [SASA](./notebooks/control_sasa/sasa.ipynb)
+    :octicons-arrow-right-24: [SASA](./notebooks/sasa.ipynb)
 
-    :octicons-arrow-right-24: [ThinkingIntervention](./notebooks/control_thinking_intervention/thinking_intervention.ipynb)
+    :octicons-arrow-right-24: [ThinkingIntervention](./notebooks/thinking_intervention.ipynb)
 
 
 </div>

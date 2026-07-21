@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import warnings
-from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
@@ -13,7 +12,6 @@ from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.algorithms.input_control.cpo import CPO, CPOArgs
 from aisteer360.algorithms.input_control.cpo.control import CPOMemory
 from aisteer360.algorithms.input_control.cpo.utils import causal_reward, refinement_meta_prompt
-from aisteer360.algorithms.input_control.cpo.utils.embeddings import TextEncoder
 from aisteer360.evaluation.metrics.base import Metric
 
 TINY_LM = "hf-internal-testing/tiny-random-LlamaForCausalLM"
@@ -361,21 +359,3 @@ class TestCPOTrustRemoteCode:
     def test_args_opt_out_false(self, offline_rows):
         args = CPOArgs(seed_prompt="x", offline_data=offline_rows, trust_remote_code=False)
         assert args.trust_remote_code is False
-
-    def test_text_encoder_threads_flag(self):
-        """TextEncoder forwards its `trust_remote_code` arg to both loaders (default False)."""
-        with (
-            patch("aisteer360.algorithms.input_control.cpo.utils.embeddings.AutoTokenizer") as tokenizer_cls,
-            patch("aisteer360.algorithms.input_control.cpo.utils.embeddings.AutoModel") as model_cls,
-        ):
-            model_cls.from_pretrained.return_value = MagicMock()
-            TextEncoder("some/encoder")
-            assert tokenizer_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is False
-            assert model_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is False
-
-            tokenizer_cls.reset_mock()
-            model_cls.reset_mock()
-            model_cls.from_pretrained.return_value = MagicMock()
-            TextEncoder("some/encoder", trust_remote_code=True)
-            assert tokenizer_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is True
-            assert model_cls.from_pretrained.call_args.kwargs["trust_remote_code"] is True

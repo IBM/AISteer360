@@ -38,24 +38,24 @@ nav:
     - Notebooks: examples/index.md
     - Controls:
       - Input control:
-        - CPO: "examples/notebooks/control_cpo/cpo.ipynb"
-        - FewShot: "examples/notebooks/control_few_shot/few_shot.ipynb"
-        - GEPA: "examples/notebooks/control_gepa/gepa.ipynb"
-        - PRewrite: "examples/notebooks/control_prewrite/prewrite.ipynb"
+        - CPO: "examples/notebooks/cpo.ipynb"
+        - FewShot: "examples/notebooks/few_shot.ipynb"
+        - GEPA: "examples/notebooks/gepa.ipynb"
+        - PRewrite: "examples/notebooks/prewrite.ipynb"
       - Structural control:
-        - MergeKit wrapper: "examples/notebooks/wrapper_mergekit/mergekit_wrapper.ipynb"
-        - TRL wrapper: "examples/notebooks/wrapper_trl/trl_wrapper.ipynb"
+        - MergeKit wrapper: "examples/notebooks/mergekit_wrapper.ipynb"
+        - TRL wrapper: "examples/notebooks/trl_wrapper.ipynb"
       - State control:
-        - ActAdd: "examples/notebooks/control_act_add/act_add.ipynb"
-        - CAA: "examples/notebooks/control_caa/caa.ipynb"
-        - CAST: "examples/notebooks/control_cast/cast.ipynb"
-        - ITI: "examples/notebooks/control_iti/iti.ipynb"
-        - PASTA: "examples/notebooks/control_pasta/pasta.ipynb"
+        - ActAdd: "examples/notebooks/act_add.ipynb"
+        - CAA: "examples/notebooks/caa.ipynb"
+        - CAST: "examples/notebooks/cast.ipynb"
+        - ITI: "examples/notebooks/iti.ipynb"
+        - PASTA: "examples/notebooks/pasta.ipynb"
       - Output control:
-        - DeAL: "examples/notebooks/control_deal/deal.ipynb"
-        - RAD: "examples/notebooks/control_rad/rad.ipynb"
-        - SASA: "examples/notebooks/control_sasa/sasa.ipynb"
-        - ThinkingIntervention: "examples/notebooks/control_thinking_intervention/thinking_intervention.ipynb"
+        - DeAL: "examples/notebooks/deal.ipynb"
+        - RAD: "examples/notebooks/rad.ipynb"
+        - SASA: "examples/notebooks/sasa.ipynb"
+        - ThinkingIntervention: "examples/notebooks/thinking_intervention.ipynb"
     - Benchmarks:
       - Commonsense MCQA: "examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb"
       - Instruction following: "examples/notebooks/benchmark_instruction_following/instruction_following.ipynb"
@@ -83,8 +83,10 @@ nav:
             - Base classes: reference/algorithms/state_control/base_state_control.md
             - Common library: reference/algorithms/state_control/_common.md
             - ActAdd: reference/algorithms/state_control/act_add.md
+            - Angular Steering: reference/algorithms/state_control/angular_steering.md
             - CAA: reference/algorithms/state_control/caa.md
             - CAST: reference/algorithms/state_control/cast.md
+            - Directional Ablation: reference/algorithms/state_control/directional_ablation.md
             - ITI: reference/algorithms/state_control/iti.md
             - PASTA: reference/algorithms/state_control/pasta.md
         - Output control:

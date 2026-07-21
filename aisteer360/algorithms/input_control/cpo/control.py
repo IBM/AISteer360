@@ -1,4 +1,4 @@
-"""CPO — causal prompt optimization.
+"""CPO, causal prompt optimization.
 
 Reference:
 
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CPOMemory:
-    """Custom Memory for CPO — holds the trained scorer and a query→best-prompt cache."""
+    """Custom Memory for CPO; holds the trained scorer and a query→best-prompt cache."""
     causal_scorer: CausalRewardScorer
     query_cache: dict[str, str] = field(default_factory=dict)
 
@@ -162,8 +162,8 @@ class CPO(InputControl):
         """Build ⟨query, prompt, score⟩ rows from `train_dataset` × proposer × metric.
 
         Each training row contributes `n_prompts_per_query` ⟨q, p, s⟩ triples (including the seed
-        prompt as one of them, so the seed is always in-distribution for the reward model). Scoring
-        is delegated to `TaskEvaluationScorer` with a one-row dev set per training query.
+        prompt as one of them, so the seed is always in-distribution for the reward model). Candidate
+        prompts are scored with `TaskEvaluationScorer` using a one-row dev set per training query.
         """
         if not self.train_dataset:
             raise RuntimeError("offline_data is None and train_dataset is empty; nothing to fit on.")
@@ -274,8 +274,8 @@ class CPO(InputControl):
         """B-wide, K-retained, R-round search from `seed_prompt`.
 
         Survivors of each round are carried into the next round's candidate pool (elitism), so the
-        search can never return a prompt that the trained reward model scores below the seed: if every
-        proposal scores worse, the seed simply survives every round and is returned.
+        search never returns a prompt that the trained reward model scores below the seed. When every
+        proposal scores worse, the seed survives every round and is returned.
         """
         survivors: list[str] = [self.seed_prompt]
         for _ in range(self.rounds):

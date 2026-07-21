@@ -1,4 +1,4 @@
-"""Proposers — produce candidate items from a seed."""
+"""Proposers produce candidate items from a seed."""
 from aisteer360.algorithms.input_control._common.proposers.base import BaseProposer
 from aisteer360.algorithms.input_control._common.proposers.llm_meta_prompt import (
     LLMMetaPromptProposer,

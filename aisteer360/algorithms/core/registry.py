@@ -1,13 +1,15 @@
 """
 Discovers steering methods at import‑time for cli reference.
 """
+import logging
 from importlib import import_module
 from pathlib import Path
-from typing import Dict, Type
 
-ROOT = Path(__file__).resolve().parents[1] / "algorithms"
+logger = logging.getLogger(__name__)
 
-REGISTRY: Dict[str, Dict[str, "SteeringMethod"]] = {}
+ROOT = Path(__file__).resolve().parent.parent
+
+REGISTRY: dict[str, dict[str, "SteeringMethod"]] = {}
 
 
 class SteeringMethod:
@@ -19,7 +21,7 @@ class SteeringMethod:
        control_cls: The control class implementation
        args_cls: The args dataclass for configuration
     """
-    def __init__(self, category: str, name: str, control_cls: Type, args_cls: Type):
+    def __init__(self, category: str, name: str, control_cls: type, args_cls: type):
         self.category = category
         self.name = name
         self.control_cls = control_cls
@@ -27,22 +29,28 @@ class SteeringMethod:
 
 
 def _crawl_methods() -> None:
-    """Auto-discover all steering methods by crawling the algorithms directory.
+    """Auto-discover all steering methods by recursively crawling the algorithms directory.
 
-    Looks for STEERING_METHOD export in each method's __init__.py and populates the global REGISTRY for CLI and
-    dynamic instantiation.
+    For each top-level category directory (input_control, structural_control, state_control,
+    output_control), walks all nested __init__.py files and imports any module that exports a
+    `STEERING_METHOD` dict. The exported dict is registered under the category's bucket keyed by
+    the method name.
     """
     for category_dir in ROOT.iterdir():
-        if not category_dir.is_dir():
+        if not category_dir.is_dir() or category_dir.name == "core":
             continue
-        category = category_dir.name
+        category = category_dir.name.removesuffix("_control")
 
-        for method_dir in category_dir.iterdir():
-            if not (method_dir / "__init__.py").exists():
+        for init_file in category_dir.rglob("__init__.py"):
+            rel_parts = init_file.relative_to(ROOT).parent.parts
+            if not rel_parts:
                 continue
-            module_path = f"aisteer360.algorithms.{category}.{method_dir.name}"
-            module = import_module(module_path)
-
+            module_path = "aisteer360.algorithms." + ".".join(rel_parts)
+            try:
+                module = import_module(module_path)
+            except ImportError as exc:
+                logger.warning("Skipping %s: missing optional dependency (%s).", module_path, exc)
+                continue
             method = getattr(module, "STEERING_METHOD", None)
             if method is None:
                 continue

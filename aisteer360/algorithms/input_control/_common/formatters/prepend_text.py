@@ -1,4 +1,4 @@
-"""PrependTextFormatter — prepend a raw text block to the user turn or input_ids."""
+"""Prepend a raw text block to the user turn or input_ids."""
 from __future__ import annotations
 
 import torch
@@ -20,7 +20,7 @@ class PrependTextFormatter(BaseFormatter):
         self.separator = separator
 
     def _resolve_text(self, memory: Memory) -> str:
-        text = memory.get("text")
+        text = memory["text"] if "text" in memory else memory.get("text")
         if not isinstance(text, str):
             raise TypeError(
                 f"PrependTextFormatter expects memory['text'] to be a str; got {type(text).__name__}."

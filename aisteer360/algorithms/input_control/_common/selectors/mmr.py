@@ -1,4 +1,4 @@
-"""MMRSelector — maximum marginal relevance for diversity."""
+"""Maximum marginal relevance for diversity."""
 from __future__ import annotations
 
 from typing import Any, Protocol, Sequence, TypeVar, runtime_checkable

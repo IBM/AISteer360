@@ -3,7 +3,7 @@ from __future__ import annotations
 import gc
 import logging
 import os
-from typing import Callable, Optional, Tuple
+from typing import Callable
 
 import numpy as np
 import torch
@@ -42,8 +42,8 @@ class RAD(OutputControl):
     step in this implementation and re-use the open-source toxicity reward model trained by the authors via
     gdown [https://storage.googleapis.com/rad_release/saved_models.zip](https://storage.googleapis.com/rad_release/saved_models.zip)
 
-    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by **beta * reward**,
-    where the *reward* is given by a trained reward model.
+    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by `beta * reward`,
+    where the `reward` is given by a trained reward model.
 
     Args:
         beta (float): Steering intensity. Defaults to 0.0.
@@ -79,9 +79,9 @@ class RAD(OutputControl):
 
         Sets up the reward model used for steering during generation. Supports two modes:
 
-        1. **HuggingFace classifier** (new path): When `reward_model_id` is set, loads any
+        1. **HuggingFace classifier**: When `reward_model_id` is set, loads any
            `AutoModelForSequenceClassification` compatible model from HuggingFace Hub.
-        2. **Legacy toxicity model** (original path): When `reward_path` is set (or neither is set),
+        2. **Legacy toxicity model**: When `reward_path` is set (or neither is set),
            loads the GPT-2 based toxicity classifier from the original RAD paper.
 
         Args:
@@ -351,13 +351,13 @@ class RewardAugmentedLogitsProcessorNoPkv(LogitsProcessor):
             topk_ids = torch.nonzero(indices_to_keep)[:,1].unsqueeze(0)
             self._topk = topk_ids.shape[1]
             del sorted_logits, sorted_indices, cumulative_probs, sorted_indices_to_keep, indices_to_keep
-            torch.cuda.empty_cache()  # Ensure immediate deallocation
+            torch.cuda.empty_cache()  # ensure immediate deallocation
         else:
-            _, topk_ids = torch.topk(scores, self._topk, dim=-1)                                    # (batch, topk,)
-        input_ids_enflated = input_ids.unsqueeze(1).expand((-1, self._topk, -1))                # (batch, topk, seq_len)
-        candidate_input_ids = torch.cat((input_ids_enflated, topk_ids.unsqueeze(-1)), dim=-1)   # (batch, topk, seq_len+1)
+            _, topk_ids = torch.topk(scores, self._topk, dim=-1)  # (batch, topk,)
+        input_ids_enflated = input_ids.unsqueeze(1).expand((-1, self._topk, -1))  # (batch, topk, seq_len)
+        candidate_input_ids = torch.cat((input_ids_enflated, topk_ids.unsqueeze(-1)), dim=-1)  # (batch, topk, seq_len+1)
         candidate_input_ids_unroll = candidate_input_ids.reshape((
-            candidate_input_ids.shape[0]*candidate_input_ids.shape[1], -1))         # (batch*topk, seq_len+1)
+            candidate_input_ids.shape[0]*candidate_input_ids.shape[1], -1))  # (batch*topk, seq_len+1)
         candidate_input_texts = self._lm_tokenizer.batch_decode(candidate_input_ids_unroll, skip_special_tokens=True)
 
         # return reward scores
@@ -447,12 +447,12 @@ class GPT2RewardModel(nn.Module):
 
     def forward(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        past_key_values: Optional[Tuple[torch.FloatTensor]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
+        input_ids: torch.Tensor | None = None,
+        past_key_values: tuple[torch.FloatTensor] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        token_type_ids: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        head_mask: torch.Tensor | None = None,
     ):
         """Forward pass through reward model.
 

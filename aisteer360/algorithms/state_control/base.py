@@ -29,7 +29,7 @@ See Also:
 """
 from abc import ABC, abstractmethod
 from dataclasses import fields
-from typing import Callable, Type
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -48,6 +48,10 @@ class StateControl(ABC):
 
     Modifies internal model states during forward passes via hooks.
 
+    A control instance holds per-generation state on `self` (e.g. position offsets, cached masks,
+    gate decisions) and therefore supports one in-flight generation at a time; do not share a single
+    control instance across concurrently running pipelines.
+
     Methods:
         get_hooks(input_ids, runtime_kwargs, **kwargs) -> dict: Create hook specs (required)
         steer(model, tokenizer, **kwargs) -> None: One-time preparation (optional)
@@ -56,7 +60,8 @@ class StateControl(ABC):
         remove_hooks() -> None: Remove all registered hooks (provided)
     """
 
-    Args: Type[BaseArgs] | None = None
+    Args: type[BaseArgs] | None = None
+    RUNTIME_KWARGS_SCHEMA: list[dict] = []
 
     enabled: bool = True
     supports_batching: bool = False
@@ -70,8 +75,11 @@ class StateControl(ABC):
 
         self.args: BaseArgs = self.Args.validate(*args, **kwargs)
 
-        # move fields to attributes
+        # move fields to attributes, skipping any name the control exposes as a property
+        # (e.g. CAST.condition_point); the raw value stays reachable via self.args.<name>
         for field in fields(self.args):
+            if isinstance(getattr(type(self), field.name, None), property):
+                continue
             setattr(self, field.name, getattr(self.args, field.name))
 
         self.hooks: dict[str, list[HookSpec]] = {"pre": [], "forward": [], "backward": []}
@@ -84,7 +92,16 @@ class StateControl(ABC):
         runtime_kwargs: dict | None,
         **kwargs,
     ) -> dict[str, list[HookSpec]]:
-        """Create hook specifications for the current generation."""
+        """Create hook specifications for the current generation.
+
+        Args:
+            input_ids: Prompt token ids of shape [batch, seq_len].
+            runtime_kwargs: Per-call parameters for the control.
+            **kwargs: Additional generation-time context. In particular, the pipeline forwards
+                `attention_mask` (the prompt attention mask matching `input_ids`, or None) here;
+                controls that score prompt tokens may consume it to align with the real (non-pad)
+                positions instead of re-deriving a mask by token identity.
+        """
         pass
 
     def steer(self,
@@ -95,17 +112,26 @@ class StateControl(ABC):
         pass
 
     def register_hooks(self, model: PreTrainedModel) -> None:
-        """Attach hooks to model."""
-        for phase in ("pre", "forward", "backward"):
-            for spec in self.hooks[phase]:
-                module = model.get_submodule(spec["module"])
-                if phase == "pre":
-                    handle = module.register_forward_pre_hook(spec["hook_func"], with_kwargs=True)
-                elif phase == "forward":
-                    handle = module.register_forward_hook(spec["hook_func"], with_kwargs=True)
-                else:
-                    handle = module.register_full_backward_hook(spec["hook_func"])
-                self.registered.append(handle)
+        """Attach hooks to model.
+
+        If registration fails partway (e.g. an unresolved module path), any handles already
+        attached are removed before re-raising, so a partial `__enter__` never leaves hooks on the
+        model for subsequent, unrelated generations (`__exit__` is not called when `__enter__` raises).
+        """
+        try:
+            for phase in ("pre", "forward", "backward"):
+                for spec in self.hooks[phase]:
+                    module = model.get_submodule(spec["module"])
+                    if phase == "pre":
+                        handle = module.register_forward_pre_hook(spec["hook_func"], with_kwargs=True)
+                    elif phase == "forward":
+                        handle = module.register_forward_hook(spec["hook_func"], with_kwargs=True)
+                    else:
+                        handle = module.register_full_backward_hook(spec["hook_func"])
+                    self.registered.append(handle)
+        except Exception:
+            self.remove_hooks()
+            raise
 
     def remove_hooks(self) -> None:
         """Remove all registered hooks from the model."""

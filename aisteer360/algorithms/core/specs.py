@@ -9,9 +9,9 @@ import itertools
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, Type
+from typing import Any, Callable, Iterable, Literal, Mapping, Sequence
 
-# The type of the search space for a ControlSpec:
+# the type of the search space for a ControlSpec:
 #   - Mapping[str, Sequence[Any]]: intervals (cartesian product)
 #   - Sequence[Mapping[str, Any]]: list of parameter dicts
 #   - Callable[[dict], Iterable[Mapping[str, Any]]]: generates dicts given a context
@@ -41,7 +41,7 @@ class ControlSpec:
         seed: Optional random seed used when `search_strategy="random"`.
     """
 
-    control_cls: Type
+    control_cls: type
     params: Mapping[str, Any] = field(default_factory=dict)
     vars: Space | None = None
     name: str | None = None

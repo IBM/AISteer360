@@ -1,12 +1,12 @@
 """Reward-function adapters for GRPO-trained PRewrite rewriters.
 
-Wraps a `TaskEvaluationScorer` (the same metric-in-the-loop reward used by PRewrite-S selection) into
-the callable shape TRL's `GRPOTrainer` expects: `reward_func(prompts, completions, **kwargs)` returning
-one float per completion. This is the paper's reward (Kong et al., 2024): apply the rewritten
-instruction with the frozen task model over a dev set and score the answers with a `Metric`.
+Wraps a `TaskEvaluationScorer` into the callable shape TRL's `GRPOTrainer` expects,
+`reward_func(prompts, completions, **kwargs)`, returning one float per completion. The reward applies
+the rewritten instruction with the frozen task model over a dev set and scores the answers with a
+`Metric` (Kong et al., 2024).
 
-Verified against trl==0.16.1: for a callable reward, `GRPOTrainer` calls
-`reward_func(prompts=prompts, completions=completions, **reward_kwargs)`; completions are plain strings
+For a callable reward on trl==0.16.1, `GRPOTrainer` calls
+`reward_func(prompts=prompts, completions=completions, **reward_kwargs)`. Completions are plain strings
 when the dataset `"prompt"` column is text (the PRewrite case) and conversational message lists when it
 is a chat. Both shapes are handled here.
 """
@@ -35,7 +35,7 @@ def make_metric_reward_func(
     """Wrap a `TaskEvaluationScorer` as a GRPO reward function.
 
     Each completion is a candidate rewritten instruction; its reward is the scorer's dev-set metric for
-    that instruction. Identical rewrites are scored once and the result reused: PRewrite rewrites are
+    that instruction. Identical rewrites are scored once and the result reused. PRewrite rewrites are
     input-agnostic (the rewriter sees only the seed meta-prompt, not the task inputs), so a generation
     group often contains duplicates.
 

@@ -1,4 +1,4 @@
-"""Selectors — pick `k` items from a pool, optionally query-conditioned."""
+"""Selectors pick `k` items from a pool, optionally query-conditioned."""
 from aisteer360.algorithms.input_control._common.selectors.base import BaseSelector
 from aisteer360.algorithms.input_control._common.selectors.dense_retrieval import (
     DenseRetrievalSelector,

@@ -20,7 +20,7 @@ __all__ = [
     "to_jsonable",
 ]
 
-# Viz utils are optional (require matplotlib)
+# viz utils are optional (require matplotlib)
 try:
     from aisteer360.evaluation.utils.viz_utils import (
         plot_comparison_bars,
