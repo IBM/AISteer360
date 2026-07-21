@@ -36,7 +36,7 @@ class ActivationAdapterArgs(BaseArgs):
     its own artifact), one selector, one gate, one token scope. It exposes the `_common` component
     families as constructor slots so a recipe can be assembled without writing a new control class.
 
-    The transform is the sole artifact carrier: it holds a concrete `SteeringVector`/directions
+    The transform is the sole artifact carrier. It holds a concrete `SteeringVector`/directions
     mapping, or an `ArtifactSource` (e.g. `ContrastiveFit(data=...)`) resolved at `steer()` time.
     Artifact kwargs passed to the adapter (`steering_vector`, `data`, `train_spec`, `estimator`,
     `estimator_kwargs`, `strength`, `normalize_vector`) raise a `TypeError` naming the

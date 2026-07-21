@@ -29,11 +29,11 @@ class SASA(OutputControl):
 
     SASA works in two phases:
 
-    1. **Subspace learning**: From a labelled toxic / non-toxic corpus, it fits a linear classifier in the model’s
-    own sentence-embedding space; the weight vector defines a toxicity subspace.
+    1. **Subspace learning**: From a labelled toxic / non-toxic corpus, it fits a linear classifier in the model's
+    own sentence-embedding space, and the weight vector defines a toxicity subspace.
 
-    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by **beta * margin**,
-    where *margin* is the classifier distance of the updated context from the toxic side of the subspace.  Sampling
+    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by `beta * margin`,
+    where `margin` is the classifier distance of the updated context from the toxic side of the subspace. Sampling
     from the soft-max of these adjusted logits (optionally with nucleus sampling) nudges generation away from
     toxic regions while staying close to the original distribution.
 

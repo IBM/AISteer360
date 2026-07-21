@@ -1,4 +1,4 @@
-"""GEPA — reflective prompt optimization (single-system-prompt variant)."""
+"""GEPA, reflective prompt optimization (single-system-prompt variant)."""
 from __future__ import annotations
 
 import logging
@@ -36,42 +36,39 @@ logger = logging.getLogger(__name__)
 
 
 class GEPA(InputControl):
-    """GEPA — reflective prompt optimization (single-system-prompt variant).
+    """GEPA, reflective prompt optimization (single-system-prompt variant).
 
     Optimizes a single system prompt via GEPA's reflective genetic search (Agrawal et al.,
-    2025). This is a faithful instantiation of the GEPA algorithm restricted to the 
-    single-module (|M| = 1) case. It implements:
+    2025), restricted to the single-module (|M| = 1) case. It implements:
 
       - Reflective prompt mutation: an LLM rewrites the current instruction using
-        natural-language feedback drawn from rollouts (the paper's "learn in language
-        space" idea).
-      - Pareto-based candidate selection: rather than always evolving the global best, GEPA
-        keeps an instance-wise Pareto frontier over a held-out set and samples parents by
-        win-frequency, mitigating local optima (paper section 3.1, Algorithm 2).
+        natural-language feedback drawn from rollouts.
+      - Pareto-based candidate selection: GEPA keeps an instance-wise Pareto frontier over a
+        held-out set and samples parents by win-frequency (paper section 3.1, Algorithm 2).
       - A genetic candidate pool that accumulates lessons across successive mutations.
 
     Scope:
 
       - This control optimizes ONE system prompt. It does NOT support compound, multi-module
         AI systems, and it does NOT implement the system-aware merge / crossover operator
-        (GEPA+Merge). Merge is intrinsically a multi-module operation -- it recombines
-        complementary modules across lineages -- and is vacuous with a single prompt.
+        (GEPA+Merge). Merge is a multi-module operation that recombines complementary modules
+        across lineages, and is vacuous with a single prompt.
       - For compound, multi-module / multi-prompt optimization with module-level credit
         assignment and merge, use the reference implementation at
         [https://github.com/gepa-ai/gepa](https://github.com/gepa-ai/gepa) (or DSPy's GEPA
         integration).
 
-    Scoring is supplied directly: a per-example `row_scorer` (the paper's metric `µ` at the
-    instance level -- required because Pareto selection needs per-instance scores), an optional
-    `feedback_fn` returning the textual feedback GEPA reflects on (the paper's `µf`), and a
-    `format_query` mapping a dataset row to the user query. GEPA runs generation, scoring, and
-    feedback internally; there is no separate Evaluator object.
+    Scoring is supplied directly through a per-example `row_scorer` (the paper's metric `µ` at
+    the instance level, required because Pareto selection needs per-instance scores), an
+    optional `feedback_fn` returning the textual feedback GEPA reflects on (the paper's `µf`),
+    and a `format_query` mapping a dataset row to the user query. GEPA runs generation, scoring,
+    and feedback internally; there is no separate Evaluator object.
 
     `adapt_messages()` / `adapt()` inject the optimized instruction as the system prompt at
     inference time. Memory: `TextMemory(slots={"instruction": best_instruction})`.
 
-    Note on `reflection_lm`: optional; defaults to the task model. A separate, stronger
-    reflection LM can help when the task model is small, but is not required.
+    `reflection_lm` is optional and defaults to the task model. A separate, stronger reflection
+    LM can help when the task model is small, but is not required.
 
     Reference:
 

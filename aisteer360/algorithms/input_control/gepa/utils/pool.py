@@ -1,4 +1,4 @@
-"""CandidatePool — GEPA's genetic candidate pool with a Pareto score matrix.
+"""CandidatePool, GEPA's genetic candidate pool with a Pareto score matrix.
 
 Holds the candidate instructions and the `[n_candidates, n_instances]` score matrix over D_pareto.
 """

@@ -1,7 +1,7 @@
 """Frequency-weighted Pareto sampling for GEPA's parent selection (Agrawal et al., 2025, Algorithm 2).
 
-Sample one candidate from the Pareto illumination set Ĉ — the per-instance winners pruned of dominated
-candidates — with probability proportional to win-frequency `f[·]`. Falls back to uniform over the pool
+Sample one candidate from the Pareto illumination set Ĉ, the per-instance winners pruned of dominated
+candidates, with probability proportional to win-frequency `f[·]`. Falls back to uniform over the pool
 only when the illumination set is empty (a degenerate score matrix).
 """
 from __future__ import annotations

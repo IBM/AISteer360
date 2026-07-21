@@ -75,9 +75,9 @@ def render_for_model(
               content token is the completion's final token (correct for
               `accumulate="last_token"`). For prompt+answer contrastive pairs (CAA).
             - `"chat_prompt"`: render `prompt` as a user turn with generation
-              prompt; no completion. Byte-identical to what inference produces for
-              a prompt. For standalone-prompt contrasts (CAST condition) and for
-              the inference path itself.
+              prompt and no completion, producing the prompt as inference renders
+              it. For standalone-prompt contrasts (CAST condition) and for the
+              inference path itself.
 
     Returns:
         The rendered string. Falls back to `raw` (with a warning) when chat

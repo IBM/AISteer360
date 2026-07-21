@@ -62,8 +62,8 @@ def build_structured_parser(scale):
         scale (tuple[float, float]): A ``(low, high)`` tuple specifying the valid inclusive range for the score.
 
     Returns:
-        A tuple of ``(format_instructions: str, parse_fn)`` where *format_instructions*
-        is the instruction string to append to the judge prompt and *parse_fn(text, scale)*
+        A tuple of ``(format_instructions: str, parse_fn)`` where `format_instructions`
+        is the instruction string to append to the judge prompt and `parse_fn(text, scale)`
         returns a clamped float score.
     """
     low, high = scale
@@ -276,8 +276,8 @@ class LLMJudgeMetric(Metric):
     def score_rendered(self, rendered_prompts: list[str]) -> dict[str, Any]:
         """Run the judge LM on already-rendered prompts and parse scores.
 
-        Used internally by ``compute()``. Bypasses prompt-template formatting and format-instructions
-        injection — assumes the caller has done both already.
+        Used internally by ``compute()``. Prompt-template formatting and format-instructions
+        injection are skipped, so the caller must have applied both already.
 
         Args:
             rendered_prompts: Prompts already formatted (template-substituted and chat-wrapped if applicable).

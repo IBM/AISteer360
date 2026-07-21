@@ -1,4 +1,4 @@
-"""LLMMetaPromptProposer — sample candidates from an LLM via a templated meta-prompt."""
+"""Sample candidates from an LLM via a templated meta-prompt."""
 from __future__ import annotations
 
 from typing import Any, Callable

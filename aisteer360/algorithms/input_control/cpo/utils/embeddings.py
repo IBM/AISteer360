@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TextEncoder:
-    """Mean-pooled HF encoder. Not a `BaseScorer` — this is purely a featurizer for CPO's reward model."""
+    """Mean-pooled HF encoder. Not a `BaseScorer`; this is purely a featurizer for CPO's reward model."""
 
     def __init__(
         self,

@@ -18,20 +18,20 @@ class AlignmentAdaptiveTransform(BaseTransform):
 
     Computes each token's projection onto a chosen direction and keeps only positions whose
     alignment exceeds `threshold`; those at or below are removed from the token mask before the
-    inner transform runs. With `threshold=0.0` this reproduces the paper's Adaptive Angular
-    Steering gate `mask = max(0, sign(h·d_feat))` (Eq. 3), which improves coherence on smaller
-    models by rotating only tokens already positively aligned with the feature axis. Because it
-    only narrows the mask, it composes with ANY `BaseTransform` (e.g., adaptive CAA/ITI for free).
+    inner transform runs. With `threshold=0.0` this applies the Adaptive Angular Steering gate
+    `mask = max(0, sign(h·d_feat))` (Eq. 3 of Vu and Nguyen), which rotates only tokens already
+    positively aligned with the feature axis. Because it only narrows the mask, it composes with
+    any `BaseTransform`.
 
-    The transform carries two artifacts — the inner transform's, and its own alignment axis — and
-    is bound iff both are bound. `bind` recurses into the inner and resolves its own source; the
-    two may share the same source instance (memoization makes the shared fit run once).
+    The transform carries two artifacts, the inner transform's and its own alignment axis, and is
+    bound iff both are bound. `bind` recurses into the inner and resolves its own source; the two
+    may share the same source instance, in which case memoization runs the shared fit once.
 
     Args:
         inner: The transform to apply at the surviving positions.
-        artifact: The steering artifact whose per-layer directions supply the alignment axis — a
-            `SteeringVector`, a per-layer directions mapping, or an `ArtifactSource` (unbound until
-            `bind(ctx)`). The axis used is `directions[layer_id][direction_index]`. Required.
+        artifact: The steering artifact whose per-layer directions supply the alignment axis, given
+            as a `SteeringVector`, a per-layer directions mapping, or an `ArtifactSource` (unbound
+            until `bind(ctx)`). The axis used is `directions[layer_id][direction_index]`. Required.
         threshold: Alignment cutoff; positions with alignment `> threshold` survive.
         direction_index: Row of the per-layer direction tensor to use as the alignment axis
             (row 0 = feature axis for angular steering).

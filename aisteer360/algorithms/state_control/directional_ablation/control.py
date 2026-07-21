@@ -31,24 +31,23 @@ class DirectionalAblation(StateControl):
     """Directional Ablation (feature removal via projection).
 
     Removes a learned feature direction from the residual stream at one or more layers during
-    generation, `h' = h - alpha * (d_hat^T h) d_hat` at masked positions. This is the
-    "abliteration" technique of Arditi et al.: learn a direction (difference-in-means over
-    contrastive data, exactly as CAA) and project it out.
+    generation, `h' = h - alpha * (d_hat^T h) d_hat` at masked positions. This is the abliteration
+    technique of Arditi et al., which learns a direction as the difference in means over
+    contrastive data and projects it out.
 
     The method operates in two phases:
 
-    1. **Training (offline)**: identical to CAA. Extract residual activations for contrastive
-       pairs and take the mean difference (or PCA of paired differences) as the feature direction.
-       A precomputed direction (or an orthonormal subspace, `K > 1`) may be supplied directly.
+    1. Training (offline). Extract residual activations for contrastive pairs and take the mean
+       difference, or the PCA of paired differences, as the feature direction. A precomputed
+       direction (or an orthonormal subspace, `K > 1`) may be supplied directly.
 
-    2. **Inference (online)**: at each target layer's output, project the direction out of the
+    2. Inference (online). At each target layer's output, project the direction out of the
        residual stream at masked positions. `alpha = 1.0` fully removes the component
        (`h'.d_hat == 0`); `alpha < 1.0` gives graded partial suppression.
 
-    Ablation is a projection (idempotent at `alpha=1`, norm-reducing). 
-    
-    It can compose with the alignment-adaptive gate (`AlignmentAdaptiveTransform`) to ablate only 
-    where the feature is present.
+    Ablation is a projection (idempotent at `alpha=1`, norm-reducing). It can compose with the
+    alignment-adaptive gate (`AlignmentAdaptiveTransform`) to ablate only where the feature is
+    present.
 
     Reference:
 

@@ -1,4 +1,4 @@
-"""DenseRetrievalSelector — pick nearest neighbors of a query in a dense embedding space."""
+"""Pick nearest neighbors of a query in a dense embedding space."""
 from __future__ import annotations
 
 from typing import Any, Protocol, Sequence, TypeVar, runtime_checkable

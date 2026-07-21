@@ -1,6 +1,6 @@
 """Self-refinement meta-prompt for CPO.
 
-Tracks Appendix EC.3 of Chen et al., 2026 (arXiv:2602.01711) — adapted to a single `{seed}` placeholder
+Follows Appendix EC.3 of Chen et al., 2026 (arXiv:2602.01711), with a single `{seed}` placeholder
 so it composes with the common `LLMMetaPromptProposer`.
 """
 

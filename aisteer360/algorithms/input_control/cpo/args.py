@@ -9,7 +9,7 @@ from aisteer360.algorithms.core.base_args import BaseArgs
 
 @dataclass
 class CPOArgs(BaseArgs):
-    """Arguments for CPO — causal prompt optimization (Chen et al. 2026)."""
+    """Arguments for CPO, causal prompt optimization (Chen et al. 2026)."""
 
     seed_prompt: str = field(
         default="",

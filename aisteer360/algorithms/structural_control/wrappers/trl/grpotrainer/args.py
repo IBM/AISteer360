@@ -8,16 +8,15 @@ from aisteer360.algorithms.structural_control.wrappers.trl.args import TRLArgs
 class GRPOArgs(TRLArgs):
     """Arguments for GRPO training via TRL's `GRPOTrainer`.
 
-    GRPO (group-relative policy optimization) is critic-free, so unlike the PPO wrapper it needs no
-    reward model and no value model. The reward is supplied as one or more callables via
+    GRPO (group-relative policy optimization) is critic-free, so it needs no reward model and no
+    value model. The reward is supplied as one or more callables via
     `reward_funcs`; each is called as `reward_func(prompts, completions, **kwargs)` and must return a
     list of floats (one per completion). `num_generations` is the group size used to compute the
     group-relative advantage; `beta` is the KL-to-reference coefficient (set `beta=0.0` to disable the
     reference model entirely).
 
-    Verified against trl 0.27 with transformers 4.57: `GRPOTrainer` reads a text `"prompt"` column
-    directly (no pre-tokenization) and `num_generations` must be >= 2 and evenly divide the global
-    train batch size.
+    `GRPOTrainer` reads a text `"prompt"` column directly with no pre-tokenization, and
+    `num_generations` must be >= 2 and evenly divide the global train batch size.
     """
 
     reward_funcs: Callable | list[Callable] | None = field(

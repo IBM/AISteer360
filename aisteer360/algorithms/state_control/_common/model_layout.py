@@ -1,9 +1,8 @@
-"""Single source of truth for architecture-specific module paths.
+"""Architecture-specific module paths for state controls.
 
 `ModelLayout` names the decoder layer prefix, attention/output-projection suffixes, and
 normalization sub-module attributes for one model family. `resolve_model_layout` maps a
-`PreTrainedModel` to its layout by trying an ordered registry of family detectors, so every
-state control derives module paths from one place and a new family is one registry entry.
+`PreTrainedModel` to its layout by trying an ordered registry of family detectors.
 """
 from __future__ import annotations
 
@@ -89,8 +88,7 @@ _DETECTORS: list[Callable[[PreTrainedModel], ModelLayout | None]] = [
 def resolve_model_layout(model: PreTrainedModel) -> ModelLayout:
     """Resolve the `ModelLayout` for a HuggingFace causal LM.
 
-    Tries each registered family detector in order and returns the first match. Adding a model
-    family is one new detector appended to `_DETECTORS`.
+    Tries each registered family detector in order and returns the first match.
 
     Args:
         model: A HuggingFace causal LM.

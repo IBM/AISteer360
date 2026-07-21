@@ -1,6 +1,6 @@
-"""Scorers: packaged condition-scoring callables for gate condition paths.
+"""Packaged condition-scoring callables for gate condition paths.
 
-A condition scorer maps a layer's hidden states to **per-row** condition scores:
+A condition scorer maps a layer's hidden states to per-row condition scores:
 
     scorer(hidden [B, T, H], layer_id, *, prompt_mask [B, T] | None) -> Tensor [B]
 
@@ -8,8 +8,8 @@ A condition scorer maps a layer's hidden states to **per-row** condition scores:
 the runtime only on the prefill pass; on decode passes it is None and `hidden` is the newly
 generated token(s). `B` here is the batch the hook observes (possibly beam-expanded); the
 runtime collapses scores down to logical rows before feeding the gate. Returning a python
-float is permitted only for single-prompt generation — for batches, scorers must be per-row so
-batched generation matches per-item generation exactly.
+float is permitted only for single-prompt generation; for batches, scorers must return per-row
+scores.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def _extract_directions(artifact: SteeringVector | Mapping[int, torch.Tensor], w
 class CosineDirectionScorer:
     """Per-row cosine similarity between the last real token and a per-layer direction.
 
-    Scores each row's **last real token** hidden state (per `prompt_mask` when given, else the
+    Scores each row's last real token hidden state (per `prompt_mask` when given, else the
     final position) against the layer's steering direction (the first row when the artifact
     stores `[K, H]`). Returns zeros for layers absent from the artifact. Device/dtype casting is
     handled internally.
@@ -84,19 +84,19 @@ class CosineDirectionScorer:
 
 
 class ProjectedCosineScorer:
-    """CAST's condition score: projected-cosine similarity of aggregated prompt states, per row.
+    """Projected-cosine similarity of aggregated prompt states, per row.
 
-    For each condition layer, hidden states are aggregated over real (non-pad) tokens —
-    `"mean"` pools, `"last"` selects the last real token — and scored as the cosine similarity
+    For each condition layer, hidden states are aggregated over real (non-pad) tokens, where
+    `"mean"` pools and `"last"` selects the last real token, then scored as the cosine similarity
     between the aggregate and its tanh'd rank-one projection onto the condition direction
-    (`projected_cosine_similarity_tensor`). One score per batch row, so a `MultiKeyThresholdGate`
-    downstream gates each prompt independently.
+    (`projected_cosine_similarity_tensor`). One score is produced per batch row, so each prompt is
+    gated independently downstream.
 
     Projectors are built lazily from the per-layer directions and cached per
     `(layer_id, device)`; directions with `[K, H]` storage use row 0.
 
     Args:
-        artifact: Condition directions — a `SteeringVector` or `Mapping[int, torch.Tensor]`.
+        artifact: Condition directions, a `SteeringVector` or `Mapping[int, torch.Tensor]`.
         comparison_mode: Aggregation over prompt tokens: `"mean"` or `"last"`.
 
     Reference:

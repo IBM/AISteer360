@@ -1,4 +1,4 @@
-"""TaskEvaluationScorer — run the task LM on a dev set under each prompt and aggregate via a Metric."""
+"""Run the task LM on a dev set under each prompt and aggregate via a Metric."""
 from __future__ import annotations
 
 import logging
@@ -60,8 +60,7 @@ class TaskEvaluationScorer(BaseScorer):
         return self.dev_set
 
     def _generate_responses(self, prompt: str, dev_rows: list[dict]) -> list[str]:
-        """Generate responses for all dev rows under a single candidate prompt (delegates to the
-        shared `generate_with_system_prompt` helper)."""
+        """Generate responses for all dev rows under a single candidate prompt."""
         queries = [self.format_query(row) for row in dev_rows]
         return generate_with_system_prompt(
             self.task_lm, self.tokenizer, prompt, queries, gen_kwargs=self.gen_kwargs

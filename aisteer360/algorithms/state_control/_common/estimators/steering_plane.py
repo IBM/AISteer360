@@ -19,8 +19,8 @@ class SteeringPlaneEstimator(BaseEstimator[SteeringVector]):
 
     The plane is built offline in three steps:
 
-    1. Per-layer feature axis via difference-in-means, delegated to `MeanDifferenceEstimator`
-        (shares CAA's hidden-state extraction, rendering, and padding).
+    1. Per-layer feature axis computed as the difference in means between positive and negative
+        activations.
     2. One global companion axis: the first PCA component across the stacked per-layer feature
         directions.
     3. Per-layer Gram-Schmidt into an orthonormal `(b1, b2)`, with `b1 = normalize(d_feat)` and

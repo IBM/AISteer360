@@ -1,4 +1,4 @@
-"""EPRSelector — learned dense retriever for few-shot example selection.
+"""EPRSelector, a learned dense retriever for few-shot example selection.
 
 Reference:
 
@@ -29,9 +29,8 @@ logger = logging.getLogger(__name__)
 class EPRSelector(DenseRetrievalSelector):
     """Learned dense retriever for few-shot example selection (EPR).
 
-    Inherits the runtime selection logic from `DenseRetrievalSelector` (encode query, find nearest in
-    the example pool by cosine similarity over precomputed embeddings). Its `prepare()` runs the EPR
-    training procedure:
+    At runtime, `select()` encodes the query and returns the nearest items in the example pool by
+    cosine similarity over precomputed embeddings. Its `prepare()` runs the EPR training procedure:
 
       1. For each training pair `(x, y)`, use BM25 over `y` to retrieve a candidate set of size
          `candidate_set_size`.

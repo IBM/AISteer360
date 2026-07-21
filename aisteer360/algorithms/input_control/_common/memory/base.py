@@ -1,4 +1,4 @@
-"""Memory Protocol — the structural contract for input-control state."""
+"""The structural contract for input-control state."""
 from __future__ import annotations
 
 from pathlib import Path

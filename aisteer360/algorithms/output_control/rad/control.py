@@ -42,8 +42,8 @@ class RAD(OutputControl):
     step in this implementation and re-use the open-source toxicity reward model trained by the authors via
     gdown [https://storage.googleapis.com/rad_release/saved_models.zip](https://storage.googleapis.com/rad_release/saved_models.zip)
 
-    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by **beta * reward**,
-    where the *reward* is given by a trained reward model.
+    2. **Controlled decoding**: At every decoding step the candidate-token logits are shifted by `beta * reward`,
+    where the `reward` is given by a trained reward model.
 
     Args:
         beta (float): Steering intensity. Defaults to 0.0.
@@ -79,9 +79,9 @@ class RAD(OutputControl):
 
         Sets up the reward model used for steering during generation. Supports two modes:
 
-        1. **HuggingFace classifier** (new path): When `reward_model_id` is set, loads any
+        1. **HuggingFace classifier**: When `reward_model_id` is set, loads any
            `AutoModelForSequenceClassification` compatible model from HuggingFace Hub.
-        2. **Legacy toxicity model** (original path): When `reward_path` is set (or neither is set),
+        2. **Legacy toxicity model**: When `reward_path` is set (or neither is set),
            loads the GPT-2 based toxicity classifier from the original RAD paper.
 
         Args:

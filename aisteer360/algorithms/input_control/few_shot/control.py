@@ -124,9 +124,8 @@ class FewShot(InputControl):
     ) -> list[int] | torch.Tensor:
         """Add few-shot examples to the model's prompt and return adapted token ids.
 
-        Both the chat-template path and the no-template fallback are routed through the resolved
-        `BaseFormatter`, so token-level (`adapt`) and message-level (`adapt_messages`) calls produce
-        structurally identical example blocks from the same pool.
+        Both the chat-template path and the no-template fallback route through the resolved
+        `BaseFormatter`, which renders the example block from the pool.
 
         Assumes `input_ids` represents the user's prompt before any chat templating. Pre-templated
         input will be re-templated and produce malformed output; use `adapt_messages` for chat input.

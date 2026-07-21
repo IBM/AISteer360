@@ -29,13 +29,12 @@ class AdditiveTransform(BaseTransform):
 
         Each vector is placed at its alignment-offset position.
         Positions outside [0, seq_len) are silently clipped.
-        During KV-cached generation (seq_len=1), the alignment range
-        [a, a+T) never intersects [0, 1), so no injection occurs —
-        prefill-only semantics emerge from the geometry.
+        During KV-cached generation, where seq_len is 1, the alignment range
+        [a, a+T) does not intersect [0, 1), so injection occurs only during prefill.
 
     Args:
-        artifact: The steering artifact — a `SteeringVector`, a per-layer directions mapping
-            (`Mapping[int, Tensor]`, each `[T, H]`), or an `ArtifactSource` (unbound until
+        artifact: The steering artifact, given as a `SteeringVector`, a per-layer directions
+            mapping (`Mapping[int, Tensor]`, each `[T, H]`), or an `ArtifactSource` (unbound until
             `bind(ctx)`). Required.
         strength: Global scaling factor.
         alignment: Starting position for positional injection (default: 0).

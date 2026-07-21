@@ -135,9 +135,9 @@ class ITI(StateControl):
 
         Registers a pre-hook on each active layer's o_proj. Each pre-hook modifies the input to
         o_proj (the concatenated per-head attention outputs) by adding direction vectors to the
-        appropriate head slices, at the positions selected by `token_scope`. This matches the
-        paper's intervention point: after Att, before Q^h_l (the output projection). Position
-        bookkeeping is delegated to the shared runtime (the lowest active layer opens the pass).
+        appropriate head slices, at the positions selected by `token_scope`. The intervention
+        point is after Att and before the output projection Q^h_l. The shared runtime tracks
+        position, and the lowest active layer opens the pass.
 
         Args:
             input_ids: Input token IDs.

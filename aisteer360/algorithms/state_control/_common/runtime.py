@@ -1,33 +1,27 @@
 """Shared hook runtime for transform-based state controls.
 
-`TransformHookRuntime` encapsulates the hook-body logic common to residual-stream state controls
-(hidden-state extraction/re-wrap, KV-cache position bookkeeping, token-scope masking, condition
-scoring, and gated transform application). One runtime instance is held per control and owns that
-control's per-generation mutable state.
+`TransformHookRuntime` builds the hook closures used by residual-stream state controls and
+owns one control's per-generation mutable state. It covers hidden-state extraction and
+re-wrapping, KV-cache position tracking, token-scope masking, condition scoring, and gated
+transform application. Three behaviors define the runtime's contract:
 
-Position bookkeeping — the shared KV-cache offset. During autoregressive generation the model
-processes the full prompt on the prefill pass, then a single new token per decode pass — but with
-multiple hooked layers, every layer's hook fires once per forward pass. The offset must therefore
-advance exactly **once per forward pass**, not once per hook call. The runtime designates the
-first-firing hook of each pass as the *pass opener* (the lowest hooked layer; for multiple hooked
-modules within a layer, the earliest in execution order): on each call it snapshots the current
-offset as the pass offset and advances the offset by the sequence length; every other hook in that
-pass reads the snapshot. This is the mirror image of the designated-*closer* pattern (advance on the
-last hook), chosen because every subsequent same-pass hook then reads a stable snapshot regardless of
-which hook executes last.
+1. **Position tracking**: The model processes the full prompt on the prefill pass and one
+    new token per decode pass, and every hooked layer fires once per forward pass. The
+    position offset therefore advances once per pass rather than once per hook call. Exactly
+    one hook per generation is designated the pass opener, by convention the lowest hooked
+    layer. On each pass the opener snapshots the current offset and advances it by the
+    observed sequence length, and every other hook in that pass reads the snapshot.
 
-Row gating — logical rows vs. the hidden batch. Gates hold one decision per *logical* row (one per
-prompt); HuggingFace `generate` may expand the hidden batch to `B_logical * num_beams` via
-`repeat_interleave`. The runtime owns both directions of that mapping: condition scores computed on
-the expanded batch are collapsed to logical rows (first beam of each group) before `gate.update()`,
-and `gate.open_rows()` is re-expanded and ANDed into the token mask before a transform fires. Beam
-siblings of one prompt therefore always share that prompt's decision, and batched generation gates
-each prompt independently — matching what per-item generation would do.
+2. **Row gating**: Gates hold one decision per logical row, one per prompt. HuggingFace
+    `generate` may expand the hidden batch to `B_logical * num_beams` via
+    `repeat_interleave`. The runtime collapses condition scores from the expanded batch to
+    logical rows before calling `gate.update()`, and expands `gate.open_rows()` back to the
+    hidden batch before masking hidden states. Beam siblings of one prompt share that
+    prompt's decision, and each prompt in a batch is gated independently.
 
-Condition scoring is evidence-driven, not pass-counted: a condition hook stops scoring as soon as
-its gate reports `is_ready()`. A `CacheOnceGate` over threshold evidence therefore yields
-"score the prompt once, freeze, and never rescore" with no first-call flag anywhere, while a gate
-that never reports ready keeps re-scoring every pass (dynamic conditions).
+3. **Condition scoring**: A condition hook computes scores only while its gate still expects
+    evidence. Scoring stops for the remainder of the generation once `gate.is_ready()`
+    returns True.
 """
 from __future__ import annotations
 
@@ -70,7 +64,7 @@ class TransformHookRuntime:
             pre-hooks; hidden states are extracted from the module's inputs via
             `extract_hidden_states` and re-injected via `replace_hidden_states`. Valid for any
             module receiving `hidden_states` as its first positional argument or as the
-            ``hidden_states=`` kwarg — decoder layers, attention output projections
+            ``hidden_states=`` kwarg, such as decoder layers, attention output projections
             (`o_proj`/`c_proj`), and per-layer norm sub-modules.
     """
 
@@ -100,7 +94,7 @@ class TransformHookRuntime:
             prompt_mask: Optional pad-aware prompt attention mask of shape
                 ``[B_logical, T_prompt]`` (True/1 at real tokens). Forwarded to condition scorers
                 on the prefill pass so condition scores align with the real (non-pad) prompt
-                positions — the same mask the selector calibrated on.
+                positions, matching the mask the selector calibrated on.
         """
         self._prompt_lens = prompt_lens
         if prompt_mask is not None:
@@ -171,9 +165,9 @@ class TransformHookRuntime:
         """Collapse per-hidden-row scores down to the logical rows the gate holds.
 
         Beam search expands the batch via `repeat_interleave` (`[i0, i0, i1, i1]`), so the first
-        member of each group represents its logical row — the same convention as
-        `align_mask_to_batch`, in reverse. Scores already at logical size pass through; a bare
-        float passes through for the gate to validate (accepted only when `num_rows == 1`).
+        member of each group represents its logical row, and that row is taken as the group's
+        score. Scores already at logical size pass through; a bare float passes through for the
+        gate to validate (accepted only when `num_rows == 1`).
         """
         if isinstance(scores, (int, float)):
             return scores
@@ -211,11 +205,11 @@ class TransformHookRuntime:
     def _prefill_prompt_mask(self, hidden: torch.Tensor, pass_offset: int) -> torch.Tensor | None:
         """The stored prompt mask aligned to the hidden batch, on the prefill pass only.
 
-        The first pass may be *longer* than the prompt when a teacher-forced continuation is
+        The first pass may be longer than the prompt when a teacher-forced continuation is
         appended (e.g. `compute_logprobs` forwards `[prompt; ref]` in one pass). The continuation
-        columns are not prompt, so the mask is extended with False there — condition aggregation
-        then covers exactly the real prompt tokens, reproducing generation-time scoring. A first
-        pass shorter than the stored mask indicates misuse and raises.
+        columns are not prompt, so the mask is extended with False there, and condition
+        aggregation then covers exactly the real prompt tokens, reproducing generation-time
+        scoring. A first pass shorter than the stored mask indicates misuse and raises.
         """
         if self._prompt_mask is None or pass_offset != 0:
             return None
@@ -296,12 +290,11 @@ class TransformHookRuntime:
         """Build a read-only hook that scores the residual stream at `layer_id` and updates `gate`.
 
         The hook never modifies hidden states. On each pass where the gate still wants evidence
-        (`not gate.is_ready()`), it computes per-row scores via `scorer` — handing it the
-        pad-aware prompt mask on the prefill pass — collapses beam-expanded scores to logical
-        rows, and calls `gate.update(rows, key=layer_id)`. Once the gate is ready (e.g., a frozen
-        `CacheOnceGate`), scoring is skipped entirely; a gate that never reports ready keeps
-        re-scoring every pass. The hook still participates in pass-opener bookkeeping when the
-        lowest hooked layer is a condition layer.
+        (`not gate.is_ready()`), it computes per-row scores via `scorer`, passing the pad-aware
+        prompt mask on the prefill pass, collapses beam-expanded scores to logical rows, and
+        calls `gate.update(rows, key=layer_id)`. Once the gate is ready, scoring is skipped
+        entirely, and a gate that never reports ready keeps re-scoring every pass. The hook still
+        participates in pass-opener bookkeeping when the lowest hooked layer is a condition layer.
 
         Args:
             layer_id: Index of the hooked layer.

@@ -17,9 +17,8 @@ def tokenize_texts(
 ) -> dict[str, torch.Tensor]:
     """Tokenize a flat list of texts independently.
 
-    Unlike tokenize_pairs(), this function tokenizes texts without interleaving.
-    Use this for methods like ITI where positive and negative examples are
-    independent and do not need co-padding for token alignment.
+    Each text is tokenized on its own, without interleaving. Use this when positive and negative
+    examples are independent and do not need co-padding for token alignment.
 
     Args:
         tokenizer: Tokenizer to use.
@@ -52,8 +51,7 @@ def tokenize_pairs(
     """Tokenize positive/negative pairs together to ensure consistent padding.
 
     Interleaves pairs before tokenization so each (pos, neg) pair shares the same
-    padding length. This ensures token alignment for shared prefixes, which is
-    important because different padding can subtly change attention patterns.
+    padding length, keeping shared prefixes token-aligned.
 
     Args:
         tokenizer: Tokenizer to use.
@@ -150,7 +148,7 @@ def layerwise_tokenwise_hidden(
 
     - `location="layer_output"`: key `l` maps to the output of layer `l` (`hidden_states[l + 1]`).
     - `location="layer_input"`: key `l` maps to the input of layer `l`, i.e. the output of layer
-        `l - 1` (`hidden_states[l]`). CAST's runtime condition pre-hook observes this boundary.
+        `l - 1` (`hidden_states[l]`), the boundary a layer pre-hook observes.
 
     Args:
         model: The model to extract from.
@@ -223,26 +221,25 @@ def measure_residual_norms(
     """Typical per-token residual-stream norm at each requested layer boundary.
 
     The statistic is aggregated over the real (non-pad) tokens of `prompts` at the residual-stream
-    boundary named by `location`. Residual norms grow with depth, so a fixed additive strength is a
-    very different intervention at different layers; measuring the typical norm at each layer lets a
-    caller rescale a direction to a fixed *fraction* of it (see `SteeringVector.scaled_to_norms`).
+    boundary named by `location`. Residual norms grow with depth, so the returned per-layer norms
+    let a caller rescale a direction to a fixed fraction of the norm at each layer (see
+    `SteeringVector.scaled_to_norms`).
 
     Prompts are rendered via `render_for_model(tokenizer, prompt=p, mode=prompt_format)`. The default
-    `prompt_format="chat_prompt"` renders with `add_generation_prompt=True`, byte-identical to what
-    inference produces for a prompt; the rendered string is tokenized with `add_special_tokens=False`
-    whenever a chat template was applied (the rendering contract), matching how the estimators consume
-    contrastive text.
+    `prompt_format="chat_prompt"` renders with `add_generation_prompt=True`, matching what inference
+    produces for a prompt. The rendered string is tokenized with `add_special_tokens=False` whenever
+    a chat template was applied, matching how the estimators consume contrastive text.
 
     Args:
         model: Model to extract hidden states from.
         tokenizer: Tokenizer for rendering and encoding the prompts.
-        layer_ids: Layers to measure (0-based). `None` measures every layer (no extra cost — all
-            layers are extracted regardless).
-        prompts: Calibration prompts. Use fit-distribution, inference-style prompts, not a held-out
-            evaluation set, so measurement never leaks eval into fitting.
-        location: Residual-stream boundary each layer key maps to. `"layer_output"` (default) matches
-            the toolkit-wide `VectorTrainSpec` default and controls that hook the layer output (CAA);
-            `"layer_input"` matches pre-hook observers, in particular CAST's behavior application.
+        layer_ids: Layers to measure (0-based). `None` measures every layer (no extra cost, since
+            all layers are extracted regardless).
+        prompts: Calibration prompts. Use fit-distribution, inference-style prompts rather than a
+            held-out evaluation set.
+        location: Residual-stream boundary each layer key maps to. `"layer_output"` (default)
+            measures the output of each layer; `"layer_input"` measures the input of each layer, the
+            boundary a layer pre-hook observes.
         stat: Aggregation over the pooled real-token norms, `"median"` (default, robust) or `"mean"`.
         prompt_format: How each prompt is rendered into model-ready text (via `render_for_model`).
         batch_size: Batch size for the extraction forward passes.

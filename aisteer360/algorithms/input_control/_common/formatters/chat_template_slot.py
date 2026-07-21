@@ -1,4 +1,4 @@
-"""ChatTemplateSlotFormatter — replace `{{slot}}` placeholders in messages with memory content."""
+"""Replace `{{slot}}` placeholders in messages with memory content."""
 from __future__ import annotations
 
 import re

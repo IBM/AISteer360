@@ -1,9 +1,8 @@
 """Base class for runtime gates that control transform application.
 
-Gates are **row-vectorized**: a gate holds one open/closed decision per *logical batch row* (one
-per prompt in the batch). Beam expansion is not the gate's concern — the runtime collapses
-beam-expanded scores down to logical rows before `update()` and re-expands `open_rows()` when
-masking hidden states. The scalar case is simply `num_rows == 1`.
+A gate holds one open/closed decision per logical batch row, one per prompt in the batch. The
+runtime collapses beam-expanded scores down to logical rows before `update()` and re-expands
+`open_rows()` when masking hidden states. The scalar case is `num_rows == 1`.
 """
 from abc import ABC, abstractmethod
 
@@ -21,9 +20,8 @@ class BaseGate(ABC):
         3. open_rows() - queried by behavior hooks; returns a `[num_rows]` bool tensor.
 
     `is_ready()` reports whether the gate has received all the evidence it expects. The runtime
-    uses it to stop paying for condition scoring once the decision is complete (see
-    `TransformHookRuntime.build_condition_hook`), so "score the prompt once, then freeze" is a
-    property of the gate's evidence contract rather than a hook-side pass counter.
+    uses it to stop condition scoring once the decision is complete, so the prompt is scored once
+    and the decision then holds.
     """
 
     num_rows: int = 1
@@ -41,8 +39,7 @@ class BaseGate(ABC):
         Args:
             scores: Per-row condition scores of shape `[num_rows]`. A bare float is accepted
                 only when `num_rows == 1` (the scalar gate case); passing a float for a
-                multi-row gate raises, because silently broadcasting one score across rows
-                would make batched generation diverge from per-item generation.
+                multi-row gate raises.
             key: Optional identifier for the source (e.g., layer_id) when the gate
                 aggregates signals from multiple sources.
         """
@@ -85,8 +82,7 @@ class BaseGate(ABC):
 class AlwaysOpenGate(BaseGate):
     """Gate that is always open for every row. Use when no conditional gating is needed.
 
-    This avoids branching in hook logic: methods without conditions still
-    go through the gate, but it is always open with zero overhead.
+    Methods without conditions still go through the gate; `open_rows()` reports every row open.
     """
 
     def update(self, scores: torch.Tensor | float, *, key: int | None = None) -> None:

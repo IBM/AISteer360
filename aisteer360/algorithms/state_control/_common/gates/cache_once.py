@@ -8,11 +8,9 @@ class CacheOnceGate(BaseGate):
     """Wraps an inner gate and caches its `open_rows()` once `is_ready()`.
 
     After the inner gate reports ready, all subsequent `open_rows()` calls return the cached
-    tensor and further updates are ignored. This is the condition-then-steer pattern: the
-    condition is evaluated on the prompt (prefill) and the decision holds for the whole
-    generation. Combined with the runtime's is_ready() early-out, the frozen gate also stops
-    condition scoring entirely — "score the prompt once" is a consequence of the evidence
-    contract, not a hook-side pass counter.
+    tensor and further updates are ignored. The condition is evaluated on the prompt during
+    prefill and the decision holds for the whole generation. Once frozen, the gate reports ready,
+    which stops further condition scoring so the prompt is scored once.
 
     The wrapped gate stays reachable via `inner` (for diagnostics such as threshold/evidence).
 

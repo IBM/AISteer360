@@ -28,8 +28,8 @@ class AngularSteering(StateControl):
     """Angular Steering.
 
     Rotates the hidden state within a per-layer 2D plane spanned by a feature axis (row 0 of the
-    steering vector) and a companion axis (row 1), leaving the orthogonal complement — the other
-    `d_model - 2` directions — untouched. Because a 2D rotation is orthogonal, the intervention is
+    steering vector) and a companion axis (row 1), leaving the orthogonal complement (the other
+    `d_model - 2` directions) untouched. Because a 2D rotation is orthogonal, the intervention is
     norm-preserving by construction and offers continuous control via a single angle.
 
     The method operates in two phases:
@@ -47,9 +47,9 @@ class AngularSteering(StateControl):
        rotation. The adaptive variant rotates only tokens already positively aligned with the
        feature axis, improving coherence on smaller models.
 
-    Each norm module is rotated exactly once, keyed to its own layer's plane. Position bookkeeping
-    (the KV-cache offset shared across all hooked norms) is delegated to the shared runtime, which
-    opens each forward pass on the first-firing norm module (opener convention).
+    Each norm module is rotated exactly once, keyed to its own layer's plane. The shared runtime
+    tracks position bookkeeping (the KV-cache offset shared across all hooked norms) and opens each
+    forward pass on the first-firing norm module (opener convention).
 
     Reference:
 
@@ -152,10 +152,9 @@ class AngularSteering(StateControl):
     ) -> dict[str, list]:
         """Create pre-hooks that rotate the residual stream entering each norm module.
 
-        Position bookkeeping is delegated to the shared runtime. Two norm modules share each
-        `layer_id`, so the pass opener is keyed on `module_path` (the first-firing norm module)
-        rather than `layer_id` — the pre-attention norm sorts and fires first on both supported
-        families.
+        The shared runtime tracks position bookkeeping. Two norm modules share each `layer_id`, so
+        the pass opener is keyed on `module_path` (the first-firing norm module) rather than
+        `layer_id`. The pre-attention norm sorts and fires first on both supported families.
 
         Args:
             input_ids: Input token IDs.

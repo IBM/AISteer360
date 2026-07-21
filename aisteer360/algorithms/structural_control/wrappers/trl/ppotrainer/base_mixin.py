@@ -20,12 +20,13 @@ from aisteer360.algorithms.structural_control.wrappers.trl.utils.prompt_schema i
 class PPOTrainerMixin(TRLMixin, StructuralControl):
     """PPO structural control backed by TRL's `PPOTrainer`.
 
-    Reward and value models are sequence-classification models. The wrapper loads a fresh value
-    model from the same path as the reward model when `value_model_name_or_path` is not provided —
-    TRL's `PPOTrainer` wraps the value model into its policy and rejects `value_model=None`.
+    Reward and value models are sequence-classification models. When
+    `value_model_name_or_path` is not provided, the wrapper loads a fresh value model from the same
+    path as the reward model, since TRL's `PPOTrainer` wraps the value model into its policy and
+    rejects `value_model=None`.
 
     The standardized prompt-only training dataset is tokenized into an `input_ids` column before
-    being passed to the trainer (TRL reads `data["input_ids"]` directly).
+    being passed to the trainer, which reads `data["input_ids"]` directly.
 
     Note: reward and value models must share the policy's tokenizer/vocabulary. The wrapper guards
     this with an error.

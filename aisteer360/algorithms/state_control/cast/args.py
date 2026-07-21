@@ -79,15 +79,14 @@ class CASTArgs(BaseArgs):
             `condition_vector_threshold`.
         condition_layer_ids: Layers to check the condition on.
         condition_vector_threshold: Similarity threshold for condition detection.
-        condition_comparator_threshold_is: When to open the gate. Canonical semantics (this toolkit):
-            "larger" opens when score >= threshold; "smaller" when score <= threshold. The unambiguous
-            aliases "score_above" (== "larger") and "score_below" (== "smaller") are also accepted and
-            normalized in `__post_init__`.
-
-            WARNING — inverted vs the CAST reference implementation
-            (github.com/IBM/activation-steering), where "larger" means "the THRESHOLD is larger" and
-            fires when similarity < threshold. Settings copied from the paper or reference repo must
-            flip the comparator; prefer the "score_above"/"score_below" aliases.
+        condition_comparator_threshold_is: When to open the gate. In this toolkit "larger" opens
+            when score >= threshold and "smaller" opens when score <= threshold. The aliases
+            "score_above" (== "larger") and "score_below" (== "smaller") are also accepted and
+            normalized in `__post_init__`. These semantics are inverted relative to the reference
+            implementation at github.com/IBM/activation-steering, where "larger" means "the
+            THRESHOLD is larger" and fires when similarity < threshold. Settings copied from the
+            paper or the reference repository must flip the comparator; prefer the "score_above"
+            and "score_below" aliases.
         condition_threshold_comparison_mode: How to aggregate hidden states
             for comparison ("mean" or "last").
         use_ooi_preventive_normalization: Apply out-of-distribution preventive

@@ -44,9 +44,9 @@ class SteeringPipeline:
 
     Workflow:
 
-    1. Instantiate with a base model checkpoint and/or control objects
-    2. Call `steer()` once to apply all controls in order (structural → input → state → output)
-    3. Use `generate()` for inference with steering applied (polymorphic across str / list[str] / chat / tensor)
+    1. Instantiate with a base model checkpoint and/or control objects.
+    2. Call `steer()` once to apply all controls in order (structural, input, state, output).
+    3. Use `generate()` for inference with steering applied, accepting str, list[str], chat, or tensor input.
 
     Args:
         model_name_or_path (str or pathlib.Path, optional): HuggingFace model hub name or local directory.
@@ -81,15 +81,12 @@ class SteeringPipeline:
         Omitted categories use no-op defaults.
     - Controls with a `tokenizer` attribute will have it auto-injected if not already set
 
-    State-control ordering contract:
-
-    For the state category, list order in `controls` is the single, well-defined composition surface:
-    list order = `steer()` order = hook registration order = execution order for hooks on the same
-    module. PyTorch forward hooks chain (a later hook receives the previous hook's returned output;
-    pre-hooks chain likewise on inputs), so "control A then B at layer 12" is well-defined and
-    non-commuting combinations (e.g. ablate∘add vs. add∘ablate) are order-sensitive by design. A
-    gated/condition-scoring control placed after another observes activations already edited at earlier
-    layers by upstream list entries.
+    For the state category, list order in `controls` defines the composition surface. List order sets
+    `steer()` order, hook registration order, and execution order for hooks on the same module. PyTorch
+    forward hooks chain, so a later hook receives the previous hook's returned output and pre-hooks chain
+    likewise on inputs. Combinations that do not commute, such as ablate after add versus add after
+    ablate, therefore produce order-sensitive results. A gated or condition-scoring control placed after
+    another observes activations already edited at earlier layers by upstream list entries.
     """
 
     # construction args
@@ -445,13 +442,13 @@ class SteeringPipeline:
         of input modality.
 
         NOTE: unlike `model.generate`, the returned token ids EXCLUDE the prompt by default. Do not
-        slice the result by prompt length — that discards generated tokens (pass
-        `return_full_sequence=True` if you need HF-style prompt+continuation output).
+        slice the result by prompt length, since that discards generated tokens. Pass
+        `return_full_sequence=True` to get HF-style prompt+continuation output.
 
         `attention_mask` is meaningful only for tensor inputs; it is ignored (with a warning) for text and chat
         inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to
         `adapt(input_ids, ...)`. For chat input, when `adapt_messages` returns a non-None result the token-level
-        `adapt()` is not called for that generation — the input control is applied exactly once per call.
+        `adapt()` is not called for that generation, so the input control is applied exactly once per call.
 
         Args:
             inputs: One of the modalities above.
@@ -591,9 +588,9 @@ class SteeringPipeline:
             **forward_kwargs: Any,
     ) -> torch.Tensor:
         """Compute per-token log-probabilities of ref_output_ids with structural, input, and state steering controls
-        applied. Note that output controls are *not* applied since they concern scoring, not generation.
+        applied. Output controls are not applied, since they concern scoring rather than generation.
 
-        The strategy below uses teacher forcing, computes log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
+        Uses teacher forcing to compute log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
         token in the reference sequence.
 
         When all pipeline controls support batching, a single batched forward pass is used (inputs are left-padded

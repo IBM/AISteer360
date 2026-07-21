@@ -1,4 +1,4 @@
-"""RandomSelector — sample k items uniformly without replacement."""
+"""Sample k items uniformly without replacement."""
 from __future__ import annotations
 
 import random

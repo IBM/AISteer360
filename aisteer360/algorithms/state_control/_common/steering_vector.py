@@ -109,13 +109,12 @@ class SteeringVector:
         """Return a deep clone whose per-layer directions are rescaled to a target L2 norm.
 
         At each layer present in both `target_norms` and `self.directions`, the direction is rescaled
-        to L2 norm `scale * target_norms[layer]` while keeping its orientation. This is the additive
-        counterpart of `normalized()`: `normalized()` scales every direction to unit norm, this scales
-        each to a caller-chosen (typically residual-norm-relative) magnitude. The original vector is
-        untouched (same ownership contract as `normalized()`).
+        to L2 norm `scale * target_norms[layer]` while keeping its orientation, scaling each direction
+        to a caller-chosen (typically residual-norm-relative) magnitude. The original vector is
+        untouched.
 
-        Semantics are defined for broadcast directions only (`K == 1`): the same vector is added at
-        every steered token of a layer.
+        Semantics are defined for broadcast directions only (`K == 1`), where every steered
+        token in the layer receives the same vector.
 
         Args:
             target_norms: Mapping from layer id to the per-layer base norm to scale to (e.g. the

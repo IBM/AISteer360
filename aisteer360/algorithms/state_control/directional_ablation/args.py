@@ -16,9 +16,9 @@ class DirectionalAblationArgs(BaseArgs):
     """Arguments for Directional Ablation.
 
     Users provide EITHER a pre-computed steering vector OR contrastive training data. If data is
-    provided, the feature direction is fitted during `steer()` (difference-in-means, exactly as
-    CAA). A precomputed vector may carry any `K >= 1` directions per layer: `K=1` is
-    single-direction ablation, `K>1` ablates the whole subspace.
+    provided, the feature direction is fitted during `steer()` as the difference in means over the
+    contrastive data. A precomputed vector may carry any `K >= 1` directions per layer, where `K=1`
+    is single-direction ablation and `K>1` ablates the whole subspace.
 
     Attributes:
         steering_vector: Pre-computed direction(s), `[K, H]` per layer. If provided, skip fitting.
@@ -27,14 +27,14 @@ class DirectionalAblationArgs(BaseArgs):
         alpha: Ablation strength in `[0, 1]`. `1.0` fully removes the component (`h'.d == 0`);
             `< 1.0` gives graded partial suppression. Values `> 1.0` are disallowed (use rotation
             or additive steering to induce the opposite behavior).
-        layer_ids: Explicit layers to ablate at. If None, a single heuristic layer (~40% depth) is
-            used, matching CAA.
+        layer_ids: Explicit layers to ablate at. If None, a single heuristic layer at ~40% depth is
+            used.
         layer_range: Optional half-open `[start, end)` filter applied to the resolved directions.
         token_scope: Which tokens to ablate (see `make_token_mask`).
         last_k: Required when `token_scope == "last_k"`.
         from_position: Required when `token_scope == "from_position"`.
         use_norm_preservation: If True, wrap the transform in `NormPreservingTransform`. Ablation
-            is intentionally norm-reducing, so this defaults to False.
+            reduces the residual norm, and this defaults to False.
     """
 
     # direction source (provide exactly one)

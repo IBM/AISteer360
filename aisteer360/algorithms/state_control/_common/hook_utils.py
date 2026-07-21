@@ -29,8 +29,7 @@ def get_model_layer_list(model: PreTrainedModel) -> tuple[list, list[str]]:
 def get_norm_module_names(model: PreTrainedModel) -> list[tuple[int, str]]:
     """Return (layer_id, module_path) pairs for the per-layer normalization sub-modules.
 
-    Angular steering rotates the residual stream entering each normalization layer (the paper
-    intervenes after every norm, before Attention and before the MLP). Supports:
+    Supports:
 
     - llama/mistral/qwen/gemma-style (`model.model.layers[i]`): `input_layernorm`,
         `post_attention_layernorm`.

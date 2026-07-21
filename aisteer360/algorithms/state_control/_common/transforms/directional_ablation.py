@@ -25,21 +25,17 @@ class DirectionalAblationTransform(BaseTransform):
     `1.0` fully removes the component (`h'.d_i == 0`), values `< 1.0` give graded partial
     suppression.
 
-    This is a projection, not a translation or a rotation, and is intentionally distinct from
-    the other transforms (do not "simplify" it into one of them):
+    This is a projection, not a translation or a rotation:
 
-    - It is idempotent at `alpha=1` (`P^2 = P`), unlike `AdditiveTransform` with a negative
-        strength, which slides along `-d` without bound and changes norm arbitrarily.
-    - It is norm-reducing (it drops a component), unlike `RotationTransform`, which only equals
-        ablation after re-normalization; a raw 90-degree rotation preserves the norm whereas raw
-        ablation shrinks it.
+    - It is idempotent at `alpha=1` (`P^2 = P`).
+    - It is norm-reducing, since it drops a component.
 
     The stored rows need not be orthonormal; they are orthonormalized via Gram-Schmidt and cached
     per `(layer_id, device, dtype)` so `K>1` removal is basis-correct and order-independent.
 
     Args:
-        artifact: The steering artifact — a `SteeringVector`, a per-layer directions mapping
-            (`Mapping[int, Tensor]`, each `[K, H]` or `[H]` treated as `K=1`), or an
+        artifact: The steering artifact, given as a `SteeringVector`, a per-layer directions
+            mapping (`Mapping[int, Tensor]`, each `[K, H]` or `[H]` treated as `K=1`), or an
             `ArtifactSource` (unbound until `bind(ctx)`). Required.
         alpha: Ablation strength in `[0, 1]`. `1.0` = full removal (default); `< 1.0` = partial.
 

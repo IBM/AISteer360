@@ -121,15 +121,15 @@ class CAST(StateControl):
     2. **Conditional Behavior Modification**: When the condition is met, applies a behavior
        transform to hidden states at the behavior layers.
 
-    The control is a thin recipe over the `_common` component families — everything at hook time
-    runs through the shared `TransformHookRuntime`:
+    The control composes the `_common` component families, and everything at hook time runs
+    through the shared `TransformHookRuntime`:
 
     - `ContrastiveDirectionEstimator` / `MeanDifferenceEstimator`: learn per-layer direction
       vectors from contrastive text pairs.
     - `ConditionPointSelector`: grid-searches the (layer, threshold, comparator) that best
       separates positive from negative calibration examples.
-    - `ProjectedCosineScorer`: the runtime condition scorer — pad-aware aggregation of prompt
-      hidden states ("mean" or "last"), scored per row via projected cosine similarity.
+    - `ProjectedCosineScorer`: the runtime condition scorer, applying pad-aware aggregation of
+      prompt hidden states ("mean" or "last"), scored per row via projected cosine similarity.
     - `CacheOnceGate(MultiKeyThresholdGate)`: row-vectorized gating. Each prompt in a batch is
       gated independently; beam-expanded rows of one prompt share that prompt's decision; the
       decision freezes after the prefill pass (the runtime stops condition scoring once the gate
@@ -138,27 +138,24 @@ class CAST(StateControl):
       in `NormPreservingTransform`) by default, or any `BaseTransform` supplied via
       `behavior_transform` (e.g. `DirectionalAblationTransform` for conditional ablation).
 
-    Layer convention. Behavior directions are estimated at the *output* of layer l
-    (`hidden_states[l+1]`) and applied at the *input* of layer l (the output of layer l-1) — the
-    runtime is constructed with `hook_point="layer_input"`, a deliberate one-layer skew matching
-    the CAST reference implementation. Condition directions are estimated by default at the
-    *input* of layer l (`VectorTrainSpec(location="layer_input")` in `CASTArgs.condition_fit`),
-    the same boundary the `ConditionPointSelector` calibrates on and the runtime condition
-    pre-hook scores, so condition fit, calibration, and runtime are aligned.
+    The runtime is constructed with `hook_point="layer_input"`. Behavior directions are
+    estimated at the output of layer l (`hidden_states[l+1]`) and applied at the input of layer
+    l (the output of layer l-1), a one-layer skew. Condition directions are estimated by default
+    at the input of layer l (`VectorTrainSpec(location="layer_input")` in `CASTArgs.condition_fit`),
+    the boundary the `ConditionPointSelector` calibrates on and the runtime condition pre-hook
+    scores, so condition fit, calibration, and runtime are aligned.
 
-    Timing. Within the prefill pass, hooks fire in layer order: a behavior layer *below* the
-    condition layer sees a still-closed gate (no evidence yet), while a behavior layer *above* it
-    sees the decided gate. When the calibrated condition layer sits above the behavior layers,
-    prompt tokens therefore pass the behavior layers unsteered and only decode steps are steered —
-    faithful to the reference, and why conditional steering is gentler than unconditional. Token
-    scope composes with this: `"all"` permits prompt-token steering wherever the gate is already
-    decided during prefill (the reference behavior); `"after_prompt"` restricts steering to
-    generated tokens regardless of layer order.
+    Within the prefill pass, hooks fire in layer order. A behavior layer below the condition layer
+    sees a still-closed gate with no evidence yet, while a behavior layer above it sees the decided
+    gate. When the calibrated condition layer sits above the behavior layers, prompt tokens pass
+    the behavior layers unsteered and only decode steps are steered. Token scope composes with
+    this: `"all"` permits prompt-token steering wherever the gate is already decided during
+    prefill; `"after_prompt"` restricts steering to generated tokens regardless of layer order.
 
-    Batching is native: `supports_batching = True`. Row-vectorized gates mean one batched
-    `generate` call gates and steers each prompt exactly as separate calls would. One in-flight
-    generation is supported per control instance (gate and runtime state are per-instance,
-    cleared by `reset()`).
+    Batching is supported (`supports_batching = True`). Row-vectorized gates let one batched
+    `generate` call gate and steer each prompt independently. One in-flight generation is
+    supported per control instance, with gate and runtime state per-instance and cleared by
+    `reset()`.
 
     Reference:
 

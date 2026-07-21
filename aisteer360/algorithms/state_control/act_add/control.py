@@ -20,9 +20,9 @@ from .args import ActAddArgs
 class ActAdd(StateControl):
     """Activation Addition (ActAdd).
 
-    Steers model behavior by adding a positional steering vector — computed
-    from a single contrast pair of short prompts — to the residual stream
-    at a single layer during the initial forward pass.
+    Steers model behavior by adding a positional steering vector, computed from a single contrast
+    pair of short prompts, to the residual stream at a single layer during the initial forward
+    pass.
 
     Reference:
 
@@ -121,12 +121,12 @@ class ActAdd(StateControl):
     ) -> dict[str, list]:
         """Register a pre-hook on the target layer.
 
-        The paper's Algorithm 1 specifies adding the steering vector to the residual stream
-        *before* the target layer processes it (h_l input), not after (h_l output); a pre-hook
-        ensures correct layer alignment. The token scope is always `"all"` — spatial control comes
-        from the transform's alignment-based positional injection, not the mask. Prefill-only
-        injection emerges from that geometry: each decode pass sees `seq_len == 1`, and the
-        alignment window never intersects it, so the runtime's position bookkeeping is unused here.
+        The steering vector is added to the residual stream before the target layer processes it
+        (h_l input) rather than after (h_l output), and a pre-hook ensures correct layer alignment.
+        The token scope is always `"all"`, and spatial control comes from the transform's
+        alignment-based positional injection rather than the mask. Injection occurs only during
+        prefill, because each decode pass has `seq_len == 1`, so the alignment window never
+        intersects it and the runtime's position bookkeeping is unused here.
 
         Args:
             input_ids: Input token IDs (used only to size prompt lengths).

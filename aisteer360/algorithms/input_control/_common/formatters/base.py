@@ -1,4 +1,4 @@
-"""BaseFormatter — token-level and message-level rendering of Memory content."""
+"""Token-level and message-level rendering of Memory content."""
 from __future__ import annotations
 
 from abc import ABC

@@ -1,4 +1,4 @@
-"""ParetoFrontier — utility for Pareto analysis over a [n_candidates, n_instances] score matrix.
+"""Utility for Pareto analysis over a [n_candidates, n_instances] score matrix.
 
 Used by methods that maintain instance-wise best-so-far records during search (GEPA).
 """
@@ -10,8 +10,8 @@ import numpy as np
 class ParetoFrontier:
     """Pareto-frontier utility over a `[n_candidates, n_instances]` score matrix.
 
-    Maximizes scores by default; pass `minimize=True` for the opposite. Internally normalizes to a
-    maximization problem so the rest of the API does not branch.
+    Maximizes scores by default; pass `minimize=True` for the opposite. Scores are handled internally as a
+    maximization problem.
     """
 
     def __init__(self, scores: np.ndarray, minimize: bool = False) -> None:

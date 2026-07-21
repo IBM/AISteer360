@@ -1,8 +1,7 @@
 """Shared batched generation helper for single-system-prompt input controls.
 
-`generate_with_system_prompt` is the "run the task LM over a batch of queries under one system prompt"
-primitive that `TaskEvaluationScorer` and GEPA both build on. It applies the
-tokenizer's chat template when available (else a plain `system\\n\\nquery` join), left-pads for the
+`generate_with_system_prompt` runs the task LM over a batch of queries under one system prompt. It applies
+the tokenizer's chat template when available (otherwise a plain `system\\n\\nquery` join), left-pads for the
 causal-LM batch, restores the tokenizer's padding side, and decodes only the continuation.
 """
 from __future__ import annotations

@@ -13,14 +13,12 @@ logger = logging.getLogger(__name__)
 class SinglePairEstimator(BaseEstimator[SteeringVector]):
     """Extracts per-token positional steering vectors from a single prompt pair.
 
-    This is the estimator used by ActAdd. Given one positive prompt and one
-    negative prompt, it computes the per-token activation difference at every
-    layer (or a specified subset of layers), preserving the full positional
-    structure of the contrast.
+    Given one positive prompt and one negative prompt, it computes the per-token
+    activation difference at every layer (or a specified subset of layers),
+    preserving the full positional structure of the contrast.
 
-    Unlike MeanDifferenceEstimator (which averages over many pairs and collapses
-    to a single direction), this produces a [T, H] direction matrix per layer,
-    where T is the token length of the (padded) prompt pair.
+    The result is a `[T, H]` direction matrix per layer, where `T` is the token
+    length of the (padded) prompt pair.
     """
 
     def fit(

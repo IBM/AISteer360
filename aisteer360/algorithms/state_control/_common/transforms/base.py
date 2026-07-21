@@ -22,14 +22,14 @@ class BaseTransform(ABC):
     is needed later (e.g., for norm-preserving wrappers); return a new tensor.
 
     Artifact-carrying transforms take their artifact as the first positional argument, typed
-    `SteeringVector | Mapping[int, Tensor] | ArtifactSource` and **required**. A concrete artifact
+    `SteeringVector | Mapping[int, Tensor] | ArtifactSource` and required. A concrete artifact
     binds the transform immediately (validated at `__init__`); an `ArtifactSource` leaves it
-    *unbound* until `bind(ctx)` resolves the source (validated then). Subclass recipe:
+    unbound until `bind(ctx)` resolves the source (validated then). Subclass recipe:
 
         - store the concrete artifact and set `is_bound=True`, or store the source and set
           `is_bound=False`;
-        - override `bind(ctx)` to return a **freshly constructed** bound instance (never mutate
-          `self`, never `copy.copy` — derived caches would go stale);
+        - override `bind(ctx)` to return a freshly constructed bound instance, never mutating
+          `self` and never using `copy.copy`, so that derived caches stay valid;
         - override `covered_layer_ids` to report the layers the (bound) artifact covers;
         - call `self._require_bound()` as the first line of `apply`.
 
@@ -71,12 +71,12 @@ class BaseTransform(ABC):
 
         Contract:
 
-            - MUST NOT mutate `self` (instances/sources are shared across adapters and
-              `Benchmark`/`ControlSpec` grid points, whose params objects are reused per point).
+            - MUST NOT mutate `self`; instances and sources are shared across adapters and
+              `Benchmark`/`ControlSpec` grid points, whose params objects are reused per point.
             - Returns `self` when already bound (idempotent).
             - When source-carrying, returns a NEW instance of the same class constructed with
-              `ctx.resolve(self._source)` and all hyperparameters copied — a fresh construction,
-              not `copy.copy`.
+              `ctx.resolve(self._source)` and all hyperparameters copied, built by fresh
+              construction rather than `copy.copy`.
 
         Default: returns self.
         """

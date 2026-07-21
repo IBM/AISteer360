@@ -18,11 +18,11 @@ _COMPARATOR_ALIASES: dict[str, Comparator] = {
 def normalize_comparator(value: str) -> Comparator:
     """Map user-facing comparator names to the canonical internal values.
 
-    Canonical semantics (THIS toolkit): "larger" opens the gate when score >= threshold; "smaller"
-    when score <= threshold.
+    Canonical semantics in this toolkit: "larger" opens the gate when score >= threshold, and
+    "smaller" opens it when score <= threshold.
 
-    WARNING — inverted vs the CAST reference implementation
-    (github.com/IBM/activation-steering), where "larger" means "the THRESHOLD is larger" and fires
+    This convention is inverted relative to the CAST reference implementation
+    (github.com/IBM/activation-steering), where "larger" means the threshold is larger and fires
     when similarity < threshold. Settings copied from the paper or reference repo must flip the
     comparator. Prefer the unambiguous aliases "score_above" / "score_below".
 
@@ -47,9 +47,9 @@ def normalize_comparator(value: str) -> Comparator:
 class LabeledExamples:
     """Independent positive/negative text data with binary labels.
 
-    Does not require equal-length lists (unlike ContrastivePairs).
-    Useful for methods where positive and negative examples are independent/
-    unpaired (and the estimator concatenates them, e.g., in ITI).
+    The positive and negative lists need not be the same length. Useful for methods where
+    positive and negative examples are independent and unpaired, and the estimator concatenates
+    them.
 
     Attributes:
         positives: Texts exhibiting the target behavior (label=1).
@@ -178,13 +178,12 @@ class VectorTrainSpec:
             tuple of `num_layers + 1` tensors: index 0 is the embedding output (the input to layer
             0) and index `i` is the output of layer `i - 1`.
             "layer_output" (default): key `l` maps to the output of layer `l`
-            (`hidden_states[l + 1]`); matches controls that hook the layer output (e.g. CAA,
-            DirectionalAblation, and `TransformHookRuntime(hook_point="layer_output")`).
+            (`hidden_states[l + 1]`), the boundary hooked by controls that intervene on the layer
+            output.
             "layer_input": key `l` maps to the input of layer `l`, i.e. the output of layer `l - 1`
-            (`hidden_states[l]`); matches pre-hook observers, in particular CAST's runtime condition
-            scoring and the `ConditionPointSelector` calibration.
-            A vector fit at one boundary is a distinct artifact from one fit at the other; fit it at
-            the boundary the consuming control scores or applies it at.
+            (`hidden_states[l]`), the boundary observed by layer pre-hooks.
+            A vector fit at one boundary is a distinct artifact from one fit at the other, so fit it
+            at the boundary where the consuming control scores or applies it.
     """
 
     method: Literal["pca_pairwise", "pca_center", "mean_diff"] = "pca_pairwise"

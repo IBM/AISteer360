@@ -9,7 +9,7 @@ from aisteer360.algorithms.core.base_args import BaseArgs
 
 @dataclass
 class PRewriteArgs(BaseArgs):
-    """Arguments for PRewrite — RL-trained instruction rewriter.
+    """Arguments for PRewrite, an RL-trained instruction rewriter.
 
     Two strategies are supported:
 

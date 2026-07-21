@@ -10,19 +10,19 @@ from .base import BaseGate
 class MultiKeyThresholdGate(BaseGate):
     """Row-vectorized gate that opens based on threshold comparison of received scores.
 
-    Supports multiple condition layers (keys); each `update()` records a per-row pass/fail
+    Supports multiple condition layers (keys). Each `update()` records a per-row pass/fail
     decision for that key, and `open_rows()` aggregates across keys with "any"/"all" semantics,
     elementwise per row. Rows are gated independently, so one batched generation can steer some
     prompts and not others.
 
     The gate retains the raw per-key score tensors (`evidence()`) so callers can surface
-    diagnostics (e.g., CAST's decision snapshot) without re-deriving them in hook code.
+    diagnostics without re-deriving them in hook code.
 
-    WARNING — comparator semantics are inverted vs the CAST reference implementation
-    (github.com/IBM/activation-steering). Here "larger" opens the gate when score >= threshold; the
-    reference's "larger" means "the THRESHOLD is larger" and fires when similarity < threshold. Any
-    `(layer, threshold, comparator)` copied from the paper or reference repo must flip the comparator.
-    Prefer the unambiguous aliases "score_above" (== "larger") / "score_below" (== "smaller").
+    Comparator semantics are inverted relative to the reference implementation at
+    github.com/IBM/activation-steering. Here "larger" opens the gate when the score is
+    greater than or equal to the threshold. Any (layer, threshold, comparator) tuple copied
+    from the paper or the reference repository must flip the comparator. Prefer the aliases
+    "score_above" and "score_below".
 
     Args:
         threshold: Score threshold for comparison.

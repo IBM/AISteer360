@@ -1,4 +1,4 @@
-"""BaseProposer — produce n candidate items from a seed."""
+"""Produce n candidate items from a seed."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

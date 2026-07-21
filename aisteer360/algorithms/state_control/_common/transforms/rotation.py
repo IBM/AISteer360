@@ -33,13 +33,13 @@ class RotationTransform(BaseTransform):
         recovers vector-addition / ablation as special cases.
 
     The stored basis need not be orthonormal; it is re-orthonormalized via Gram-Schmidt and cached
-    per `(layer_id, device, dtype)`. Only positions selected by `token_mask` are modified; every
-    other position is returned byte-identical to the input.
+    per `(layer_id, device, dtype)`. Only positions selected by `token_mask` are modified; at every
+    other position the input is returned unchanged.
 
     Args:
         artifact: The steering artifact whose per-layer directions are `[2, H]` (row 0 = feature
-            axis, row 1 = companion axis) — a `SteeringVector`, a per-layer directions mapping, or
-            an `ArtifactSource` (unbound until `bind(ctx)`). Required.
+            axis, row 1 = companion axis), given as a `SteeringVector`, a per-layer directions
+            mapping, or an `ArtifactSource` (unbound until `bind(ctx)`). Required.
         angle: Rotation angle in radians. Interpreted as an absolute target angle in `"target"`
             mode and as a signed offset in `"offset"` mode.
         mode: Either `"target"` or `"offset"`.

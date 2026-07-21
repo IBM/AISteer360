@@ -1,4 +1,4 @@
-"""PrependTextFormatter — prepend a raw text block to the user turn or input_ids."""
+"""Prepend a raw text block to the user turn or input_ids."""
 from __future__ import annotations
 
 import torch

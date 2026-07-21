@@ -1,4 +1,4 @@
-"""PRewrite — RL-trained instruction rewriter.
+"""PRewrite, an RL-trained instruction rewriter.
 
 Reference:
 
@@ -42,10 +42,9 @@ class PRewrite(InputControl):
     """Train (or load) an LLM rewriter that rewrites a seed instruction; optionally select the best
     rewrite by dev-set evaluation, then apply it as the system prompt at inference time.
 
-    When `train_rewriter=True`, the rewriter is trained with GRPO (group-relative policy optimization)
-    rather than the paper's PPO: the reward is downstream task performance (apply each rewrite with the
-    frozen task model over a dev set and score with a `Metric`, or a user-supplied `reward_fn`). This
-    keeps the paper's metric-in-the-loop reward, which a reward-model-only PPO trainer cannot express.
+    When `train_rewriter=True`, the rewriter is trained with GRPO (group-relative policy optimization).
+    The reward is downstream task performance, computed by applying each rewrite with the frozen task
+    model over a dev set and scoring with a `Metric`, or a user-supplied `reward_fn`.
 
     Memory shape: `TextMemory(slots={"instruction": str})`.
 
@@ -180,10 +179,10 @@ class PRewrite(InputControl):
     def _build_reward_fn(self, task_lm, task_tok):
         """Build the GRPO reward callable for rewriter training.
 
-        Uses a user-supplied `reward_fn` if present, otherwise the paper's metric-in-the-loop reward:
-        a `TaskEvaluationScorer` (the same one PRewrite-S uses for selection) that applies each rewrite
-        with the frozen task model over `dev_set` and aggregates `metric` to a scalar. The reward's
-        `task_lm` is the task model passed to `steer()` and stays frozen; only the rewriter is trained.
+        Uses a user-supplied `reward_fn` if present. Otherwise builds a `TaskEvaluationScorer` that
+        applies each rewrite with the frozen task model over `dev_set` and aggregates `metric` to a
+        scalar. The reward's `task_lm` is the task model passed to `steer()` and stays frozen; only the
+        rewriter is trained.
         """
         if self.reward_fn is not None:
             return self.reward_fn

@@ -1,4 +1,4 @@
-"""RetrievalProposer — retrieve top-n items from a corpus index given a query."""
+"""Retrieve top-n items from a corpus index given a query."""
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable

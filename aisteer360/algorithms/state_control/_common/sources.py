@@ -48,25 +48,24 @@ class ArtifactSource(Protocol):
 class ContrastiveFit:
     """A fit recipe: contrastive pairs plus how to extract a per-layer direction.
 
-    The five spec fields (`method`, `accumulate`, `batch_size`, `prompt_format`, `location`) mirror
-    `VectorTrainSpec` and drive the built-in estimators: `"mean_diff"` dispatches to
-    `MeanDifferenceEstimator`, everything else to `ContrastiveDirectionEstimator`. When a custom
-    `estimator` is supplied, the spec fields are ignored (a warning is emitted) and fitting delegates
-    to `estimator.fit(model, tokenizer, data=<coerced pairs>, **(estimator_kwargs or {}))`.
+    The five spec fields (`method`, `accumulate`, `batch_size`, `prompt_format`, `location`) drive
+    the built-in estimators. `"mean_diff"` dispatches to `MeanDifferenceEstimator`, everything else
+    to `ContrastiveDirectionEstimator`. When a custom `estimator` is supplied, the spec fields are
+    ignored (a warning is emitted) and fitting delegates to
+    `estimator.fit(model, tokenizer, data=<coerced pairs>, **(estimator_kwargs or {}))`.
 
-    The fitted master vector is memoized in a single weakref slot keyed by model identity: the same
-    model resolved repeatedly fits once; a different model refits; alternating models (A→B→A) refit
-    on each switch. Every `resolve` returns an independent clone, so a consumer may freely
-    `.to(...)`/mutate its copy without touching the master.
+    The fitted master vector is memoized in a single weakref slot keyed by model identity. The same
+    model resolved repeatedly fits once, a different model refits, and alternating models (A→B→A)
+    refit on each switch. Every `resolve` returns an independent clone, so a consumer may freely
+    `.to(...)` or mutate its copy without touching the master.
 
     Attributes:
         data: Contrastive pairs (or a dict coerced via `as_contrastive_pairs`).
-        method: Direction-extraction method (mirrors `VectorTrainSpec.method`).
-        accumulate: Hidden-state span selection (mirrors `VectorTrainSpec.accumulate`).
-        batch_size: Forward-pass batch size (mirrors `VectorTrainSpec.batch_size`).
-        prompt_format: How to render pairs into model-ready text (mirrors
-            `VectorTrainSpec.prompt_format`).
-        location: Residual-stream boundary to fit at (mirrors `VectorTrainSpec.location`).
+        method: Direction-extraction method used to fit the per-layer direction.
+        accumulate: Hidden-state span selection for the fit.
+        batch_size: Forward-pass batch size used during fitting.
+        prompt_format: How to render pairs into model-ready text.
+        location: Residual-stream boundary to fit at.
         normalize: L2-normalize the fitted master per layer once, before caching.
         estimator: Optional custom `BaseEstimator`; when set, the spec fields are ignored.
         estimator_kwargs: Extra kwargs forwarded to a custom `estimator.fit(...)`.
@@ -146,7 +145,7 @@ class _Precomputed:
     """A trivially-resolved source wrapping a concrete `SteeringVector` (internal).
 
     Lets the adapter's resolver treat concrete artifacts and sources uniformly. Not part of the
-    public API — users pass vectors, mappings, or sources directly.
+    public API; users pass vectors, mappings, or sources directly.
     """
 
     def __init__(self, steering_vector: SteeringVector):

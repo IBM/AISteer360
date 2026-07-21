@@ -200,7 +200,7 @@ class Benchmark:
         This helper handles both baseline (no controls) and fixed-control pipelines. Structural steering is applied
         once; the use case is evaluated `num_trials` times (to capture generate-time variability).
 
-        If the configuration is already present in *existing_runs* (from a prior checkpoint), its runs are returned
+        If the configuration is already present in `existing_runs` (from a prior checkpoint), its runs are returned
         immediately and the model is never loaded or steered.
 
         Args:
@@ -409,7 +409,7 @@ class Benchmark:
     def export(self, profiles: dict[str, list[dict[str, Any]]], save_dir: str) -> None:
         """Export benchmark results to disk.
 
-        Sanitize to a JSON-friendly structure before delegating to the use case's export method.
+        Sanitizes the profiles to a JSON-friendly structure, then calls the use case's export method.
         """
         save_path = Path(save_dir)
         save_path.mkdir(parents=True, exist_ok=True)
