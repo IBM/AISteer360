@@ -1,5 +1,6 @@
 **/.DS_Store
 **/.idea
+**/.cache
 *.pyc
 **/__pycache__/
 .ipynb_checkpoints/
@@ -24,3 +25,5 @@ examples/**/profiles_*/
 **/profiles/
 .claude/
 **/CLAUDE.md
+**/_run_notebooks.sh
+**/.nbrun/

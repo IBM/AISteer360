@@ -24,6 +24,11 @@ Signed-off-by: Random J Developer <random@developer.example.org>
 ```
 
 
+## Development setup
+Install the toolkit with the `dev` extra (which pulls in the full feature set via `all`, plus the test and
+pre-commit tooling):
+`uv pip install -e ".[dev]"`
+
 Coding Style Guidelines
 We are using tools to enforce code style:
 - iSort, to sort imports
