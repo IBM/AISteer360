@@ -1,8 +1,7 @@
 """Tests for the explicit-modality dispatch of `SteeringPipeline.generate`.
 
 Covers the keyword surface (`text=`, `messages=`, `input_ids=`), the positional-text convenience,
-the error/warning catalog (E1-E11, W1), the deprecation shim for positional chat/token input, and
-the preserved return semantics.
+the error catalog (E1-E12, no shim), and the preserved return semantics.
 """
 import warnings
 
@@ -83,14 +82,14 @@ class TestPositionalTextConvenience:
         assert isinstance(out, list)
         assert all(isinstance(x, str) for x in out)
 
-    def test_positional_str_emits_no_future_warning(self, pipeline):
+    def test_positional_str_emits_no_warning(self, pipeline):
         with warnings.catch_warnings():
-            warnings.simplefilter("error", FutureWarning)
+            warnings.simplefilter("error")
             pipeline.generate("hello", max_new_tokens=2)
 
-    def test_positional_list_str_emits_no_future_warning(self, pipeline):
+    def test_positional_list_str_emits_no_warning(self, pipeline):
         with warnings.catch_warnings():
-            warnings.simplefilter("error", FutureWarning)
+            warnings.simplefilter("error")
             pipeline.generate(["a", "b"], max_new_tokens=2)
 
 
@@ -190,7 +189,7 @@ class TestTokenValidation:
 
 
 class TestAttentionMaskPairing:
-    """`attention_mask` is valid only with `input_ids=` (E11); positional text is lenient (W)."""
+    """`attention_mask` is valid only with `input_ids=` (E11), including positional text."""
 
     def test_text_with_mask_raises_e11(self, pipeline):
         with pytest.raises(TypeError, match="only valid with token input"):
@@ -213,31 +212,15 @@ class TestAttentionMaskPairing:
         )
         assert isinstance(out, torch.Tensor)
 
-    def test_positional_str_with_mask_warns_not_raises(self, pipeline):
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
-            out = pipeline.generate(
+    def test_positional_str_with_mask_raises_e11(self, pipeline):
+        with pytest.raises(TypeError, match="only valid with token input"):
+            pipeline.generate(
                 "hi", attention_mask=torch.ones(1, 3, dtype=torch.long), max_new_tokens=1
             )
-        assert isinstance(out, str)
-        assert any("attention_mask" in str(w.message).lower() for w in recorded)
 
 
-class TestDeprecationShim:
-    """Positional chat/token input (deprecated in 0.3.0, removed in 0.4.0): W1 + token-identity.
-
-    Delete this class at 0.4.0 together with `_legacy_classify_inputs` and the positional shim.
-    """
-
-    def _keyword_of(self, positional):
-        if isinstance(positional, torch.Tensor) or (
-            isinstance(positional, list) and positional and isinstance(positional[0], int)
-        ) or (
-            isinstance(positional, list) and positional and isinstance(positional[0], list)
-            and positional[0] and isinstance(positional[0][0], int)
-        ):
-            return "input_ids"
-        return "messages"
+class TestRemovedPositionalShapes:
+    """Every positional shape other than text raises E12 at the boundary (no shim)."""
 
     @pytest.mark.parametrize(
         "positional",
@@ -248,46 +231,15 @@ class TestDeprecationShim:
             torch.tensor([[1, 2, 3]]),  # 2-D tensor
             [1, 2, 3],  # list[int]
             [[1, 2, 3], [4, 5, 6]],  # list[list[int]]
+            ["a", {"role": "user", "content": "x"}],  # mixed list (not all-str)
         ],
     )
-    def test_positional_legacy_emits_exactly_one_future_warning(self, pipeline, positional):
-        with pytest.warns(FutureWarning) as record:
+    def test_positional_non_text_raises_e12(self, pipeline, positional):
+        with pytest.raises(TypeError, match="positional input to generate\\(\\)") as excinfo:
             pipeline.generate(positional, max_new_tokens=2, do_sample=False)
-        assert sum(issubclass(w.category, FutureWarning) for w in record) == 1
-
-    @pytest.mark.parametrize(
-        "positional",
-        [
-            [{"role": "user", "content": "hi"}],
-            [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]],
-            torch.tensor([1, 2, 3]),
-            torch.tensor([[1, 2, 3]]),
-            [1, 2, 3],
-            [[1, 2, 3], [4, 5, 6]],
-        ],
-    )
-    def test_positional_legacy_token_identical_to_keyword(self, pipeline, positional):
-        keyword = self._keyword_of(positional)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            legacy = pipeline.generate(
-                positional, max_new_tokens=4, do_sample=False, return_output=True
-            )
-            explicit = pipeline.generate(
-                max_new_tokens=4, do_sample=False, return_output=True, **{keyword: positional}
-            )
-        legacy_list = legacy if isinstance(legacy, list) else [legacy]
-        explicit_list = explicit if isinstance(explicit, list) else [explicit]
-        assert len(legacy_list) == len(explicit_list)
-        for a, b in zip(legacy_list, explicit_list):
-            assert torch.equal(a.output_ids, b.output_ids)
-
-    def test_mixed_list_warns_then_fails_downstream(self, pipeline):
-        # ["a", {...}] is not all-str, so it is treated as deprecated positional (W1) and then
-        # fails loudly when the classifier cannot map it.
-        with pytest.warns(FutureWarning):
-            with pytest.raises((TypeError, ValueError)):
-                pipeline.generate(["a", {"role": "user", "content": "x"}], max_new_tokens=2)
+        message = str(excinfo.value)
+        assert "messages=" in message
+        assert "input_ids=" in message
 
 
 class TestReturnOutputFlag:
@@ -444,36 +396,3 @@ class TestReturnSemantics:
         for k in (1, 3, 6):
             cont = tiny_pipeline.generate(input_ids=ids, max_new_tokens=k, do_sample=False)
             assert cont.shape[1] == k
-
-
-class TestLegacyClassifyInputs:
-    """Direct unit tests for the deprecated positional classifier (delete at 0.4.0)."""
-
-    def test_tensor_maps_to_tokens(self):
-        kind, payload = SteeringPipeline._legacy_classify_inputs(torch.tensor([1, 2, 3]))
-        assert kind == "tokens"
-        assert torch.equal(payload, torch.tensor([1, 2, 3]))
-
-    def test_single_chat_maps_to_messages(self):
-        kind, payload = SteeringPipeline._legacy_classify_inputs(
-            [{"role": "user", "content": "hi"}]
-        )
-        assert kind == "messages"
-
-    def test_batch_chat_maps_to_messages(self):
-        kind, _ = SteeringPipeline._legacy_classify_inputs(
-            [[{"role": "user", "content": "a"}], [{"role": "user", "content": "b"}]]
-        )
-        assert kind == "messages"
-
-    def test_list_int_maps_to_tokens(self):
-        kind, _ = SteeringPipeline._legacy_classify_inputs([1, 2, 3])
-        assert kind == "tokens"
-
-    def test_list_list_int_maps_to_tokens(self):
-        kind, _ = SteeringPipeline._legacy_classify_inputs([[1, 2], [3, 4]])
-        assert kind == "tokens"
-
-    def test_unsupported_raises(self):
-        with pytest.raises((TypeError, ValueError)):
-            SteeringPipeline._legacy_classify_inputs(3.14)

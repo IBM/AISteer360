@@ -115,7 +115,7 @@ pipeline = SteeringPipeline(
 pipeline.steer()  # required once before generate(); heavy work (training, fitting) happens here
 
 response = pipeline.generate(
-    [{"role": "user", "content": "Where is the Eiffel Tower?"}],
+    messages=[{"role": "user", "content": "Where is the Eiffel Tower?"}],
     max_new_tokens=64,
 )
 ```
@@ -155,15 +155,17 @@ The registered names at the time of writing:
 
 ### Pipeline semantics
 
-`generate()` is polymorphic over input modality and returns the matching shape:
+`generate()` dispatches on the declared keyword source (exactly one per call) and returns the matching shape:
 
-| Input | Tokenization | Return |
+| Source | Tokenization | Return |
 | --- | --- | --- |
-| `str` | plain text | `str` |
-| `list[str]` | batched text | `list[str]` |
-| `list[dict]` (one chat) | chat template | `str` |
-| `list[list[dict]]` (batch of chats) | batched chat template | `list[str]` |
-| `torch.Tensor` / token id lists | passed through | `torch.Tensor` |
+| `text=` (`str`) | plain text | `str` |
+| `text=` (`list[str]`) | batched text | `list[str]` |
+| `messages=` (one chat) | chat template | `str` |
+| `messages=` (batch of chats) | batched chat template | `list[str]` |
+| `input_ids=` (tensor / token id lists) | passed through | `torch.Tensor` |
+
+Positional `str`/`list[str]` behaves like `text=`; any other positional shape raises a `TypeError`.
 
 Behaviors that differ from bare Hugging Face usage:
 
@@ -173,7 +175,7 @@ Behaviors that differ from bare Hugging Face usage:
   `adapted_input_ids` (the prompt after input controls, useful for inspecting the steered prompt), `runtime_kwargs`,
   `finish_reason`, and `metadata`.
 - `generate()` before `steer()` raises `RuntimeError`; a second `steer()` call is a silent no-op.
-- `attention_mask` is honored only for tensor input; for text and chat input it is ignored with a warning and rebuilt.
+- `attention_mask` is valid only with `input_ids=`; it is derived automatically for `text=` and `messages=`, and passing it with either (or with positional text) raises a `TypeError`.
 - `device` and a non-default `device_map` are mutually exclusive on the `SteeringPipeline` constructor.
 - Pass `lazy_init=True` when a structural control produces the final weights itself (e.g. `mergekit`); the base model
   is then not loaded at construction and the structural control must return one during `steer()`.

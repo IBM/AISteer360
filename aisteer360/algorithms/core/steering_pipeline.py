@@ -507,67 +507,28 @@ class SteeringPipeline:
                 logits[:, t, :] = stack(prefix, logits[:, t, :])
         return logits
 
-    @staticmethod
-    def _legacy_classify_inputs(
-            inputs: Any,
-    ) -> tuple[Literal["messages", "tokens"], Any]:
-        """Classify a deprecated positional prompt into a keyword modality (shim only).
-
-        Supports the positional call forms deprecated in 0.3.0 (`list[dict]`, `list[list[dict]]`,
-        `torch.Tensor`, `list[int]`, `list[list[int]]`) by mapping each to the keyword modality it
-        re-enters, so the shim and keyword paths cannot drift. Positional `str`/`list[str]` (text) is
-        peeled off by the caller before this runs and is not handled here. Scheduled for removal in
-        0.4.0.
-
-        Returns:
-            tuple[kind, payload] where `kind` is `"messages"` or `"tokens"` and `payload` is the raw
-            value to hand to the corresponding resolver.
-
-        Raises:
-            TypeError: If the value is not a supported deprecated positional shape.
-            ValueError: If a tensor is neither 1-D nor 2-D, or an empty list is given.
-        """
-        if isinstance(inputs, torch.Tensor):
-            return "tokens", inputs
-
-        if isinstance(inputs, list):
-            if len(inputs) == 0:
-                raise ValueError("Empty input list.")
-            first = inputs[0]
-            if isinstance(first, Mapping):
-                return "messages", inputs
-            if isinstance(first, list) and first and isinstance(first[0], Mapping):
-                return "messages", inputs
-            if isinstance(first, int):
-                return "tokens", inputs
-            if isinstance(first, list) and first and isinstance(first[0], int):
-                return "tokens", inputs
-
-        raise TypeError(f"Unsupported input type: {type(inputs).__name__}.")
-
     def _resolve_generate_source(
             self,
             inputs: Any,
             text: Any,
             messages: Any,
             input_ids: Any,
-    ) -> tuple[Literal["text", "messages", "tokens"], Any, bool]:
-        """Select the single prompt source and its modality (design §4.2).
+    ) -> tuple[Literal["text", "messages", "tokens"], Any]:
+        """Select the single prompt source and its modality.
 
         Exactly one of positional `inputs`, `text=`, `messages=`, or `input_ids=` may be provided.
-        Positional `str`/`list[str]` (every element a `str`) routes to text with no warning and is
-        supported indefinitely; any other positional shape is deprecated, emits `FutureWarning` once,
-        and is routed via `_legacy_classify_inputs`.
+        Positional input is a convenience for text prompts (`str` or a `list` whose every element is
+        a `str`) and routes to text; any other positional shape raises (E12). Because the check is a
+        total `all(...)` over the list, a mixed list such as `["a", {"role": ...}]` fails here rather
+        than downstream.
 
         Returns:
-            tuple[kind, payload, is_legacy_positional] where `kind` is `"text"`, `"messages"`, or
-            `"tokens"`, `payload` is the value handed to the matching resolver, and
-            `is_legacy_positional` marks the lenient positional surface (used for `attention_mask`
-            pairing).
+            tuple[kind, payload] where `kind` is `"text"`, `"messages"`, or `"tokens"` and `payload`
+            is the value handed to the matching resolver.
 
         Raises:
-            TypeError: If no source or more than one source is provided (E1/E2), or a deprecated
-                positional shape is unsupported.
+            TypeError: If no source or more than one source is provided (E1/E2), or a positional
+                input is neither a `str` nor a `list[str]` (E12).
         """
         provided = [
             name for name, value in (
@@ -587,25 +548,21 @@ class SteeringPipeline:
             )
 
         if text is not None:
-            return "text", text, False
+            return "text", text
         if messages is not None:
-            return "messages", messages, False
+            return "messages", messages
         if input_ids is not None:
-            return "tokens", input_ids, False
+            return "tokens", input_ids
 
-        # positional inputs
+        # positional inputs: text convenience only
         if isinstance(inputs, str) or (
             isinstance(inputs, list) and all(isinstance(element, str) for element in inputs)
         ):
-            return "text", inputs, True
-
-        warnings.warn(
-            "Positional chat/token input to generate() is deprecated and will be removed in v0.4.0; "
-            "pass messages=... (chat) or input_ids=... (token) input instead.",
-            FutureWarning,
+            return "text", inputs
+        raise TypeError(
+            "positional input to generate() must be a str or list of str; pass messages=... "
+            "for chat or input_ids=... for token input."
         )
-        kind, payload = self._legacy_classify_inputs(inputs)
-        return kind, payload, True
 
     def _resolve_text_prompt(self, text: Any) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
         """Validate and tokenize a text prompt (design §4.3.1).
@@ -850,25 +807,23 @@ class SteeringPipeline:
         | `input_ids=` (2-D tokens) | already tokenized; passed through | `torch.Tensor` |
 
         Positional `str`/`list[str]` is accepted as a convenience for text prompts and behaves like
-        `text=`. Passing chat or token input positionally is deprecated (`FutureWarning`) and will be
-        removed in v0.4.0; use `messages=` or `input_ids=`. With `return_output=True`, the return is
-        always `Output` (single) or `list[Output]` (batched) regardless of source.
+        `text=`; any other positional shape raises `TypeError`. With `return_output=True`, the return
+        is always `Output` (single) or `list[Output]` (batched) regardless of source.
 
         Unlike `model.generate`, the returned token ids exclude the prompt by default. Do not slice
         the result by prompt length, since that discards generated tokens. Pass
         `return_full_sequence=True` to get HF-style prompt+continuation output.
 
         `attention_mask` is valid only with token input (`input_ids=`); it is derived automatically
-        for `text=` and `messages=`, and passing it with either raises `TypeError`. During the
-        deprecation window, passing `attention_mask` with positional text is ignored with a warning.
+        for `text=` and `messages=`, and passing it with either raises `TypeError`.
         The `adapt_messages` hook fires only on chat input; text and token input go straight to the
         token-level `adapt(input_ids, ...)` chain. For chat input, each input control whose
         `adapt_messages` returns a non-None result is not additionally run at token level, so every
         input control is applied exactly once per call.
 
         Args:
-            inputs: Positional convenience for text prompts (`str` or `list[str]`). Other positional
-                shapes are deprecated; use the keywords below.
+            inputs: Positional convenience for text prompts (`str` or `list[str]`), behaving like
+                `text=`. Any other positional shape raises `TypeError`; use the keywords below.
             attention_mask: Attention mask, valid only with `input_ids=`.
             runtime_kwargs: Per-generation parameters for controls (e.g., `{"substrings": [...]}`).
             return_output: If True, return one or more `Output` objects instead of decoded text /
@@ -896,23 +851,14 @@ class SteeringPipeline:
         runtime_kwargs = runtime_kwargs or {}
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
-        kind, payload, is_legacy_positional = self._resolve_generate_source(
-            inputs, text, messages, input_ids
-        )
+        kind, payload = self._resolve_generate_source(inputs, text, messages, input_ids)
 
-        # attention_mask pairing (design §4.4)
+        # attention_mask pairing
         if attention_mask is not None and kind != "tokens":
-            if is_legacy_positional and kind == "text":
-                warnings.warn(
-                    "`attention_mask` is ignored for text input; it is rebuilt after tokenization.",
-                    UserWarning,
-                )
-                attention_mask = None
-            else:
-                raise TypeError(
-                    "attention_mask is only valid with token input (input_ids=); it is derived "
-                    "automatically for text= and messages=."
-                )
+            raise TypeError(
+                "attention_mask is only valid with token input (input_ids=); it is derived "
+                "automatically for text= and messages=."
+            )
 
         # resolve the prompt tensors per modality
         message_handled: set[int] = set()
