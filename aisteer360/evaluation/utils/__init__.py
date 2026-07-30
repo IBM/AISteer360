@@ -30,7 +30,6 @@ try:
         plot_sensitivity,
         plot_tradeoff,
         plot_tradeoff_scatter,
-        plot_tradeoff_with_pareto,
     )
 
     __all__.extend([
@@ -41,7 +40,6 @@ try:
         "plot_sensitivity",
         "plot_tradeoff",
         "plot_tradeoff_scatter",
-        "plot_tradeoff_with_pareto",
     ])
 except ImportError:
     pass  # matplotlib not installed

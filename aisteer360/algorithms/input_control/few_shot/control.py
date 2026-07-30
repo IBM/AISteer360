@@ -11,8 +11,8 @@ from aisteer360.algorithms.input_control.base import InputControl
 from aisteer360.algorithms.input_control._common.formatters.few_shot_block import (
     FewShotBlockFormatter,
 )
-from aisteer360.algorithms.input_control._common.memory.pool_memory import PoolMemory
-from aisteer360.algorithms.input_control._common.memory.text_memory import TextMemory
+from aisteer360.algorithms.input_control._common.memory.pool import PoolMemory
+from aisteer360.algorithms.input_control._common.memory.text import TextMemory
 from aisteer360.algorithms.input_control._common.selectors.base import (
     BaseSelector,
 )

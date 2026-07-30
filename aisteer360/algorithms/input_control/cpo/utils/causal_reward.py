@@ -27,6 +27,7 @@ from aisteer360.algorithms.input_control.cpo.utils.embeddings import (
     TextEncoder,
     fit_pca,
 )
+from aisteer360.utils.optional import require
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +198,8 @@ def train(
 
     DML = _try_import_dml() if use_dml is None else (_try_import_dml() if use_dml else None)
     if use_dml is True and DML is None:
-        raise ImportError(
-            "CPO with use_dml=True requires `econml`. Install with `pip install aisteer360[cpo]`."
-        )
+        require("econml")  # raises ImportError naming the [cpo] extra when econml is absent
+        raise ImportError("CPO with use_dml=True requires `econml.dml.CausalForestDML`.")
 
     if DML is not None:
         treatment = prompt_red - seed_prompt_red[None, :]

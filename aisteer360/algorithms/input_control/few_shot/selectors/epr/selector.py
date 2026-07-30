@@ -13,7 +13,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from aisteer360.algorithms.input_control._common.memory.pool_memory import PoolMemory
+from aisteer360.algorithms.input_control._common.memory.pool import PoolMemory
 from aisteer360.algorithms.input_control._common.selectors.dense_retrieval import (
     DenseRetrievalSelector,
 )

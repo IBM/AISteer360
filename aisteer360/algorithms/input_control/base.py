@@ -46,6 +46,9 @@ class InputControl(ABC):
     architecture, or runtime activations). Any preparation happens once in `steer()`; `adapt()` / `adapt_messages()`
     are a function of the input and the prepared state at inference time.
 
+    A pipeline may hold several input controls; they chain in `controls`-list order, each control receiving the
+    previous control's output within its phase (message-level for chat input, then token-level).
+
     Methods:
         adapt(input_ids, runtime_kwargs) -> input_ids: Tensor-level adaptation (required).
         adapt_messages(messages, runtime_kwargs) -> messages | None: Optional message-level adaptation,
@@ -104,9 +107,9 @@ class InputControl(ABC):
 
         Default returns None (no message-level changes). Subclasses that modify chat structure (set/replace system
         prompt, insert example turns) override this. When this method returns a non-None result for a chat-input
-        generation, the pipeline does NOT additionally call `adapt()` for that call; controls may therefore implement
-        both entry points (message-level for chat input, token-level for raw text/tensor input) without being applied
-        twice.
+        generation, the pipeline does NOT additionally call this control's `adapt()` for that call; a control may
+        therefore implement both entry points (message-level for chat input, token-level for raw text/tensor input)
+        without being applied twice. Other input controls in the pipeline still run per their own phase.
 
         Args:
             messages: A batch of chats; outer list is the batch, inner list is the message sequence for one chat.
