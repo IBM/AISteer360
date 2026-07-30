@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from typing import Callable
-
-import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
+from aisteer360.algorithms.output_control._common.drivers.phased import Fixed, Generated, PhasedDriver
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.output_control.thinking_intervention.args import (
     ThinkingInterventionArgs,
 )
 
 
-class ThinkingIntervention(OutputControl):
+class ThinkingIntervention(PhasedDriver):
     """
     Implementation of Thinking Intervention from Wu et al., 2025.
 
@@ -25,9 +23,16 @@ class ThinkingIntervention(OutputControl):
     instructions, reasoning templates, or structured prompts to guide the model's internal reasoning process.
 
     2. **Guided Generation**: Generate text using the modified prompt, where the model first produces thinking content
-    within special tags (e.g., <think>...</think>) before generating the actual response.
+    within special tags (e.g. <think>...</think>) before generating the actual response.
 
     3. **Output Extraction**: Parse the generated text to extract only the content after the thinking tags.
+
+    ThinkingIntervention is a decoding driver: a thin preset of the generic `PhasedDriver`. Its plan is a single
+    replacing `Fixed` phase (the intervention-rewritten prompt) followed by a `Generated` phase, with an
+    `extract_after="</think>"` output rule that keeps the original prompt's token prefix and the re-tokenized remainder
+    after the closing tag. Per-example `params` supplied as a dict-of-lists are sliced during plan construction.
+
+    Batch-1 plans are constructed per example (the driver loops over rows), preserving the original batched behavior.
 
     Args:
         intervention (Callable[[str, dict], str]): Function that modifies the input prompt to include thinking
@@ -43,132 +48,24 @@ class ThinkingIntervention(OutputControl):
 
     supports_batching: bool = True
 
-    model: PreTrainedModel | None = None
     tokenizer: PreTrainedTokenizer | None = None
-    base_generate: Callable | None = None
 
-    def steer(
-            self,
-            model: PreTrainedModel,
-            tokenizer: PreTrainedTokenizer | None = None,
-            **_
-    ) -> PreTrainedModel:
-        self.model = model
+    def __init__(self, *args, **kwargs):
+        # route through OutputControl (validate ThinkingInterventionArgs, mirror fields, _configure)
+        OutputControl.__init__(self, *args, **kwargs)
+
+    def _configure(self) -> None:
+        """Fix the phase-splice output rule (`extract_after` = the closing think tag)."""
+        self.extract_after = "</think>"
+
+    def steer(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizer | None = None, **_) -> PreTrainedModel:
+        """Lightweight preparation; attach the tokenizer used to re-tokenize the modified prompt."""
         self.tokenizer = tokenizer or getattr(model, "tokenizer", None)
-        self.base_generate = model.generate
         return model
 
-    def generate(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        runtime_kwargs: dict | None,
-        model: PreTrainedModel,
-        **gen_kwargs,
-    ) -> torch.Tensor:
-        if self.tokenizer is None or self.model is None:
-            raise RuntimeError("ThinkingIntervention requires .steer() first.")
-
-        runtime_kwargs = runtime_kwargs or {}
-        base_generate = runtime_kwargs.get("base_generate", self.base_generate)
-        if base_generate is None:
-            raise RuntimeError("ThinkingIntervention: base_generate is not set.")
-
-        intervention = self.intervention
-
-        # self.tag_ids = self.tokenizer("</think>", add_special_tokens=False).input_ids
-
-        # normalize to [batch, seq_len]
-        if input_ids.dim() == 1:
-            input_ids = input_ids.unsqueeze(0)
-            if attention_mask is not None and attention_mask.dim() == 1:
-                attention_mask = attention_mask.unsqueeze(0)
-
-        batch_size = input_ids.size(0)
-
-        # params handling
-        params_agg = runtime_kwargs.get("params", None)
-        if params_agg is None:
-            params_per_example = [{} for _ in range(batch_size)]
-        elif isinstance(params_agg, dict) and any(
-                isinstance(v, (list, tuple)) for v in params_agg.values()
-        ):
-            # aggregated dict-of-lists; slice each list per example
-            params_per_example: list[dict] = []
-            for i in range(batch_size):
-                p_i = {}
-                for k, v in params_agg.items():
-                    if isinstance(v, (list, tuple)):
-                        if len(v) != batch_size:
-                            raise ValueError(
-                                f"ThinkingIntervention: params['{k}'] has length {len(v)}, but batch size is {batch_size}."
-                            )
-                        p_i[k] = v[i]
-                    else:
-                        p_i[k] = v
-                params_per_example.append(p_i)
-        else:
-            # simple case: same params dict for every example
-            params_per_example = [params_agg] * batch_size
-
-        # build modified prompts
-        original_lengths = [ids.size(0) for ids in input_ids]
-        original_prompts = self.tokenizer.batch_decode(
-            input_ids, skip_special_tokens=True
-        )
-
-        modified_prompts = [
-            intervention(prompt, params_per_example[i])
-            for i, prompt in enumerate(original_prompts)
+    def plan(self, prompt_text: str, params: dict) -> list:
+        """Rewrite the prompt via `intervention`, then generate; keep the post-`</think>` remainder."""
+        return [
+            Fixed(self.intervention, replace=True, add_special_tokens=True),
+            Generated(),
         ]
-
-        new_input = self.tokenizer(
-            modified_prompts,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.model.device)
-
-        gen_kwargs = dict(gen_kwargs)
-        gen_kwargs["return_dict_in_generate"] = False
-
-        outputs = base_generate(
-            input_ids=new_input["input_ids"],
-            attention_mask=new_input.get("attention_mask", None),
-            **gen_kwargs,
-        )
-
-        if isinstance(outputs, torch.Tensor):
-            output_ids = outputs
-        else:
-            output_ids = outputs[0] if isinstance(outputs, (list, tuple)) else outputs
-
-        final_sequences: list[torch.Tensor] = []
-
-        for i in range(batch_size):
-            out_ids = output_ids[i]
-            keep_prefix = out_ids[: original_lengths[i]]
-
-            decoded = self.tokenizer.decode(out_ids, skip_special_tokens=False)
-            remainder_txt = decoded.rsplit("</think>", 1)[-1].lstrip()
-
-            remainder_ids = (
-                self.tokenizer(
-                    remainder_txt,
-                    add_special_tokens=False,
-                    return_tensors="pt",
-                )["input_ids"]
-                .to(out_ids.device)
-                .squeeze(0)
-            )
-
-            final_ids = torch.cat([keep_prefix, remainder_ids], dim=0)
-            final_sequences.append(final_ids)
-
-        padded = self.tokenizer.pad(
-            {"input_ids": [seq.tolist() for seq in final_sequences]},
-            padding=True,
-            return_tensors="pt",
-        ).to(self.model.device)
-
-        # return [batch, max_len]
-        return padded["input_ids"]
