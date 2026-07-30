@@ -10,7 +10,7 @@ import torch
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.algorithms.state_control._common.gates import MultiKeyThresholdGate
-from aisteer360.algorithms.state_control._common.gates.utils.scores import aggregate_condition_hidden
+from aisteer360.algorithms.core.internals.pooling import aggregate_condition_hidden
 from aisteer360.algorithms.state_control._common.specs import ConditionSearchSpec, VectorTrainSpec
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 from aisteer360.algorithms.state_control.cast.args import CASTArgs

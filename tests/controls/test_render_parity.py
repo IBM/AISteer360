@@ -1,4 +1,4 @@
-"""Tests for the shared example renderer (`_common/render.py`).
+"""Tests for the shared example renderer (`core/internals/render.py`).
 
 The parity test is the regression guard for the unified-formatting design: it
 fails if steering-vector extraction and inference ever produce different
@@ -10,7 +10,7 @@ import logging
 import pytest
 from transformers import AutoTokenizer
 
-from aisteer360.algorithms.state_control._common.render import render_contrastive
+from aisteer360.algorithms.core.internals.render import render_contrastive
 from aisteer360.algorithms.state_control._common.specs import ContrastivePairs
 from aisteer360.utils.rendering import encode_for_model, render_for_model
 from tests.utils.load_ci_models import get_models

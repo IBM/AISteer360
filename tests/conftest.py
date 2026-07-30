@@ -186,11 +186,12 @@ class StateControl:
 
 
 class OutputControl:
-    """Base class for output control steering methods."""
+    """Base class for output control steering methods (step-level)."""
 
     Args: type[BaseArgs] | None = None
     enabled: bool = True
     supports_batching: bool = False
+    include_in_scoring: bool = True
 
     def __init__(self, *args, **kwargs) -> None:
         if self.Args is not None:
@@ -198,13 +199,38 @@ class OutputControl:
             for f in self.args.__dataclass_fields__:
                 setattr(self, f, getattr(self.args, f))
 
-    def generate(self, input_ids, attention_mask, runtime_kwargs, model, **gen_kwargs) -> torch.Tensor:
-        """Custom generation logic."""
-        return model.generate(input_ids=input_ids, attention_mask=attention_mask, **gen_kwargs)
+    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs) -> list:
+        return []
+
+    def get_stopping_criteria(self, input_ids, runtime_kwargs, **kwargs) -> list:
+        return []
 
     def steer(self, model, tokenizer=None, **kwargs) -> None:
         """Optional steering/preparation."""
         pass
+
+
+class DecodingDriver(OutputControl):
+    """Base class for output controls that implement the decoding procedure."""
+
+    def decode(self, input_ids, attention_mask, model, logits_processors,
+               stopping_criteria, runtime_kwargs, **gen_kwargs) -> torch.Tensor:
+        raise NotImplementedError
+
+
+class HFGenerateDriver(DecodingDriver):
+    """Default decoding driver: delegate to model.generate."""
+
+    supports_batching: bool = True
+
+    def decode(self, input_ids, attention_mask, model, logits_processors,
+               stopping_criteria, runtime_kwargs, **gen_kwargs) -> torch.Tensor:
+        extra = {}
+        if len(logits_processors):
+            extra["logits_processor"] = logits_processors
+        if len(stopping_criteria):
+            extra["stopping_criteria"] = stopping_criteria
+        return model.generate(input_ids=input_ids, attention_mask=attention_mask, **extra, **gen_kwargs)
 
 
 # Null Control Classes (identity/no-op implementations)
@@ -224,12 +250,6 @@ class NoStructuralControl(StructuralControl):
 
 class NoStateControl(StateControl):
     """Identity state control - no hooks registered."""
-    enabled: bool = False
-    supports_batching: bool = True
-
-
-class NoOutputControl(OutputControl):
-    """Identity output control - uses default model.generate()."""
     enabled: bool = False
     supports_batching: bool = True
 
@@ -352,23 +372,27 @@ class MockOutputArgs(BaseArgs):
 
 class MockOutputControl(OutputControl):
     """
-    Generic mock output control for testing.
+    Generic mock output control for testing (step-level).
 
-    Simulates custom decoding logic.
+    Records whether its `get_logits_processors` hook was invoked and the runtime kwargs it
+    received, then contributes a no-op logits processor so the default driver still produces output.
     """
     Args = MockOutputArgs
     supports_batching: bool = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._generate_called = False
+        self._processors_requested = False
         self._runtime_kwargs_received = None
 
-    def generate(self, input_ids, attention_mask, runtime_kwargs, model, **gen_kwargs):
-        self._generate_called = True
+    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs):
+        self._processors_requested = True
         self._runtime_kwargs_received = runtime_kwargs
-        # Delegate to model but track the call
-        return model.generate(input_ids=input_ids, attention_mask=attention_mask, **gen_kwargs)
+
+        def _noop(prefix_ids, scores):
+            return scores
+
+        return [_noop]
 
     def steer(self, model, tokenizer=None, **kwargs):
         self.model = model
@@ -489,20 +513,32 @@ class MockUseCase:
 
 
 # Utility Functions
-_DEFAULT_FACTORIES: dict[type, type] = {
+_DEFAULT_FACTORIES: dict[type, type | None] = {
     InputControl: NoInputControl,
     StructuralControl: NoStructuralControl,
     StateControl: NoStateControl,
-    OutputControl: NoOutputControl,
+    OutputControl: None,  # output has no phantom no-op; the pipeline owns a default driver
 }
 
 
 def merge_controls(supplied) -> dict[str, object]:
     """Sort supplied controls by category.
 
-    The state category admits any number of controls (returned as an ordered list under
-    `"state_controls"`); the other categories admit at most one each.
+    Every category admits any number of controls (returned as ordered lists under
+    `"input_controls"` / `"structural_controls"` / `"state_controls"` / `"output_controls"`). The
+    output category additionally admits at most one enabled `DecodingDriver`.
     """
+    supplied = list(supplied)
+
+    seen_ids: set[int] = set()
+    for control in supplied:
+        if id(control) in seen_ids:
+            raise ValueError(
+                f"The same {type(control).__name__} instance was supplied more than once. "
+                "To apply a method twice, construct a second instance."
+            )
+        seen_ids.add(id(control))
+
     bucket: dict[type, list] = defaultdict(list)
     for control in supplied:
         for category in _DEFAULT_FACTORIES:
@@ -512,23 +548,19 @@ def merge_controls(supplied) -> dict[str, object]:
         else:
             raise TypeError(f"Unknown control type: {type(control)}")
 
-    for category, controls in bucket.items():
-        if category is not StateControl and len(controls) > 1:
-            names = [type(c).__name__ for c in controls]
-            raise ValueError(f"Multiple {category.__name__}s supplied: {names}")
+    drivers = [
+        c for c in bucket.get(OutputControl, [])
+        if isinstance(c, DecodingDriver) and getattr(c, "enabled", True)
+    ]
+    if len(drivers) > 1:
+        names = [type(c).__name__ for c in drivers]
+        raise ValueError(f"Multiple decoding drivers supplied: {names}.")
 
     out: dict[str, object] = {}
-    for category, factory in _DEFAULT_FACTORIES.items():
-        if category is StateControl:
-            out["state_controls"] = bucket.get(category) or [factory()]
-            continue
-        instance = bucket.get(category, [factory()])[0]
-        out_key = (
-            "input_control" if category is InputControl else
-            "structural_control" if category is StructuralControl else
-            "output_control"
-        )
-        out[out_key] = instance
+    out["state_controls"] = bucket.get(StateControl) or [NoStateControl()]
+    out["output_controls"] = list(bucket.get(OutputControl, []))
+    out["input_controls"] = bucket.get(InputControl) or [NoInputControl()]
+    out["structural_controls"] = bucket.get(StructuralControl) or [NoStructuralControl()]
     return out
 
 

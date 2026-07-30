@@ -15,6 +15,8 @@ import pytest
 import torch
 
 from tests.conftest import (  # Base classes; Mock controls; Utilities
+    DecodingDriver,
+    HFGenerateDriver,
     InputControl,
     MockInputArgs,
     MockInputControl,
@@ -25,7 +27,6 @@ from tests.conftest import (  # Base classes; Mock controls; Utilities
     MockStructuralArgs,
     MockStructuralControl,
     NoInputControl,
-    NoOutputControl,
     NoStateControl,
     NoStructuralControl,
     OutputControl,
@@ -279,19 +280,17 @@ class TestOutputControlBase:
         assert OutputControl.enabled is True
         assert OutputControl.supports_batching is False
         assert OutputControl.Args is None
+        assert OutputControl.include_in_scoring is True
 
-    def test_generate_delegates_to_model(self, mock_model):
-        """Test that base generate delegates to model."""
+    def test_base_output_hooks_default_empty(self):
+        """The base output hooks return empty lists."""
         control = OutputControl()
-        input_ids = torch.tensor([[1, 2, 3]])
-        attention_mask = torch.ones_like(input_ids)
-
-        control.generate(input_ids, attention_mask, {}, mock_model, max_new_tokens=10)
-        mock_model.generate.assert_called_once()
+        assert control.get_logits_processors(torch.tensor([[1, 2, 3]]), {}) == []
+        assert control.get_stopping_criteria(torch.tensor([[1, 2, 3]]), {}) == []
 
 
 class TestMockOutputControl:
-    """Tests for MockOutputControl implementation."""
+    """Tests for MockOutputControl implementation (step-level)."""
 
     def test_initialization_with_args(self):
         """Test MockOutputControl initializes with args."""
@@ -299,42 +298,47 @@ class TestMockOutputControl:
         assert control.temperature == 0.5
         assert control.top_k == 30
 
-    def test_generate_tracks_call(self, mock_model):
-        """Test that generate tracks whether it was called."""
+    def test_get_logits_processors_tracks_call(self):
+        """Test that get_logits_processors tracks whether it was called."""
         control = MockOutputControl()
-        assert control._generate_called is False
+        assert control._processors_requested is False
 
-        input_ids = torch.tensor([[1, 2, 3]])
-        control.generate(input_ids, torch.ones_like(input_ids), {"key": "val"}, mock_model)
+        processors = control.get_logits_processors(torch.tensor([[1, 2, 3]]), {"key": "val"})
 
-        assert control._generate_called is True
+        assert control._processors_requested is True
+        assert len(processors) == 1  # contributes a no-op processor
 
-    def test_generate_stores_runtime_kwargs(self, mock_model):
-        """Test that generate stores runtime_kwargs."""
+    def test_get_logits_processors_stores_runtime_kwargs(self):
+        """Test that get_logits_processors stores runtime_kwargs."""
         control = MockOutputControl()
         runtime_kwargs = {"constraint": "test"}
-        input_ids = torch.tensor([[1, 2, 3]])
 
-        control.generate(input_ids, torch.ones_like(input_ids), runtime_kwargs, mock_model)
+        control.get_logits_processors(torch.tensor([[1, 2, 3]]), runtime_kwargs)
 
         assert control._runtime_kwargs_received == runtime_kwargs
 
 
-class TestNoOutputControl:
-    """Tests for NoOutputControl (identity control)."""
+class TestHFGenerateDriver:
+    """Tests for HFGenerateDriver (default decoding driver)."""
 
     def test_properties(self):
-        """Test NoOutputControl properties."""
-        assert NoOutputControl.enabled is False
-        assert NoOutputControl.supports_batching is True
+        """Test HFGenerateDriver properties."""
+        assert HFGenerateDriver.enabled is True
+        assert HFGenerateDriver.supports_batching is True
+        assert issubclass(HFGenerateDriver, DecodingDriver)
 
-    def test_generate_uses_model_generate(self, mock_model):
-        """Test that generate uses model.generate."""
-        control = NoOutputControl()
+    def test_decode_uses_model_generate(self, mock_model):
+        """Test that decode delegates to model.generate."""
+        from transformers import LogitsProcessorList, StoppingCriteriaList
+
+        driver = HFGenerateDriver()
         input_ids = torch.tensor([[1, 2, 3]])
         attention_mask = torch.ones_like(input_ids)
 
-        control.generate(input_ids, attention_mask, {}, mock_model)
+        driver.decode(
+            input_ids, attention_mask, mock_model,
+            LogitsProcessorList(), StoppingCriteriaList(), None,
+        )
         mock_model.generate.assert_called_once()
 
 
@@ -424,22 +428,18 @@ class TestControlLifecycle:
         assert returned_model is mock_model
 
     def test_output_control_full_lifecycle(self, mock_model, mock_tokenizer):
-        """Test full lifecycle of output control."""
+        """Test full lifecycle of output control (steer -> contribute processors)."""
         control = MockOutputControl(temperature=0.8)
 
         # Steer phase
         control.steer(mock_model, mock_tokenizer)
 
-        # Generate phase
+        # Contribution phase
         input_ids = torch.tensor([[1, 2, 3]])
-        attention_mask = torch.ones_like(input_ids)
+        processors = control.get_logits_processors(input_ids, {"key": "val"})
 
-        output = control.generate(
-            input_ids, attention_mask, {"key": "val"}, mock_model, max_new_tokens=5
-        )
-
-        assert control._generate_called
-        assert output is not None
+        assert control._processors_requested
+        assert len(processors) == 1
 
 
 # Real StateControl.register_hooks unwind (Issue 8) + beam-expansion mask (Issue 4)

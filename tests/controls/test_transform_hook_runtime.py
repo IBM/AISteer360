@@ -1,19 +1,26 @@
 """Unit tests for the shared `TransformHookRuntime` (design PR 2a).
 
-Exercises the runtime directly with hand-registered hooks on a tiny Llama: pass-opener KV-offset
-semantics across prefill/decode with multiple hooked layers, `after_prompt`/`last_k`/`from_position`/
-`all` token scopes, beam-expansion alignment, tuple vs bare-tensor outputs, the pre-hook
-(`layer_input`) extract/replace path, and read-only condition hooks feeding a gate.
+Exercises the runtime directly with hand-registered hooks on a tiny Llama: `cache_position`-derived
+position offsets and their pass-counting fallback, pass-opener KV-offset semantics across
+prefill/decode with multiple hooked layers, `after_prompt`/`last_k`/`from_position`/`all` token
+scopes, auxiliary-pass marking (aligned and detached), beam-expansion alignment, tuple vs
+bare-tensor outputs, the pre-hook (`layer_input`) extract/replace path, and read-only condition
+hooks feeding a gate.
 
 Runs hub-free on a tiny randomly-initialized Llama.
 """
+import warnings
+
 import pytest
 import torch
 
+from aisteer360.algorithms.core.utils.auxiliary_pass import auxiliary_pass
 from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate, MultiKeyThresholdGate
+from aisteer360.algorithms.state_control._common.gates.base import BaseGate
 from aisteer360.algorithms.state_control._common.runtime import TransformHookRuntime
 from aisteer360.algorithms.state_control._common.token_scope import compute_prompt_lens
-from aisteer360.algorithms.state_control._common.transforms.base import BaseTransform
+from tests.utils.runtime_helpers import RecordingTransform as _RecordingTransform
+from tests.utils.runtime_helpers import strip_clock
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 HIDDEN = 32
@@ -21,23 +28,13 @@ HEADS = 4
 LAYERS = 4
 
 
-class _RecordingTransform(BaseTransform):
-    """Records the token mask and position offset seen at each apply; adds a constant."""
-
-    def __init__(self, value: float = 1.0):
-        self.value = value
-        self.masks: list[torch.BoolTensor] = []
-
-    def apply(self, hidden_states, *, layer_id, token_mask, **kwargs):
-        self.masks.append(token_mask.detach().clone())
-        return hidden_states + self.value
-
-
-def _register(model, runtime, hooks):
+def _register(model, runtime, hooks, strip=False):
     """Register `(layer_id, hook_callable)` pairs at the runtime's hook point; return handles."""
     handles = []
     for layer_id, hook in hooks:
         module = model.model.layers[layer_id]
+        if strip:
+            hook = strip_clock(hook)
         if runtime.hook_point == "layer_output":
             handles.append(module.register_forward_hook(hook, with_kwargs=True))
         else:
@@ -46,7 +43,8 @@ def _register(model, runtime, hooks):
 
 
 class TestPassOpenerOffset:
-    def test_offset_advances_once_per_pass_multi_layer(self):
+    @pytest.mark.parametrize("strip", [False, True], ids=["clock", "fallback"])
+    def test_offset_advances_once_per_pass_multi_layer(self, strip):
         """With three hooked layers, `after_prompt` steers every decode pass and no prefill pass."""
         model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
         runtime = TransformHookRuntime(hook_point="layer_output")
@@ -64,7 +62,7 @@ class TestPassOpenerOffset:
                 token_scope="after_prompt", is_pass_opener=(lid == opener)))
             for lid in layer_ids
         ]
-        handles = _register(model, runtime, hooks)
+        handles = _register(model, runtime, hooks, strip=strip)
         try:
             model.generate(input_ids=input_ids, max_new_tokens=5, do_sample=False, eos_token_id=None)
         finally:
@@ -81,8 +79,9 @@ class TestPassOpenerOffset:
             for m in masks:
                 assert m.shape[1] == 1 and bool(m.all())
 
+    @pytest.mark.parametrize("strip", [False, True], ids=["clock", "fallback"])
     @pytest.mark.parametrize("prompt_len", [1, 4])
-    def test_prompt_len_one_still_steers_decode(self, prompt_len):
+    def test_prompt_len_one_still_steers_decode(self, prompt_len, strip):
         """A length-1 prompt must not confuse prefill with decode (the anti-drift guard)."""
         model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
         runtime = TransformHookRuntime(hook_point="layer_output")
@@ -93,7 +92,7 @@ class TestPassOpenerOffset:
         hook = runtime.build_behavior_hook(
             layer_id=1, transform=transform, gate=AlwaysOpenGate(),
             token_scope="after_prompt", is_pass_opener=True)
-        handles = _register(model, runtime, [(1, hook)])
+        handles = _register(model, runtime, [(1, hook)], strip=strip)
         try:
             model.generate(input_ids=input_ids, max_new_tokens=5, do_sample=False, eos_token_id=None)
         finally:
@@ -244,3 +243,177 @@ class TestConditionHook:
         assert out is hidden  # unmodified output returned as-is
         assert seen["hidden"] is hidden
         assert gate.is_open()  # 0.9 >= 0.5 opens the gate
+
+
+def _after_prompt_hook(runtime, transform, prompt_len=4):
+    """Build an `after_prompt` opener behavior hook on a freshly reset runtime."""
+    runtime.reset(torch.tensor([prompt_len]))
+    return runtime.build_behavior_hook(
+        layer_id=0, transform=transform, gate=AlwaysOpenGate(),
+        token_scope="after_prompt", is_pass_opener=True)
+
+
+class TestClockOffsets:
+    def test_decode_position_from_cache_position(self):
+        """A single-token pass is positioned by `cache_position`, not by the pass counter."""
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        transform = _RecordingTransform()
+        hook = _after_prompt_hook(runtime, transform)
+
+        hidden = torch.zeros(1, 1, HIDDEN)
+        hook(None, (), {"cache_position": torch.tensor([7])}, (hidden,))
+        assert len(transform.masks) == 1 and bool(transform.masks[0].all())
+
+        hook(None, (), {"cache_position": torch.tensor([2])}, (hidden,))
+        assert len(transform.masks) == 1  # position 2 is inside the prompt; nothing recorded
+
+    def test_restart_sequence_never_steers_prompt_columns(self):
+        """A second `generate` call re-forwarding a longer frontier keeps prompt columns unsteered."""
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        transform = _RecordingTransform()
+        hook = _after_prompt_hook(runtime, transform)
+
+        def run(seq_len, start):
+            hidden = torch.zeros(1, seq_len, HIDDEN)
+            hook(None, (), {"cache_position": torch.arange(start, start + seq_len)}, (hidden,))
+
+        run(4, 0)  # first call: prefill (all prompt, nothing recorded)
+        run(1, 4)  # first call: decode step
+        run(6, 0)  # second call: re-prefill over the longer frontier
+        run(1, 6)  # second call: decode step
+
+        assert len(transform.masks) == 3
+        assert transform.masks[0].shape == (1, 1) and bool(transform.masks[0].all())
+        re_prefill = transform.masks[1]
+        assert re_prefill.shape == (1, 6)
+        assert not bool(re_prefill[:, :4].any())  # prompt columns stay unsteered
+        assert bool(re_prefill[:, 4:].all())
+        assert transform.masks[2].shape == (1, 1) and bool(transform.masks[2].all())
+
+    def test_clock_disappearing_warns_once_and_falls_back(self):
+        """A pass missing `cache_position` after the clock was observed warns once and counts."""
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        transform = _RecordingTransform()
+        hook = _after_prompt_hook(runtime, transform)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            hook(None, (), {"cache_position": torch.arange(4)}, (torch.zeros(1, 4, HIDDEN),))
+            hook(None, (), {}, (torch.zeros(1, 1, HIDDEN),))
+            hook(None, (), {}, (torch.zeros(1, 1, HIDDEN),))
+        matches = [w for w in caught if "falling back to pass counting" in str(w.message)]
+        assert len(matches) == 1
+        # the fallback snapshot places both cache-less passes after the prompt
+        assert len(transform.masks) == 2
+        assert all(bool(m.all()) for m in transform.masks)
+
+
+class TestAuxiliaryPasses:
+    def _hook_and_state(self):
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        transform = _RecordingTransform()
+        hook = _after_prompt_hook(runtime, transform)
+        return runtime, transform, hook
+
+    def test_aligned_aux_with_clock_applies_and_leaves_counter(self):
+        runtime, transform, hook = self._hook_and_state()
+        hidden = torch.zeros(1, 1, HIDDEN)
+        with auxiliary_pass(aligned=True):
+            hook(None, (), {"cache_position": torch.tensor([5])}, (hidden,))
+        assert len(transform.masks) == 1 and bool(transform.masks[0].all())
+        assert runtime._offset == 0  # the fallback counter never sees auxiliary passes
+        assert runtime._prefill_seen is False
+
+    def test_aligned_aux_without_clock_skips_and_warns_once(self):
+        runtime, transform, hook = self._hook_and_state()
+        hidden = torch.zeros(1, 1, HIDDEN)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with auxiliary_pass(aligned=True):
+                hook(None, (), {}, (hidden,))
+                hook(None, (), {}, (hidden,))
+        assert not transform.masks
+        matches = [w for w in caught if "Auxiliary same-model passes" in str(w.message)]
+        assert len(matches) == 1
+
+    def test_detached_aux_skipped_in_both_modes_without_warning(self):
+        runtime, transform, hook = self._hook_and_state()
+        hidden = torch.zeros(1, 1, HIDDEN)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with auxiliary_pass(aligned=False):
+                hook(None, (), {"cache_position": torch.tensor([5])}, (hidden,))
+                hook(None, (), {}, (hidden,))
+        assert not transform.masks
+        assert not caught
+        assert runtime._offset == 0
+
+
+class _NeverReadyGate(BaseGate):
+    """Gate that never reports ready and records every update call."""
+
+    def __init__(self):
+        self.updates = []
+
+    def update(self, scores, *, key=None):
+        self.updates.append(self._coerce_scores(scores))
+
+    def open_rows(self):
+        return torch.ones(self.num_rows, dtype=torch.bool)
+
+    def is_ready(self):
+        return False
+
+
+class TestConditionHookAuxiliary:
+    def _condition_hook(self):
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        gate = _NeverReadyGate()
+        gate.reset(1)
+        scorer_calls = []
+
+        def scorer(hidden, layer_id, *, prompt_mask=None):
+            scorer_calls.append(tuple(hidden.shape))
+            return torch.zeros(hidden.size(0))
+
+        runtime.reset(torch.tensor([4]), prompt_mask=torch.ones(1, 4, dtype=torch.bool))
+        hook = runtime.build_condition_hook(layer_id=0, scorer=scorer, gate=gate, is_pass_opener=True)
+        return gate, scorer_calls, hook
+
+    @pytest.mark.parametrize("with_clock", [True, False], ids=["clock", "fallback"])
+    @pytest.mark.parametrize("aligned", [True, False], ids=["aligned", "detached"])
+    @pytest.mark.parametrize("seq_len", [2, 6])
+    def test_condition_ignores_auxiliary_passes(self, aligned, with_clock, seq_len):
+        """No scoring, no gate update, no accounting; a variant prompt of any length never raises."""
+        gate, scorer_calls, hook = self._condition_hook()
+        hidden = torch.zeros(1, seq_len, HIDDEN)
+        kwargs = {"cache_position": torch.arange(seq_len)} if with_clock else {}
+        with auxiliary_pass(aligned=aligned):
+            hook(None, (), kwargs, (hidden,))
+        assert not scorer_calls
+        assert not gate.updates
+
+
+class TestFallbackMultiCallHeuristic:
+    def _hook(self):
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        return _after_prompt_hook(runtime, _RecordingTransform())
+
+    def test_two_prefill_length_passes_warn_once(self):
+        hook = self._hook()
+        hidden = torch.zeros(1, 4, HIDDEN)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            hook(None, (), {}, (hidden,))
+            hook(None, (), {}, (hidden,))
+            hook(None, (), {}, (hidden,))
+        matches = [w for w in caught if "Multiple generate calls" in str(w.message)]
+        assert len(matches) == 1
+
+    def test_single_teacher_forced_pass_does_not_warn(self):
+        hook = self._hook()
+        hidden = torch.zeros(1, 10, HIDDEN)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            hook(None, (), {}, (hidden,))
+        assert not [w for w in caught if "Multiple generate calls" in str(w.message)]
