@@ -39,6 +39,10 @@ square brackets to the `install` command as follows:
 uv venv --python 3.11 && uv pip install '.[docs]'
 ```
 
+The feature extras are: `merging` (MergeKit structural control), `cpo` (causal DML reward estimation for CPO; CPO
+itself runs without it via a gradient-boosting fallback), and `plots` (benchmark visualization utilities). The umbrella
+`all` extra installs all three; install everything via `uv pip install '.[all]'`.
+
 ## Accessing Hugging Face models
 
 Inference is facilitated by Hugging Face. Before steering, create a `.env` file in the root directory for your Hugging

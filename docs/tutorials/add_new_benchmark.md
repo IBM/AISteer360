@@ -49,7 +49,7 @@ To decrease the execution time of the benchmark run, we additionally set `num_sa
 evaluation to (the first) `500` elements of the evaluation dataset.
 
 In this benchmark, we compare the model's base performance with two steering controls:
-[`FewShot`](../examples/notebooks/few_shot.ipynb) and [`DPO (with LoRA)`](../examples/notebooks/trl_wrapper.ipynb). Both
+[`FewShot`](../examples/notebooks/algorithms/few_shot.ipynb) and [`DPO (with LoRA)`](../examples/notebooks/algorithms/trl.ipynb). Both
 of these controls require specification of steering data, i.e., the source data that a control uses to steer the base
 model. Common steering data is used by both controls, forming the example pools for `FewShot` and the training dataset
 for `DPO`. The steering dataset takes the following form:
@@ -189,7 +189,7 @@ profiles = benchmark.run()
 benchmark.export(profiles, save_dir="./profiles/")
 ```
 A complete working example of the `CommonsenseMCQA` benchmark can be found in the
-[example notebook](../examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb).
+[example notebook](../examples/notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb).
 
 
 ## Benchmark with inference-time arguments
@@ -197,7 +197,7 @@ A complete working example of the `CommonsenseMCQA` benchmark can be found in th
 The benchmark for the `CommonsenseMCQA` use case compares `FewShot` and `DPO` controls, neither of which require
 additional inference-time arguments. In some cases, controls in a pipeline rely on information that is only available at
 inference time, e.g., increasing attention weights on specific prompt tokens corresponding to instructions as in
-[PASTA](../examples/notebooks/pasta.ipynb).
+[PASTA](../examples/notebooks/algorithms/pasta.ipynb).
 
 The `Benchmark` class allows these arguments to be passed in to each control via the specification of
 `runtime_overrides`. We briefly illustrate how this is done for the `InstructionFollowing` use case.
@@ -266,7 +266,7 @@ benchmark = Benchmark(
 )
 ```
 The benchmark can then be run as usual to generate the profiles. We direct the reader to the
-[notebook](../examples/notebooks/benchmark_instruction_following/instruction_following.ipynb) for the full implementation.
+[notebook](../examples/notebooks/benchmarks/instruction_following/instruction_following.ipynb) for the full implementation.
 
 ## Benchmark with variable controls
 

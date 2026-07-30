@@ -60,8 +60,8 @@ Lastly, the `control.py` file implements the method by overriding the `adapt` me
 
 For methods whose work is more naturally expressed at the message level (e.g. setting/replacing a system prompt),
 override `adapt_messages` instead. The pipeline calls `adapt_messages` *before* chat-template tokenization when the
-caller passes chat-shaped input; when `adapt_messages` returns a non-None result, the token-level `adapt` is *not*
-called for that generation, so the control is applied exactly once.
+caller passes chat-shaped input; when `adapt_messages` returns a non-None result, that control's token-level `adapt`
+is *not* called for that generation, so each control is applied exactly once.
 
 The control implementation for `PromptCensor` is as follows:
 
@@ -164,8 +164,8 @@ print(
 
 If your method modifies chat structure (sets/replaces a system prompt, inserts example turns, etc.), override
 `adapt_messages`. The pipeline calls `adapt_messages` before chat-template tokenization when the caller passes
-chat-shaped input; when it returns a non-None result, the token-level `adapt` is *not* called for that generation, so
-the control is applied exactly once.
+chat-shaped input; when it returns a non-None result, that control's token-level `adapt` is *not* called for that
+generation, so each control is applied exactly once.
 
 ```python
 def adapt_messages(self, messages, runtime_kwargs=None):

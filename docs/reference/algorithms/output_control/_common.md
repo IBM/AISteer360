@@ -1,6 +1,6 @@
-# Core
+# Common library
 
-::: aisteer360.algorithms.core
+::: aisteer360.algorithms.output_control._common
     handler: python
     options:
         show_if_no_docstring: true
@@ -15,7 +15,6 @@
         show_symbol_type_heading: true
         show_symbol_type_toc: true
         filters:
-          - "!^_"
-          - "!^internals"
+          - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"

@@ -1,6 +1,6 @@
-# Core
+# StoppingRules
 
-::: aisteer360.algorithms.core
+::: aisteer360.algorithms.output_control.stopping_rules
     handler: python
     options:
         show_if_no_docstring: true
@@ -16,6 +16,6 @@
         show_symbol_type_toc: true
         filters:
           - "!^_"
-          - "!^internals"
+          - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"

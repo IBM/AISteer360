@@ -1,6 +1,6 @@
-# Core
+# Probes
 
-::: aisteer360.algorithms.core
+::: aisteer360.algorithms.core.internals.probes
     handler: python
     options:
         show_if_no_docstring: true
@@ -16,6 +16,5 @@
         show_symbol_type_toc: true
         filters:
           - "!^_"
-          - "!^internals"
           - "!^registry"
           - "!^STEERING_METHOD"
