@@ -1,95 +1,105 @@
 """
-Tests for base control classes (Input, Structural, State, Output).
+Tests for the control base classes (input, structural, state, output).
 
 Tests cover:
 
-- Control initialization with and without Args
-- Control method signatures and behavior
+- Base-class defaults, abstractness, and optional lifecycle hooks
+- Args validation and field mirroring on construction
 - Null/identity control behavior
-- Control properties (enabled, supports_batching)
-- Hook management for StateControl
+- Hook management for `StateControl`, including partial-registration unwind
+- The default decoding driver
+- Batched beam search under a state control
 """
 from unittest.mock import MagicMock
 
 import pytest
 import torch
+import torch.nn as nn
+from transformers import LogitsProcessorList, StoppingCriteriaList
 
-from tests.conftest import (  # Base classes; Mock controls; Utilities
+from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
+from aisteer360.algorithms.input_control.base import InputControl, NoInputControl
+from aisteer360.algorithms.output_control.base import (
     DecodingDriver,
     HFGenerateDriver,
-    InputControl,
+    OutputControl,
+)
+from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
+from aisteer360.algorithms.state_control.base import NoStateControl, StateControl
+from aisteer360.algorithms.state_control.caa.control import CAA
+from aisteer360.algorithms.structural_control.base import (
+    NoStructuralControl,
+    StructuralControl,
+)
+from tests.conftest import (
     MockInputArgs,
     MockInputControl,
-    MockOutputArgs,
     MockOutputControl,
-    MockStateArgs,
     MockStateControl,
-    MockStructuralArgs,
     MockStructuralControl,
-    NoInputControl,
-    NoStateControl,
-    NoStructuralControl,
-    OutputControl,
-    StateControl,
-    StructuralControl,
-    create_mock_model,
-    create_mock_tokenizer,
 )
+from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+
+class _MinimalInputControl(InputControl):
+    """Concrete input control with an identity `adapt`."""
+
+    def adapt(self, input_ids, runtime_kwargs=None):
+        return input_ids
+
+
+class _MinimalStateControl(StateControl):
+    """Concrete state control returning empty hook specs."""
+
+    def get_hooks(self, input_ids, runtime_kwargs, **kwargs):
+        return {"pre": [], "forward": [], "backward": []}
 
 
 # Input Control Tests
 class TestInputControlBase:
-    """Tests for InputControl base class."""
+    """Tests for the `InputControl` base class."""
 
     def test_base_class_defaults(self):
-        """Test InputControl default properties."""
         assert InputControl.enabled is True
         assert InputControl.supports_batching is False
         assert InputControl.Args is None
 
-    def test_get_prompt_adapter_returns_identity(self):
-        """Test that base get_prompt_adapter returns identity function."""
-        control = InputControl()
-        adapter = control.get_prompt_adapter()
+    def test_adapt_is_abstract(self):
+        with pytest.raises(TypeError):
+            InputControl()
 
-        input_ids = [1, 2, 3, 4]
-        result = adapter(input_ids, {})
-        assert result == input_ids
+    def test_adapt_messages_default_returns_none(self):
+        control = _MinimalInputControl()
+        assert control.adapt_messages([[{"role": "user", "content": "hi"}]]) is None
 
     def test_steer_is_optional(self):
-        """Test that steer can be called without error."""
-        control = InputControl()
-        control.steer(model=None, tokenizer=None)  # Should not raise
+        control = _MinimalInputControl()
+        control.steer(model=None, tokenizer=None)  # no-op by default
 
 
 class TestMockInputControl:
-    """Tests for MockInputControl implementation."""
+    """Tests for the recording `MockInputControl`."""
 
     def test_initialization_with_args(self):
-        """Test MockInputControl initializes with args."""
         control = MockInputControl(prefix="test_", num_examples=5)
         assert control.prefix == "test_"
         assert control.num_examples == 5
 
     def test_initialization_from_dict(self):
-        """Test MockInputControl initializes from dict."""
         control = MockInputControl({"prefix": "dict_", "num_examples": 3})
         assert control.prefix == "dict_"
         assert control.num_examples == 3
 
-    def test_get_prompt_adapter_tracks_calls(self):
-        """Test that adapter tracks call count."""
+    def test_adapt_tracks_calls(self):
         control = MockInputControl()
-        adapter = control.get_prompt_adapter()
 
-        assert control._adapter_call_count == 0
-        adapter([1, 2, 3], {})
-        assert control._adapter_call_count == 1
-        adapter([4, 5, 6], {})
-        assert control._adapter_call_count == 2
+        assert control._adapt_call_count == 0
+        control.adapt([1, 2, 3], {})
+        assert control._adapt_call_count == 1
+        control.adapt([4, 5, 6], {})
+        assert control._adapt_call_count == 2
 
     def test_steer_stores_references(self, mock_model, mock_tokenizer):
-        """Test that steer stores model and tokenizer."""
         control = MockInputControl()
         control.steer(model=mock_model, tokenizer=mock_tokenizer)
 
@@ -98,51 +108,47 @@ class TestMockInputControl:
 
 
 class TestNoInputControl:
-    """Tests for NoInputControl (identity control)."""
+    """Tests for `NoInputControl` (identity control)."""
 
     def test_properties(self):
-        """Test NoInputControl properties."""
         assert NoInputControl.enabled is False
         assert NoInputControl.supports_batching is True
 
     def test_returns_input_unchanged(self):
-        """Test that adapter returns input unchanged."""
         control = NoInputControl()
-        adapter = control.get_prompt_adapter()
-
         input_ids = torch.tensor([1, 2, 3, 4])
-        result = adapter(input_ids, {})
+        result = control.adapt(input_ids, {})
         assert torch.equal(result, input_ids)
+
+    def test_steer_attaches_tokenizer(self, mock_tokenizer):
+        control = NoInputControl()
+        control.steer(tokenizer=mock_tokenizer)
+        assert control.tokenizer is mock_tokenizer
 
 
 # Structural Control Tests
 class TestStructuralControlBase:
-    """Tests for StructuralControl base class."""
+    """Tests for the `StructuralControl` base class."""
 
     def test_base_class_defaults(self):
-        """Test StructuralControl default properties."""
         assert StructuralControl.enabled is True
         assert StructuralControl.supports_batching is True
         assert StructuralControl.Args is None
 
-    def test_steer_returns_model(self, mock_model):
-        """Test that base steer returns the model."""
-        control = StructuralControl()
-        result = control.steer(mock_model)
-        assert result is mock_model
+    def test_steer_is_abstract(self):
+        with pytest.raises(TypeError):
+            StructuralControl()
 
 
 class TestMockStructuralControl:
-    """Tests for MockStructuralControl implementation."""
+    """Tests for the recording `MockStructuralControl`."""
 
     def test_initialization_with_args(self):
-        """Test MockStructuralControl initializes with args."""
         control = MockStructuralControl(learning_rate=1e-3, num_epochs=5)
         assert control.learning_rate == 1e-3
         assert control.num_epochs == 5
 
     def test_steer_tracks_call(self, mock_model, mock_tokenizer):
-        """Test that steer tracks whether it was called."""
         control = MockStructuralControl()
         assert control._steer_called is False
 
@@ -150,22 +156,19 @@ class TestMockStructuralControl:
         assert control._steer_called is True
 
     def test_steer_returns_model(self, mock_model):
-        """Test that steer returns the model."""
         control = MockStructuralControl()
         result = control.steer(mock_model)
         assert result is mock_model
 
 
 class TestNoStructuralControl:
-    """Tests for NoStructuralControl (identity control)."""
+    """Tests for `NoStructuralControl` (identity control)."""
 
     def test_properties(self):
-        """Test NoStructuralControl properties."""
         assert NoStructuralControl.enabled is False
         assert NoStructuralControl.supports_batching is True
 
     def test_steer_returns_model_unchanged(self, mock_model):
-        """Test that steer returns model unchanged."""
         control = NoStructuralControl()
         result = control.steer(mock_model)
         assert result is mock_model
@@ -173,66 +176,74 @@ class TestNoStructuralControl:
 
 # State Control Tests
 class TestStateControlBase:
-    """Tests for StateControl base class."""
+    """Tests for the `StateControl` base class."""
 
     def test_base_class_defaults(self):
-        """Test StateControl default properties."""
         assert StateControl.enabled is True
         assert StateControl.supports_batching is False
         assert StateControl.Args is None
 
+    def test_get_hooks_is_abstract(self):
+        with pytest.raises(TypeError):
+            StateControl()
+
     def test_hooks_initialized_empty(self):
-        """Test that hooks are initialized as empty dicts."""
-        control = StateControl()
+        control = _MinimalStateControl()
         assert control.hooks == {"pre": [], "forward": [], "backward": []}
         assert control.registered == []
 
-    def test_get_hooks_returns_empty(self):
-        """Test that base get_hooks returns empty hook dict."""
-        control = StateControl()
-        hooks = control.get_hooks(torch.tensor([[1, 2, 3]]), {})
-        assert hooks == {"pre": [], "forward": [], "backward": []}
-
     def test_set_hooks(self):
-        """Test that set_hooks updates hooks."""
-        control = StateControl()
+        control = _MinimalStateControl()
         new_hooks = {"pre": [{"module": "test"}], "forward": [], "backward": []}
         control.set_hooks(new_hooks)
         assert control.hooks == new_hooks
 
+    def test_context_manager_requires_model_ref(self):
+        control = _MinimalStateControl()
+        with pytest.raises(RuntimeError, match="Model reference not set"):
+            with control:
+                pass
+
     def test_context_manager_protocol(self):
-        """Test that StateControl implements context manager."""
-        control = StateControl()
+        control = _MinimalStateControl()
         control._model_ref = MagicMock()
 
         with control as c:
             assert c is control
 
-    def test_reset_callable(self):
-        """Test that reset can be called."""
-        control = StateControl()
-        control.reset()  # Should not raise
+    def test_reset_default_is_noop(self):
+        control = _MinimalStateControl()
+        control.reset()  # no gate or runtime present
+
+    def test_reset_clears_gate_and_runtime(self):
+        """`reset` clears a `_gate` and re-clears a `_runtime`'s per-generation counters when
+        the control exposes them."""
+        control = _MinimalStateControl()
+        control._gate = MagicMock()
+        control._runtime = MagicMock()
+
+        control.reset()
+
+        control._gate.reset.assert_called_once_with()
+        control._runtime.reset_between_generations.assert_called_once_with()
 
 
 class TestMockStateControl:
-    """Tests for MockStateControl implementation."""
+    """Tests for the recording `MockStateControl`."""
 
     def test_initialization_with_args(self):
-        """Test MockStateControl initializes with args."""
         control = MockStateControl(target_layers=[0, 2, 4], scale_factor=2.0)
         assert control.target_layers == [0, 2, 4]
         assert control.scale_factor == 2.0
 
     def test_get_hooks_creates_hooks_for_layers(self):
-        """Test that get_hooks creates hooks for target layers."""
         control = MockStateControl(target_layers=[0, 1])
         hooks = control.get_hooks(torch.tensor([[1, 2, 3]]), {})
 
         assert control._hooks_created is True
-        assert len(hooks["pre"]) == 2  # One for each layer
+        assert len(hooks["pre"]) == 2  # one per layer
 
     def test_get_hooks_stores_runtime_kwargs(self):
-        """Test that get_hooks stores runtime_kwargs."""
         control = MockStateControl()
         runtime_kwargs = {"param": "value"}
         control.get_hooks(torch.tensor([[1, 2, 3]]), runtime_kwargs)
@@ -240,7 +251,6 @@ class TestMockStateControl:
         assert control._runtime_kwargs_received == runtime_kwargs
 
     def test_steer_stores_device(self, mock_model, mock_tokenizer):
-        """Test that steer stores device reference."""
         control = MockStateControl()
         control.steer(mock_model, mock_tokenizer)
 
@@ -249,67 +259,64 @@ class TestMockStateControl:
 
 
 class TestNoStateControl:
-    """Tests for NoStateControl (identity control)."""
+    """Tests for `NoStateControl` (identity control)."""
 
     def test_properties(self):
-        """Test NoStateControl properties."""
         assert NoStateControl.enabled is False
         assert NoStateControl.supports_batching is True
 
     def test_get_hooks_returns_empty(self):
-        """Test that get_hooks returns empty."""
         control = NoStateControl()
         hooks = control.get_hooks(torch.tensor([[1]]), {})
         assert hooks == {"pre": [], "forward": [], "backward": []}
 
     def test_operations_are_noop(self):
-        """Test that all operations are no-ops."""
         control = NoStateControl()
-        control.register_hooks(None)  # No error
-        control.remove_hooks()  # No error
-        control.set_hooks({"pre": [1, 2, 3], "forward": [], "backward": []})  # No error
-        control.reset()  # No error
+        control.register_hooks(None)
+        control.remove_hooks()
+        control.set_hooks({"pre": [1, 2, 3], "forward": [], "backward": []})
+        control.reset()
 
 
 # Output Control Tests
 class TestOutputControlBase:
-    """Tests for OutputControl base class."""
+    """Tests for the `OutputControl` base class."""
 
     def test_base_class_defaults(self):
-        """Test OutputControl default properties."""
         assert OutputControl.enabled is True
         assert OutputControl.supports_batching is False
         assert OutputControl.Args is None
         assert OutputControl.include_in_scoring is True
+        assert OutputControl.same_model_forwards is False
 
     def test_base_output_hooks_default_empty(self):
-        """The base output hooks return empty lists."""
         control = OutputControl()
         assert control.get_logits_processors(torch.tensor([[1, 2, 3]]), {}) == []
         assert control.get_stopping_criteria(torch.tensor([[1, 2, 3]]), {}) == []
 
+    def test_decoding_driver_is_abstract(self):
+        with pytest.raises(TypeError):
+            DecodingDriver()
+
 
 class TestMockOutputControl:
-    """Tests for MockOutputControl implementation (step-level)."""
+    """Tests for the recording `MockOutputControl` (step-level)."""
 
     def test_initialization_with_args(self):
-        """Test MockOutputControl initializes with args."""
         control = MockOutputControl(temperature=0.5, top_k=30)
         assert control.temperature == 0.5
         assert control.top_k == 30
 
     def test_get_logits_processors_tracks_call(self):
-        """Test that get_logits_processors tracks whether it was called."""
         control = MockOutputControl()
         assert control._processors_requested is False
 
         processors = control.get_logits_processors(torch.tensor([[1, 2, 3]]), {"key": "val"})
 
         assert control._processors_requested is True
-        assert len(processors) == 1  # contributes a no-op processor
+        assert len(processors) == 1  # contributes one identity processor
 
     def test_get_logits_processors_stores_runtime_kwargs(self):
-        """Test that get_logits_processors stores runtime_kwargs."""
         control = MockOutputControl()
         runtime_kwargs = {"constraint": "test"}
 
@@ -319,18 +326,14 @@ class TestMockOutputControl:
 
 
 class TestHFGenerateDriver:
-    """Tests for HFGenerateDriver (default decoding driver)."""
+    """Tests for `HFGenerateDriver` (default decoding driver)."""
 
     def test_properties(self):
-        """Test HFGenerateDriver properties."""
         assert HFGenerateDriver.enabled is True
         assert HFGenerateDriver.supports_batching is True
         assert issubclass(HFGenerateDriver, DecodingDriver)
 
     def test_decode_uses_model_generate(self, mock_model):
-        """Test that decode delegates to model.generate."""
-        from transformers import LogitsProcessorList, StoppingCriteriaList
-
         driver = HFGenerateDriver()
         input_ids = torch.tensor([[1, 2, 3]])
         attention_mask = torch.ones_like(input_ids)
@@ -341,13 +344,37 @@ class TestHFGenerateDriver:
         )
         mock_model.generate.assert_called_once()
 
+    def test_empty_stacks_are_not_forwarded(self, mock_model):
+        """Empty processor and criteria stacks are omitted from the `model.generate` kwargs."""
+        driver = HFGenerateDriver()
+        input_ids = torch.tensor([[1, 2, 3]])
+
+        driver.decode(
+            input_ids, torch.ones_like(input_ids), mock_model,
+            LogitsProcessorList(), StoppingCriteriaList(), None,
+        )
+        kwargs = mock_model.generate.call_args.kwargs
+        assert "logits_processor" not in kwargs
+        assert "stopping_criteria" not in kwargs
+
+    def test_nonempty_stacks_are_forwarded(self, mock_model):
+        driver = HFGenerateDriver()
+        input_ids = torch.tensor([[1, 2, 3]])
+        processors = LogitsProcessorList([lambda prefix_ids, scores: scores])
+
+        driver.decode(
+            input_ids, torch.ones_like(input_ids), mock_model,
+            processors, StoppingCriteriaList(), None,
+        )
+        kwargs = mock_model.generate.call_args.kwargs
+        assert kwargs["logits_processor"] is processors
+
 
 # Control Args Integration Tests
 class TestControlArgsIntegration:
-    """Tests for how controls integrate with their Args classes."""
+    """Tests for how controls integrate with their `Args` classes."""
 
     def test_input_control_args_fields_become_attributes(self):
-        """Test that Args fields become control attributes."""
         control = MockInputControl(prefix="test", suffix="_end", num_examples=10)
 
         assert hasattr(control, "prefix")
@@ -358,7 +385,6 @@ class TestControlArgsIntegration:
         assert control.num_examples == 10
 
     def test_state_control_args_fields_become_attributes(self):
-        """Test that StateControl Args fields become attributes."""
         control = MockStateControl(target_layers=[5, 6], scale_factor=0.1, mode="multiply")
 
         assert control.target_layers == [5, 6]
@@ -366,7 +392,6 @@ class TestControlArgsIntegration:
         assert control.mode == "multiply"
 
     def test_control_preserves_args_reference(self):
-        """Test that control preserves reference to args."""
         control = MockInputControl(prefix="test")
 
         assert hasattr(control, "args")
@@ -379,62 +404,44 @@ class TestControlLifecycle:
     """Tests for control lifecycle patterns."""
 
     def test_input_control_full_lifecycle(self, mock_model, mock_tokenizer):
-        """Test full lifecycle of input control."""
         control = MockInputControl(prefix=">>", num_examples=2)
 
-        # Steer phase
         control.steer(mock_model, mock_tokenizer)
-
-        # Generate phase - get adapter
-        adapter = control.get_prompt_adapter({"key": "value"})
-
-        # Use adapter
-        result = adapter([1, 2, 3], {})
+        result = control.adapt([1, 2, 3], {"key": "value"})
 
         assert control.model is mock_model
         assert control.tokenizer is mock_tokenizer
         assert result == [1, 2, 3]
 
     def test_state_control_full_lifecycle(self, mock_model, mock_tokenizer):
-        """Test full lifecycle of state control."""
         control = MockStateControl(target_layers=[0])
 
-        # Steer phase
         control.steer(mock_model, mock_tokenizer)
 
-        # Generate phase - get hooks
         input_ids = torch.tensor([[1, 2, 3]])
         hooks = control.get_hooks(input_ids, {"runtime": "kwargs"})
 
-        # Set and use hooks
         control.set_hooks(hooks)
         control._model_ref = mock_model
 
         with control:
-            # Would normally call model.generate here
             pass
 
-        # Reset for next generation
         control.reset()
 
     def test_structural_control_full_lifecycle(self, mock_model, mock_tokenizer):
-        """Test full lifecycle of structural control."""
         control = MockStructuralControl(learning_rate=1e-4, num_epochs=1)
 
-        # Steer phase (modifies model)
         returned_model = control.steer(mock_model, mock_tokenizer)
 
         assert control._steer_called
         assert returned_model is mock_model
 
     def test_output_control_full_lifecycle(self, mock_model, mock_tokenizer):
-        """Test full lifecycle of output control (steer -> contribute processors)."""
         control = MockOutputControl(temperature=0.8)
 
-        # Steer phase
         control.steer(mock_model, mock_tokenizer)
 
-        # Contribution phase
         input_ids = torch.tensor([[1, 2, 3]])
         processors = control.get_logits_processors(input_ids, {"key": "val"})
 
@@ -442,23 +449,12 @@ class TestControlLifecycle:
         assert len(processors) == 1
 
 
-# Real StateControl.register_hooks unwind (Issue 8) + beam-expansion mask (Issue 4)
-import torch.nn as nn  # noqa: E402
-
-from aisteer360.algorithms.state_control.base import StateControl as RealStateControl  # noqa: E402
-
-
-class _ProbeStateControl(RealStateControl):
-    """Minimal concrete state control that registers a caller-supplied hook spec list."""
-
-    Args = None
+# StateControl.register_hooks unwind
+class _ProbeStateControl(StateControl):
+    """Concrete state control that registers a caller-supplied hook spec dict."""
 
     def __init__(self, hook_specs):
         super().__init__()
-        # the null-control (Args=None) branch of the base __init__ skips these; set them so the
-        # provided register_hooks/remove_hooks machinery works
-        self.hooks = {"pre": [], "forward": [], "backward": []}
-        self.registered = []
         self._specs = hook_specs
 
     def get_hooks(self, input_ids, runtime_kwargs, **kwargs):
@@ -466,7 +462,7 @@ class _ProbeStateControl(RealStateControl):
 
 
 class _TinyModel(nn.Module):
-    """Two named submodules to hook, with a no-op forward."""
+    """Two named submodules to hook, with a pass-through forward."""
 
     def __init__(self):
         super().__init__()
@@ -478,7 +474,7 @@ class _TinyModel(nn.Module):
 
 
 class TestRegisterHooksUnwind:
-    """register_hooks must not leak handles when registration fails partway (Issue 8)."""
+    """`register_hooks` must not leak handles when registration fails partway."""
 
     def _noop_pre_hook(self, module, args, kwargs):
         return None
@@ -524,14 +520,9 @@ class TestRegisterHooksUnwind:
 
 
 class TestBeamExpansionMask:
-    """CAA under batched beam search: masks align to the repeat_interleave-expanded batch (Issue 4)."""
+    """CAA under batched beam search: masks align to the `repeat_interleave`-expanded batch."""
 
     def test_caa_batch2_beams2_completes_and_steers(self):
-        from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-        from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
-        from aisteer360.algorithms.state_control.caa.control import CAA
-        from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
-
         torch.manual_seed(0)
         hidden, layers = 32, 4
         model = tiny_llama(num_layers=layers, hidden=hidden)
@@ -577,11 +568,6 @@ class TestBeamExpansionMask:
         assert 4 in applied["batches"]
 
     def test_plain_batch2_no_beams_unchanged(self):
-        from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-        from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
-        from aisteer360.algorithms.state_control.caa.control import CAA
-        from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
-
         torch.manual_seed(0)
         hidden, layers = 32, 4
         model = tiny_llama(num_layers=layers, hidden=hidden)
