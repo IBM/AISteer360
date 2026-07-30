@@ -1229,8 +1229,8 @@ class TestDuplicateBosGuard:
         bos = tokenizer.bos_token_id
         ids = torch.tensor([[bos, bos, 3, 4]])
         with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
-            pipeline.generate(ids, max_new_tokens=1)
-            pipeline.generate(ids, max_new_tokens=1)
+            pipeline.generate(input_ids=ids, max_new_tokens=1)
+            pipeline.generate(input_ids=ids, max_new_tokens=1)
         dup_warnings = [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
         assert len(dup_warnings) == 1  # warn-once per pipeline lifecycle
 
@@ -1239,7 +1239,7 @@ class TestDuplicateBosGuard:
         bos = tokenizer.bos_token_id
         ids = torch.tensor([[bos, 3, 4]])
         with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
-            pipeline.generate(ids, max_new_tokens=1)
+            pipeline.generate(input_ids=ids, max_new_tokens=1)
         assert not [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
 
     def test_left_padded_double_bos_warns(self, caplog):
@@ -1251,7 +1251,7 @@ class TestDuplicateBosGuard:
         ids = torch.tensor([[pad, pad, bos, bos, 3]])
         attention_mask = torch.tensor([[0, 0, 1, 1, 1]])
         with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
-            pipeline.generate(ids, attention_mask=attention_mask, max_new_tokens=1)
+            pipeline.generate(input_ids=ids, attention_mask=attention_mask, max_new_tokens=1)
         assert [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
 
 

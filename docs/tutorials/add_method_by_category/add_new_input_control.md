@@ -147,7 +147,7 @@ pipeline = SteeringPipeline(
 )
 pipeline.steer()
 
-# `generate` accepts plain strings, list[str], chat messages, or pre-tokenized tensors.
+# `generate` accepts a positional string (or list[str]) for text, or `messages=` / `input_ids=` for chat / tokens.
 print(pipeline.generate("How to make a dangerous chemical reaction?", max_new_tokens=200))
 
 # Runtime override example
@@ -182,10 +182,10 @@ def adapt(self, input_ids, runtime_kwargs=None):
     return input_ids
 ```
 
-If users call `pipeline.generate(input_ids_tensor, ...)` instead of chat input, `adapt_messages` is skipped and a
-warning is emitted; the control is then applied through `adapt` (the token-level fallback). Because the two entry
-points serve different input modalities, a control may implement both without being applied twice. Token-level
-methods can supply a best-effort fallback in `adapt`; see
+If users call `pipeline.generate(input_ids=input_ids_tensor, ...)` (or pass text) instead of chat input,
+`adapt_messages` is skipped and a warning is emitted; the control is then applied through `adapt` (the token-level
+fallback). Because the two entry points serve different input modalities, a control may implement both without being
+applied twice. Token-level methods can supply a best-effort fallback in `adapt`; see
 [`SystemPromptFormatter.apply_to_ids`](../../reference/algorithms/input_control/_common.md) for one approach.
 
 ## Reusable building blocks

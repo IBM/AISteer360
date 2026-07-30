@@ -4,6 +4,7 @@ Core steering pipeline for composing and applying multiple LLM control methods.
 import contextlib
 import logging
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Sequence, overload
@@ -507,48 +508,243 @@ class SteeringPipeline:
         return logits
 
     @staticmethod
-    def _classify_inputs(
+    def _legacy_classify_inputs(
             inputs: Any,
-    ) -> tuple[Literal["text", "chat", "tensor"], bool, Any]:
-        """Classify the input modality and normalize to a batched form.
+    ) -> tuple[Literal["messages", "tokens"], Any]:
+        """Classify a deprecated positional prompt into a keyword modality (shim only).
+
+        Supports the positional call forms deprecated in 0.3.0 (`list[dict]`, `list[list[dict]]`,
+        `torch.Tensor`, `list[int]`, `list[list[int]]`) by mapping each to the keyword modality it
+        re-enters, so the shim and keyword paths cannot drift. Positional `str`/`list[str]` (text) is
+        peeled off by the caller before this runs and is not handled here. Scheduled for removal in
+        0.4.0.
 
         Returns:
-            tuple[modality, is_single, normalized] where:
+            tuple[kind, payload] where `kind` is `"messages"` or `"tokens"` and `payload` is the raw
+            value to hand to the corresponding resolver.
 
-                - `modality`: one of `"text"`, `"chat"`, or `"tensor"`.
-                - `is_single`: True if the caller passed a single (non-batched) input.
-                - `normalized`: `list[str]` for text, `list[list[dict]]` for chat, 2-D `torch.Tensor` for tensor.
+        Raises:
+            TypeError: If the value is not a supported deprecated positional shape.
+            ValueError: If a tensor is neither 1-D nor 2-D, or an empty list is given.
         """
-        if isinstance(inputs, str):
-            return "text", True, [inputs]
-
         if isinstance(inputs, torch.Tensor):
-            if inputs.ndim == 1:
-                return "tensor", True, inputs.unsqueeze(0)
-            if inputs.ndim == 2:
-                return "tensor", False, inputs
-            raise ValueError(f"Tensor input must be 1-D or 2-D; got {inputs.ndim}-D.")
+            return "tokens", inputs
 
         if isinstance(inputs, list):
             if len(inputs) == 0:
                 raise ValueError("Empty input list.")
             first = inputs[0]
-            if isinstance(first, str):
-                return "text", False, list(inputs)
-            if isinstance(first, dict):
-                # one chat (list of messages)
-                return "chat", True, [list(inputs)]
-            if isinstance(first, list) and first and isinstance(first[0], dict):
-                # batch of chats (list of list of messages)
-                return "chat", False, [list(chat) for chat in inputs]
+            if isinstance(first, Mapping):
+                return "messages", inputs
+            if isinstance(first, list) and first and isinstance(first[0], Mapping):
+                return "messages", inputs
             if isinstance(first, int):
-                # 1-D token id list
-                return "tensor", True, torch.tensor([list(inputs)], dtype=torch.long)
+                return "tokens", inputs
             if isinstance(first, list) and first and isinstance(first[0], int):
-                # 2-D token id list-of-lists
-                return "tensor", False, torch.tensor([list(seq) for seq in inputs], dtype=torch.long)
+                return "tokens", inputs
 
         raise TypeError(f"Unsupported input type: {type(inputs).__name__}.")
+
+    def _resolve_generate_source(
+            self,
+            inputs: Any,
+            text: Any,
+            messages: Any,
+            input_ids: Any,
+    ) -> tuple[Literal["text", "messages", "tokens"], Any, bool]:
+        """Select the single prompt source and its modality (design §4.2).
+
+        Exactly one of positional `inputs`, `text=`, `messages=`, or `input_ids=` may be provided.
+        Positional `str`/`list[str]` (every element a `str`) routes to text with no warning and is
+        supported indefinitely; any other positional shape is deprecated, emits `FutureWarning` once,
+        and is routed via `_legacy_classify_inputs`.
+
+        Returns:
+            tuple[kind, payload, is_legacy_positional] where `kind` is `"text"`, `"messages"`, or
+            `"tokens"`, `payload` is the value handed to the matching resolver, and
+            `is_legacy_positional` marks the lenient positional surface (used for `attention_mask`
+            pairing).
+
+        Raises:
+            TypeError: If no source or more than one source is provided (E1/E2), or a deprecated
+                positional shape is unsupported.
+        """
+        provided = [
+            name for name, value in (
+                ("inputs", inputs), ("text", text), ("messages", messages), ("input_ids", input_ids),
+            ) if value is not None
+        ]
+        if len(provided) == 0:
+            raise TypeError(
+                "generate() requires a prompt: pass positional text, or exactly one of text=, "
+                "messages=, input_ids=."
+            )
+        if len(provided) > 1:
+            names = ", ".join(provided)
+            raise TypeError(
+                f"generate() received multiple prompt sources ({names}); pass exactly one of "
+                "positional inputs, text=, messages=, input_ids=."
+            )
+
+        if text is not None:
+            return "text", text, False
+        if messages is not None:
+            return "messages", messages, False
+        if input_ids is not None:
+            return "tokens", input_ids, False
+
+        # positional inputs
+        if isinstance(inputs, str) or (
+            isinstance(inputs, list) and all(isinstance(element, str) for element in inputs)
+        ):
+            return "text", inputs, True
+
+        warnings.warn(
+            "Positional chat/token input to generate() is deprecated and will be removed in v0.4.0; "
+            "pass messages=... (chat) or input_ids=... (token) input instead.",
+            FutureWarning,
+        )
+        kind, payload = self._legacy_classify_inputs(inputs)
+        return kind, payload, True
+
+    def _resolve_text_prompt(self, text: Any) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
+        """Validate and tokenize a text prompt (design §4.3.1).
+
+        Args:
+            text: A `str` (single) or a `list`/`tuple` whose elements are all `str` (batch).
+
+        Returns:
+            tuple[input_ids, attention_mask, is_single].
+
+        Raises:
+            TypeError: If `text` is a sequence containing a non-`str` element (E3).
+            ValueError: If `text` is an empty sequence (E4).
+        """
+        is_single = isinstance(text, str)
+        if is_single:
+            normalized = [text]
+        else:
+            normalized = list(text)
+            if len(normalized) == 0:
+                raise ValueError("text= received an empty sequence.")
+            for index, element in enumerate(normalized):
+                if not isinstance(element, str):
+                    raise TypeError(
+                        f"text= must be a str or a sequence of str; element {index} is "
+                        f"{type(element).__name__}."
+                    )
+
+        self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
+            self.input_controls, self._warned_tensor_with_adapt_messages
+        )
+        tokenized = self.tokenizer(normalized, return_tensors="pt", padding=True)
+        return tokenized["input_ids"], tokenized.get("attention_mask"), is_single
+
+    def _resolve_messages_prompt(
+            self,
+            messages: Any,
+            runtime_kwargs: dict,
+    ) -> tuple[torch.Tensor, torch.Tensor | None, set[int], bool]:
+        """Validate a chat prompt, then adapt and chat-template tokenize it (design §4.3.2).
+
+        Accepts one conversation (a sequence of mappings) or a batch (a sequence of sequences of
+        mappings). Message elements are validated as `collections.abc.Mapping`; role/content schema
+        remains the responsibility of `apply_chat_template`.
+
+        Args:
+            messages: One conversation or a batch of conversations.
+            runtime_kwargs: Per-call parameters forwarded to `adapt_messages`.
+
+        Returns:
+            tuple[input_ids, attention_mask, message_handled, is_single], where `message_handled`
+            holds `id()`s of controls that adapted at message level.
+
+        Raises:
+            ValueError: If the conversation or batch is empty (E5).
+            TypeError: If a batch inner element is not a mapping (E6) or the outer sequence mixes
+                element kinds (E7).
+        """
+        outer = list(messages)
+        if len(outer) == 0:
+            raise ValueError("messages= received an empty conversation or batch.")
+
+        if all(isinstance(element, Mapping) for element in outer):
+            is_single = True
+            normalized = [list(outer)]
+        elif all(isinstance(element, (list, tuple)) for element in outer):
+            is_single = False
+            normalized = []
+            for i, chat in enumerate(outer):
+                chat = list(chat)
+                if len(chat) == 0:
+                    raise ValueError("messages= received an empty conversation or batch.")
+                for j, message in enumerate(chat):
+                    if not isinstance(message, Mapping):
+                        raise TypeError(
+                            f"messages[{i}][{j}] must be a mapping (one chat message); got "
+                            f"{type(message).__name__}."
+                        )
+                normalized.append(chat)
+        else:
+            raise TypeError(
+                "messages= must be one conversation (a sequence of mappings) or a batch (a sequence "
+                "of sequences of mappings); got mixed element types at the outer level."
+            )
+
+        input_ids, attention_mask, message_handled = apply_adapt_messages_and_tokenize(
+            self.input_controls, self.tokenizer, normalized, runtime_kwargs
+        )
+        return input_ids, attention_mask, message_handled, is_single
+
+    def _resolve_token_prompt(
+            self,
+            input_ids: Any,
+            attention_mask: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
+        """Validate a token prompt (tokens only; design §4.3.3).
+
+        Args:
+            input_ids: A 1-D/2-D `torch.Tensor`, a `list[int]`, or a `list[list[int]]`.
+            attention_mask: Optional mask, passed through unchanged.
+
+        Returns:
+            tuple[input_ids, attention_mask, is_single].
+
+        Raises:
+            ValueError: If a tensor is neither 1-D nor 2-D (E8), or nested lists are ragged (E9).
+            TypeError: If the value is not a token tensor or integer list (E10).
+        """
+        if isinstance(input_ids, torch.Tensor):
+            if input_ids.ndim == 1:
+                resolved, is_single = input_ids.unsqueeze(0), True
+            elif input_ids.ndim == 2:
+                resolved, is_single = input_ids, False
+            else:
+                raise ValueError(f"input_ids tensor must be 1-D or 2-D; got {input_ids.ndim}-D.")
+        elif isinstance(input_ids, list) and input_ids and all(isinstance(x, int) for x in input_ids):
+            resolved, is_single = torch.tensor([input_ids], dtype=torch.long), True
+        elif (
+            isinstance(input_ids, list) and input_ids
+            and all(isinstance(row, list) and row and all(isinstance(x, int) for x in row) for row in input_ids)
+        ):
+            try:
+                resolved = torch.tensor(input_ids, dtype=torch.long)
+            except ValueError as exception:
+                raise ValueError(
+                    "input_ids= nested lists must be rectangular (equal-length rows)."
+                ) from exception
+            is_single = False
+        else:
+            raise TypeError(
+                f"input_ids= accepts a 1-D/2-D integer tensor, list[int], or list[list[int]]; got "
+                f"{type(input_ids).__name__}. For text prompts use text= or positional input; for "
+                "chat use messages=."
+            )
+
+        self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
+            self.input_controls, self._warned_tensor_with_adapt_messages
+        )
+        return resolved, attention_mask, is_single
 
     @overload
     def generate(
@@ -571,7 +767,44 @@ class SteeringPipeline:
     @overload
     def generate(
             self,
-            inputs: torch.Tensor,
+            *,
+            text: str,
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> str: ...
+    @overload
+    def generate(
+            self,
+            *,
+            text: Sequence[str],
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> list[str]: ...
+    @overload
+    def generate(
+            self,
+            *,
+            messages: Sequence[Mapping],
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> str: ...
+    @overload
+    def generate(
+            self,
+            *,
+            messages: Sequence[Sequence[Mapping]],
+            runtime_kwargs: dict | None = ...,
+            return_output: Literal[False] = ...,
+            **gen_kwargs: Any,
+    ) -> list[str]: ...
+    @overload
+    def generate(
+            self,
+            *,
+            input_ids: torch.Tensor | list[int] | list[list[int]],
             attention_mask: torch.Tensor | None = ...,
             runtime_kwargs: dict | None = ...,
             return_output: Literal[False] = ...,
@@ -580,54 +813,70 @@ class SteeringPipeline:
     @overload
     def generate(
             self,
-            inputs: Any,
+            inputs: Any = ...,
             attention_mask: torch.Tensor | None = ...,
             runtime_kwargs: dict | None = ...,
-            return_output: Literal[True] = ...,
+            *,
+            text: Any = ...,
+            messages: Any = ...,
+            input_ids: Any = ...,
+            return_output: Literal[True],
             **gen_kwargs: Any,
     ) -> Output | list[Output]: ...
 
     def generate(
             self,
-            inputs: str | list[str] | list[dict] | list[list[dict]] | torch.Tensor | list[int] | list[list[int]] | None = None,
+            inputs: str | list[str] | None = None,
             attention_mask: torch.Tensor | None = None,
             runtime_kwargs: dict | None = None,
             return_output: bool = False,
             *,
-            input_ids: Any = None,
+            text: str | Sequence[str] | None = None,
+            messages: Sequence[Mapping] | Sequence[Sequence[Mapping]] | None = None,
+            input_ids: torch.Tensor | list[int] | list[list[int]] | None = None,
             **gen_kwargs,
     ) -> str | list[str] | torch.Tensor | Output | list[Output]:
-        """Polymorphic generation across text, chat, and tensor inputs.
+        """Generate with steering across text, chat, and token prompts.
 
-        Dispatch table:
+        The prompt source is declared by keyword, with exactly one source per call:
 
-        | Input type | Tokenization | Default return type |
+        | Source | Tokenization | Default return type |
         | --- | --- | --- |
-        | `str` | plain text | `str` |
-        | `list[str]` | batched plain text | `list[str]` |
-        | `list[dict]` (one chat) | `apply_chat_template` | `str` |
-        | `list[list[dict]]` (batch of chats) | batched `apply_chat_template` | `list[str]` |
-        | `torch.Tensor` | already tokenized; passed through | `torch.Tensor` |
+        | `text=` (`str`) | plain text | `str` |
+        | `text=` (`Sequence[str]`) | batched plain text | `list[str]` |
+        | `messages=` (one conversation) | `apply_chat_template` | `str` |
+        | `messages=` (batch of conversations) | batched `apply_chat_template` | `list[str]` |
+        | `input_ids=` (1-D tokens) | already tokenized; passed through | `torch.Tensor` |
+        | `input_ids=` (2-D tokens) | already tokenized; passed through | `torch.Tensor` |
 
-        With `return_output=True`, the return is always `Output` (single) or `list[Output]` (batched), regardless
-        of input modality.
+        Positional `str`/`list[str]` is accepted as a convenience for text prompts and behaves like
+        `text=`. Passing chat or token input positionally is deprecated (`FutureWarning`) and will be
+        removed in v0.4.0; use `messages=` or `input_ids=`. With `return_output=True`, the return is
+        always `Output` (single) or `list[Output]` (batched) regardless of source.
 
-        NOTE: unlike `model.generate`, the returned token ids EXCLUDE the prompt by default. Do not
-        slice the result by prompt length, since that discards generated tokens. Pass
+        Unlike `model.generate`, the returned token ids exclude the prompt by default. Do not slice
+        the result by prompt length, since that discards generated tokens. Pass
         `return_full_sequence=True` to get HF-style prompt+continuation output.
 
-        `attention_mask` is meaningful only for tensor inputs; it is ignored (with a warning) for text and chat
-        inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to the
-        token-level `adapt(input_ids, ...)` chain. For chat input, each input control whose `adapt_messages`
-        returns a non-None result is not additionally run at token level for that generation, so every input
-        control is applied exactly once per call: at message level if it handled the messages, else at token
-        level.
+        `attention_mask` is valid only with token input (`input_ids=`); it is derived automatically
+        for `text=` and `messages=`, and passing it with either raises `TypeError`. During the
+        deprecation window, passing `attention_mask` with positional text is ignored with a warning.
+        The `adapt_messages` hook fires only on chat input; text and token input go straight to the
+        token-level `adapt(input_ids, ...)` chain. For chat input, each input control whose
+        `adapt_messages` returns a non-None result is not additionally run at token level, so every
+        input control is applied exactly once per call.
 
         Args:
-            inputs: One of the modalities above.
-            attention_mask: Optional, tensor-only.
+            inputs: Positional convenience for text prompts (`str` or `list[str]`). Other positional
+                shapes are deprecated; use the keywords below.
+            attention_mask: Attention mask, valid only with `input_ids=`.
             runtime_kwargs: Per-generation parameters for controls (e.g., `{"substrings": [...]}`).
-            return_output: If True, return one or more `Output` objects instead of decoded text / token IDs.
+            return_output: If True, return one or more `Output` objects instead of decoded text /
+                token IDs.
+            text: Text prompt as a `str` or a sequence of `str`.
+            messages: Chat prompt as one conversation (a sequence of mappings) or a batch (a sequence
+                of sequences of mappings).
+            input_ids: Token prompt as a 1-D/2-D integer tensor, `list[int]`, or `list[list[int]]`.
             **gen_kwargs: Generation parameters passed to `model.generate()`. May include
                 `return_full_sequence: bool` to include the prompt in the returned token IDs.
 
@@ -636,57 +885,100 @@ class SteeringPipeline:
 
         Raises:
             RuntimeError: If `steer()` has not yet been called.
+            TypeError: If no prompt source or more than one is provided, if a source fails
+                validation, or if `attention_mask` is paired with `text=`/`messages=`.
+            ValueError: If a token tensor is not 1-D/2-D, nested token lists are ragged, or a text/
+                chat sequence is empty.
         """
         if not self._is_steered:
             raise RuntimeError("Must call `.steer()` before `.generate()`.")
 
-        # keyword alias: callers may pass `input_ids=` as the prompt
-        if inputs is None and input_ids is not None:
-            inputs = input_ids
-        elif inputs is not None and input_ids is not None:
-            raise TypeError("Pass either `inputs` or `input_ids`, not both.")
-        if inputs is None:
-            raise TypeError("`generate()` requires `inputs` (or the legacy `input_ids` keyword).")
-
         runtime_kwargs = runtime_kwargs or {}
         return_full_sequence = bool(gen_kwargs.pop("return_full_sequence", False))
 
-        modality, is_single, normalized = self._classify_inputs(inputs)
+        kind, payload, is_legacy_positional = self._resolve_generate_source(
+            inputs, text, messages, input_ids
+        )
 
-        # resolve the prompt input_ids (and attention_mask) per modality
-        message_handled: set[int] = set()
-        if modality == "chat":
-            if attention_mask is not None:
-                warnings.warn(
-                    "`attention_mask` is ignored for chat input; it is rebuilt after tokenization.",
-                    UserWarning,
-                )
-            prompt_input_ids, prompt_attention_mask, message_handled = (
-                apply_adapt_messages_and_tokenize(self.input_controls, self.tokenizer, normalized, runtime_kwargs)
-            )
-        elif modality == "text":
-            if attention_mask is not None:
+        # attention_mask pairing (design §4.4)
+        if attention_mask is not None and kind != "tokens":
+            if is_legacy_positional and kind == "text":
                 warnings.warn(
                     "`attention_mask` is ignored for text input; it is rebuilt after tokenization.",
                     UserWarning,
                 )
-            self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
-                self.input_controls, self._warned_tensor_with_adapt_messages
-            )
-            tokenized = self.tokenizer(
-                list(normalized),
-                return_tensors="pt",
-                padding=True,
-            )
-            prompt_input_ids = tokenized["input_ids"]
-            prompt_attention_mask = tokenized.get("attention_mask")
-        else:  # tensor
-            self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
-                self.input_controls, self._warned_tensor_with_adapt_messages
-            )
-            prompt_input_ids = normalized
-            prompt_attention_mask = attention_mask
+                attention_mask = None
+            else:
+                raise TypeError(
+                    "attention_mask is only valid with token input (input_ids=); it is derived "
+                    "automatically for text= and messages=."
+                )
 
+        # resolve the prompt tensors per modality
+        message_handled: set[int] = set()
+        if kind == "text":
+            prompt_input_ids, prompt_attention_mask, is_single = self._resolve_text_prompt(payload)
+        elif kind == "messages":
+            prompt_input_ids, prompt_attention_mask, message_handled, is_single = (
+                self._resolve_messages_prompt(payload, runtime_kwargs)
+            )
+        else:  # tokens
+            prompt_input_ids, prompt_attention_mask, is_single = self._resolve_token_prompt(
+                payload, attention_mask
+            )
+
+        return self._execute_generation(
+            prompt_input_ids=prompt_input_ids,
+            prompt_attention_mask=prompt_attention_mask,
+            message_handled=message_handled,
+            decode_text=(kind != "tokens"),
+            is_single=is_single,
+            runtime_kwargs=runtime_kwargs,
+            return_output=return_output,
+            return_full_sequence=return_full_sequence,
+            gen_kwargs=gen_kwargs,
+        )
+
+    def _execute_generation(
+            self,
+            prompt_input_ids: torch.Tensor,
+            prompt_attention_mask: torch.Tensor | None,
+            message_handled: frozenset[int] | set[int],
+            *,
+            decode_text: bool,
+            is_single: bool,
+            runtime_kwargs: dict,
+            return_output: bool,
+            return_full_sequence: bool,
+            gen_kwargs: dict,
+    ) -> str | list[str] | torch.Tensor | Output | list[Output]:
+        """Run the shared generation tail from prompt tensors through the shaped return.
+
+        Applies the token-level input-control chain, configures state hooks, composes the output
+        processor and stopping-criteria stacks, drives decoding under the state-control context, and
+        shapes the return. The prompt slice is removed by default (`return_full_sequence=False`
+        returns continuation tokens only).
+
+        Args:
+            prompt_input_ids: Prompt token IDs [seq_len] or [batch, seq_len] before the token-level
+                `adapt` chain.
+            prompt_attention_mask: Attention mask matching `prompt_input_ids`, or None to derive it.
+            message_handled: `id()`s of input controls already handled at message level; their
+                token-level `adapt` is skipped.
+            decode_text: If True, decode the returned IDs to `str`/`list[str]`; if False, return the
+                token tensor.
+            is_single: If True, the caller passed a single (non-batched) prompt, so unwrap the batch
+                dimension in the return.
+            runtime_kwargs: Per-call parameters forwarded to input, state, and output controls.
+            return_output: If True, return `Output` (single) or `list[Output]` (batched) regardless
+                of `decode_text`.
+            return_full_sequence: If True, include the prompt in the returned token IDs.
+            gen_kwargs: Generation parameters forwarded to the decoding driver.
+
+        Returns:
+            `str` or `list[str]` when `decode_text` is True, `torch.Tensor` when False, or
+            `Output`/`list[Output]` when `return_output` is True.
+        """
         # input controls (token-level adapt chain) + normalize
         steered_input_ids, steered_attention_mask = self._prepare_inputs(
             input_ids=prompt_input_ids,
@@ -748,7 +1040,7 @@ class SteeringPipeline:
                 for i in range(output.output_ids.size(0))
             ]
 
-        if modality == "tensor":
+        if not decode_text:
             return returned_ids
 
         # text / chat → decode
