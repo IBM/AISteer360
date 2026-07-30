@@ -265,3 +265,55 @@ class TestBehaviorTransformApplication:
         control = CAST(behavior_transform=transform, behavior_layer_ids=[0, 1])
         with pytest.raises(ValueError, match="no direction for layer"):
             _tiny_pipeline(control)
+
+
+# reset() / get_hooks() gate re-sizing across consecutive generations
+def _conditional_cast() -> CAST:
+    """A conditional CAST whose row gate (`CacheOnceGate`) resizes per batch."""
+    return CAST(
+        behavior_vector=_steering_vector(seed=0, layers=range(LAYERS)),
+        behavior_layer_ids=[0, 1],
+        condition_vector=_steering_vector(seed=1, layers=range(LAYERS)),
+        condition_layer_ids=[1],
+        condition_vector_threshold=0.043,
+        condition_comparator_threshold_is="larger",
+    )
+
+
+def _cast_pipeline(control: CAST, model, tokenizer) -> SteeringPipeline:
+    pipeline = SteeringPipeline(controls=[control], lazy_init=True)
+    pipeline.model = model
+    pipeline.tokenizer = tokenizer
+    pipeline.steer()
+    return pipeline
+
+
+def test_consecutive_generations_across_batch_sizes():
+    """A steered CAST pipeline generating batch-of-4 then batch-of-2 leaves no state from the first call.
+
+    `reset()` clears the row gate to a single row without knowing the next batch; `get_hooks` re-sizes
+    it to the true batch before any gate read. The batch-of-2 outputs must match a freshly steered,
+    identically configured pipeline given only the batch-of-2, and the gate must be sized to 2 after.
+    """
+    from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+    torch.manual_seed(0)
+    model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=4)
+    tokenizer = wordlevel_tokenizer()
+
+    batch4 = torch.stack([torch.arange(3, 7), torch.arange(4, 8), torch.arange(5, 9), torch.arange(6, 10)])
+    batch2 = torch.stack([torch.arange(3, 7), torch.arange(4, 8)])
+    gen = dict(max_new_tokens=4, do_sample=False, eos_token_id=None)
+
+    control = _conditional_cast()
+    pipeline = _cast_pipeline(control, model, tokenizer)
+    pipeline.generate(input_ids=batch4, **gen)
+    out_after_4 = pipeline.generate(input_ids=batch2, **gen)
+
+    fresh_model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=4)
+    fresh_model.load_state_dict(model.state_dict())
+    fresh_pipeline = _cast_pipeline(_conditional_cast(), fresh_model, wordlevel_tokenizer())
+    out_fresh = fresh_pipeline.generate(input_ids=batch2, **gen)
+
+    assert torch.equal(out_after_4, out_fresh)  # no state from the batch-of-4 leaked into the batch-of-2
+    assert control._gate.num_rows == 2  # get_hooks re-sized the gate past the unsized reset() clear
