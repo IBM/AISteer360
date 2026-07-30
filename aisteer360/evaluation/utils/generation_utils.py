@@ -6,10 +6,54 @@ from typing import Any, Callable, Sequence
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
+from aisteer360.algorithms.core.output import Output, infer_finish_reasons
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.utils.rendering import has_chat_template, render_for_model, render_messages
 
 logger = logging.getLogger(__name__)
+
+
+def output_record_fields(output: Output | None, tokenizer: PreTrainedTokenizerBase) -> dict[str, Any]:
+    """Build the per-item observability fields contributed by an `Output` to a generation dict.
+
+    Always includes `"finish_reason"` (the row's `finish_reason`, or None when `output` is None). When
+    `output.adapted_input_ids` is present, also includes `"adapted_prompt"`: the row's adapted token IDs with
+    `pad_token_id` positions removed, decoded with `skip_special_tokens=False` so chat-template markers are
+    preserved. In the pad-equals-eos tokenizer configuration this display string may also drop a genuine trailing
+    EOS along with the padding.
+
+    Args:
+        output: The `Output` record for one item, or None if generation failed for it.
+        tokenizer: Tokenizer used to decode `adapted_input_ids`.
+
+    Returns:
+        A dict with `"finish_reason"` and, when available, `"adapted_prompt"`.
+    """
+    if output is None:
+        return {"finish_reason": None}
+
+    fields: dict[str, Any] = {"finish_reason": output.finish_reason}
+
+    if output.adapted_input_ids is not None:
+        row = output.adapted_input_ids[0]
+        pad_token_id = tokenizer.pad_token_id
+        if pad_token_id is not None:
+            row = row[row != pad_token_id]
+        fields["adapted_prompt"] = tokenizer.decode(row, skip_special_tokens=False)
+
+    return fields
+
+
+def log_truncation_count(outputs: Sequence[Output | None]) -> None:
+    """Log one warning naming how many items in a run ended on `"length"` (truncation)."""
+    truncated = sum(1 for output in outputs if output is not None and output.finish_reason == "length")
+    if truncated:
+        logger.warning(
+            "%d of %d generations ended on 'length' (truncated at max_new_tokens); "
+            "length-sensitive metrics may be affected.",
+            truncated,
+            len(outputs),
+        )
 
 
 def render_inference_prompts(tokenizer, batch, **kwargs) -> list:
@@ -60,16 +104,21 @@ def chat_generate_model(
     device: str | torch.device,
     gen_kwargs: dict[str, Any] | None = None,
     batch_size: int = None
-) -> list[str]:
+) -> tuple[list[str], list[Output | None]]:
     """
     Batch generate on model with chunking to prevent OOM.
     Each instance of the batch must have a 'prompt' which could be:
     - A plain string , in which case we apply the chat template
     - Dict with the chat template already applied ('role' and 'content' keys)
+
+    Returns the decoded responses and, aligned with them, a per-item `Output` record (with
+    `adapted_input_ids=None`, since the raw model has no input-control chain). Records are None only
+    for items whose chunk raised during generation.
     """
 
     prompts = render_inference_prompts(tokenizer, batch)
-    decoded_outputs = []
+    decoded_outputs: list[str] = []
+    outputs_records: list[Output | None] = []
 
     for i in range(0, len(prompts), batch_size):
         batch_prompts = prompts[i:i + batch_size]
@@ -85,9 +134,25 @@ def chat_generate_model(
                     **(gen_kwargs or {}),
                 )
             start = inputs["input_ids"].shape[1]
+            new_tokens = outputs[:, start:]
 
-            batch_decoded = tokenizer.batch_decode(outputs[:, start:], skip_special_tokens=True)
+            batch_decoded = tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
             decoded_outputs.extend(batch_decoded)
+
+            reasons = infer_finish_reasons(
+                new_tokens,
+                gen_kwargs or {},
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.pad_token_id,
+            )
+            for row_index in range(new_tokens.size(0)):
+                outputs_records.append(
+                    Output(
+                        output_ids=new_tokens[row_index:row_index + 1],
+                        adapted_input_ids=None,
+                        finish_reason=reasons[row_index],
+                    )
+                )
 
         except Exception as e:
             logger.warning(
@@ -96,7 +161,7 @@ def chat_generate_model(
             )
             raise
 
-    return decoded_outputs
+    return decoded_outputs, outputs_records
 
 
 def chat_generate_pipeline(
@@ -108,11 +173,14 @@ def chat_generate_pipeline(
     runtime_overrides: dict[tuple[str, str], str] | None = None,
     evaluation_data: list[dict] | None = None,
     batch_size: int = None,
-) -> list[str]:
+) -> tuple[list[str], list[Output]]:
     """Generate on pipeline.
 
     If all enabled controls in the pipeline declare `supports_batching=True`, runs batched decoding; otherwise falls
     back to per-example decoding.
+
+    Returns the decoded responses and, aligned with them, a per-item `Output` record carrying the
+    steered prompt (`adapted_input_ids`) and per-row `finish_reason`.
     """
 
     if runtime_overrides is not None and evaluation_data is None:
@@ -149,6 +217,7 @@ def chat_generate_pipeline(
 
     prompts = render_inference_prompts(tokenizer, batch)
     decoded_outputs: list[str] = []
+    outputs_records: list[Output] = []
 
     pipeline_supports_batching: bool = getattr(pipeline, "supports_batching", False)
 
@@ -184,38 +253,32 @@ def chat_generate_pipeline(
 
         with torch.no_grad():
             if pipeline_supports_batching:
-                # batched path: single pipeline.generate call per chunk
-                outputs = pipeline.generate(
+                # batched path: single pipeline.generate call per chunk; 2-D input_ids -> list[Output]
+                chunk_outputs = pipeline.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     runtime_kwargs=batch_runtime_kwargs_agg,
+                    return_output=True,
                     **(gen_kwargs or {}),
                 )
-                # outputs: [batch, gen_len] (new tokens only)
-                tokens = outputs
             else:
-                # fallback: per-example generate
-                generations = []
+                # fallback: per-example generate; each 2-D (row) call returns a length-1 list[Output]
+                chunk_outputs = []
                 for j in range(current_batch_size):
-                    out = pipeline.generate(
+                    row_outputs = pipeline.generate(
                         input_ids=input_ids[j].unsqueeze(0),
                         attention_mask=attention_mask[j].unsqueeze(0),
                         runtime_kwargs=batch_runtime_kwargs_list[j],
+                        return_output=True,
                         **(gen_kwargs or {}),
                     )
-                    generations.append(out)
+                    chunk_outputs.append(row_outputs[0])
 
-                # pad to rectangular tensor for batch_decode
-                token_lists = [generation.squeeze(0).tolist() for generation in generations]
-                padded = tokenizer.pad(
-                    {"input_ids": token_lists}, padding=True, return_tensors="pt"
-                )
-                tokens = padded["input_ids"]
+        for out in chunk_outputs:
+            decoded_outputs.append(out.decode(tokenizer)[0])
+            outputs_records.append(out)
 
-        batch_decoded = tokenizer.batch_decode(tokens, skip_special_tokens=True)
-        decoded_outputs.extend(batch_decoded)
-
-    return decoded_outputs
+    return decoded_outputs, outputs_records
 
 
 def batch_retry_generate(
@@ -228,15 +291,19 @@ def batch_retry_generate(
     parse_fn: Callable[[str, dict[str, Any]], Any | None] | None = None,
     max_retries: int = 2,
     return_raw: bool = False,
+    return_outputs: bool = False,
     batch_size: int = None,
-) -> list[Any] | tuple[list[Any], list[str]]:
+) -> list[Any] | tuple[list[Any], list[str]] | tuple[list[Any], list[str], list[Output | None]]:
     """
     Generate chat completions with optional parsing/retry logic.
 
     Function keeps retrying only the prompts whose outputs fail parse_fn (up to max_retries); return value is a list
     of parsed objects (or None if parsing doesn't succeed).
 
-    If return_raw is True the function instead returns a tuple (parsed_list, raw_list).
+    If `return_outputs` is True the function returns `(parsed_list, raw_list, outputs_list)` regardless of `return_raw`,
+    where each `outputs_list[i]` is the `Output` record of the final attempt at index `i` (None if a raw-model chunk
+    raised). If `return_outputs` is False and `return_raw` is True the function returns `(parsed_list, raw_list)`.
+    Otherwise it returns just `parsed_list`.
     """
 
     missing_prompt = [i for i, item in enumerate(prompt_data) if "prompt" not in item]
@@ -258,7 +325,7 @@ def batch_retry_generate(
         raise RuntimeError(f"Unable to identify model or pipeline device - {e}")
 
     if is_pipeline:
-        responses = chat_generate_pipeline(
+        responses, outputs = chat_generate_pipeline(
             batch=prompt_data,
             pipeline=model_or_pipeline,
             tokenizer=tokenizer,
@@ -269,7 +336,7 @@ def batch_retry_generate(
             batch_size=batch_size
         )
     else:
-        responses = chat_generate_model(
+        responses, outputs = chat_generate_model(
             batch=prompt_data,
             model=model_or_pipeline,
             tokenizer=tokenizer,
@@ -291,7 +358,7 @@ def batch_retry_generate(
         retry_prompts = [prompt_data[i] for i in retry_indices]
 
         if is_pipeline:
-            retry_raw = chat_generate_pipeline(
+            retry_raw, retry_outputs = chat_generate_pipeline(
                 batch=retry_prompts,
                 pipeline=model_or_pipeline,
                 tokenizer=tokenizer,
@@ -302,7 +369,7 @@ def batch_retry_generate(
                 batch_size=batch_size
             )
         else:
-            retry_raw = chat_generate_model(
+            retry_raw, retry_outputs = chat_generate_model(
                 batch=retry_prompts,
                 model=model_or_pipeline,
                 tokenizer=tokenizer,
@@ -313,11 +380,14 @@ def batch_retry_generate(
 
         for local_i, global_i in enumerate(retry_indices):
             responses[global_i] = retry_raw[local_i]
+            outputs[global_i] = retry_outputs[local_i]
             parsed_responses[global_i] = parse_fn(retry_raw[local_i])
 
         retry_indices = [i for i, v in enumerate(parsed_responses) if v is None]
         tries += 1
 
+    if return_outputs:
+        return parsed_responses, responses, outputs
     return (parsed_responses, responses) if return_raw else parsed_responses
 
 

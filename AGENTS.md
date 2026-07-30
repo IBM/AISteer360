@@ -171,9 +171,9 @@ Behaviors that differ from bare Hugging Face usage:
 
 - Returned token ids exclude the prompt by default. Do not slice the result by prompt length; pass
   `return_full_sequence=True` for HF-style prompt-plus-continuation output.
-- `generate(..., return_output=True)` returns an `Output` object (or list of them) with `output_ids`,
-  `adapted_input_ids` (the prompt after input controls, useful for inspecting the steered prompt), `runtime_kwargs`,
-  `finish_reason`, and `metadata`.
+- `generate(..., return_output=True)` returns an `Output` object (or list of them) with three fields: `output_ids`,
+  `adapted_input_ids` (the prompt after input controls, useful for inspecting the steered prompt), and a per-item
+  `finish_reason` (`"eos"`, `"length"`, or `None`). Import it via `from aisteer360.algorithms.core import Output`.
 - `generate()` before `steer()` raises `RuntimeError`; a second `steer()` call is a silent no-op.
 - `attention_mask` is valid only with `input_ids=`; it is derived automatically for `text=` and `messages=`, and passing it with either (or with positional text) raises a `TypeError`.
 - `device` and a non-default `device_map` are mutually exclusive on the `SteeringPipeline` constructor.

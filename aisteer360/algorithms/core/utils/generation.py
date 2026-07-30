@@ -1,5 +1,4 @@
-"""Helpers for `SteeringPipeline.generate()`: message-level adaptation/tokenization and finish-reason
-inference."""
+"""Helpers for `SteeringPipeline.generate()`: message-level adaptation and chat-template tokenization."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -53,15 +52,3 @@ def apply_adapt_messages_and_tokenize(
         if attention_mask is not None and attention_mask.ndim == 1:
             attention_mask = attention_mask.unsqueeze(0)
     return input_ids, attention_mask, handled
-
-
-def infer_finish_reason(new_tokens: torch.Tensor, gen_kwargs: dict) -> str | None:
-    """Best-effort finish-reason inference from generated token IDs and gen_kwargs.
-
-    We don't have direct access to HuggingFace's stopping criteria result here, so we use heuristics:
-    if the generated length equals `max_new_tokens` exactly, mark `"length"`; otherwise None.
-    """
-    max_new = gen_kwargs.get("max_new_tokens")
-    if max_new is not None and new_tokens.size(1) >= max_new:
-        return "length"
-    return None

@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from aisteer360.evaluation.use_cases.base import UseCase
-from aisteer360.evaluation.utils.generation_utils import batch_retry_generate
+from aisteer360.evaluation.utils.generation_utils import (
+    batch_retry_generate,
+    log_truncation_count,
+    output_record_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,15 +93,18 @@ class TruthfulQA(UseCase):
             user_prompt = [{"role": "user", "content": prompt_text}]
             prompt_data.append({"prompt": user_prompt})
 
-        responses = batch_retry_generate(
+        responses, _, outputs = batch_retry_generate(
             prompt_data=prompt_data,
             model_or_pipeline=model_or_pipeline,
             tokenizer=tokenizer,
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=self.evaluation_data,
+            return_outputs=True,
             batch_size=batch_size,
         )
+
+        log_truncation_count(outputs)
 
         generations = [
             {
@@ -108,8 +115,9 @@ class TruthfulQA(UseCase):
                 "incorrect_answers": instance["incorrect_answers"],
                 "best_answer": instance.get("best_answer", ""),
                 "category": instance.get("category", ""),
+                **output_record_fields(output, tokenizer),
             }
-            for instance, response in zip(self.evaluation_data, responses)
+            for instance, response, output in zip(self.evaluation_data, responses, outputs)
         ]
 
         return generations
@@ -149,17 +157,21 @@ class TruthfulQA(UseCase):
 
         steering_methods = []
         predictions: dict[str, list[str]] = {}
+        finish_reasons: dict[str, list[str | None]] = {}
+        adapted_prompts: dict[str, list[str | None]] = {}
         questions: list[str] | None = None
         correct_answers: list[list[str]] | None = None
         incorrect_answers: list[list[str]] | None = None
 
         for steering_method, runs in profiles.items():
-            # profiles maps pipeline names to a list of run dicts (one per trial); 
+            # profiles maps pipeline names to a list of run dicts (one per trial);
             # use the first trial for the per-question response export
             first_run = runs[0] if isinstance(runs, list) else runs
             generations = first_run["generations"]
             steering_methods.append(steering_method)
             predictions[steering_method] = [gen["response"] for gen in generations]
+            finish_reasons[steering_method] = [gen.get("finish_reason") for gen in generations]
+            adapted_prompts[steering_method] = [gen.get("adapted_prompt") for gen in generations]
 
             if questions is None:
                 questions = [gen["question"] for gen in generations]
@@ -175,6 +187,10 @@ class TruthfulQA(UseCase):
             }
             for method in steering_methods:
                 entry[method] = predictions[method][idx]
+                entry[f"{method}_finish_reason"] = finish_reasons[method][idx]
+                adapted_prompt = adapted_prompts[method][idx]
+                if adapted_prompt is not None:
+                    entry[f"{method}_adapted_prompt"] = adapted_prompt
             responses.append(entry)
 
         with open(folder_path / "responses.json", "w", encoding="utf-8") as f:

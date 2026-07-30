@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-from aisteer360.algorithms.core.types import Output
+from aisteer360.algorithms.core.output import Output
 from aisteer360.algorithms.input_control.base import InputControl
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
@@ -263,9 +263,9 @@ class TestReturnOutputFlag:
         )
         assert isinstance(out, Output)
 
-    def test_finish_reason_length(self, pipeline):
+    def test_finish_reason(self, pipeline):
         out = pipeline.generate(text="hi", max_new_tokens=3, return_output=True)
-        assert out.finish_reason in ("length", None)
+        assert out.finish_reason in ("eos", "length", None)
 
 
 class _BothEntryPointsControl(InputControl):

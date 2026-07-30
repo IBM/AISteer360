@@ -25,9 +25,8 @@ from aisteer360.algorithms.core.utils.controls import (
 )
 from aisteer360.algorithms.core.utils.generation import (
     apply_adapt_messages_and_tokenize,
-    infer_finish_reason,
 )
-from aisteer360.algorithms.core.types import Output
+from aisteer360.algorithms.core.output import Output, infer_finish_reasons
 from aisteer360.utils.tokenization import (
     ensure_pad_token,
     infer_attention_mask_from_ids,
@@ -961,29 +960,27 @@ class SteeringPipeline:
         new_tokens = full_output_ids[:, prompt_len:]
         returned_ids = full_output_ids if return_full_sequence else new_tokens
 
-        # build Output (always — used for return_output=True and to expose adapted_input_ids for introspection)
-        finish_reason = infer_finish_reason(new_tokens, gen_kwargs)
-        output = Output(
-            output_ids=new_tokens,
-            adapted_input_ids=steered_input_ids,
-            runtime_kwargs=runtime_kwargs or None,
-            finish_reason=finish_reason,
-            metadata=None,
-        )
-
         # shape return per modality + flag
         if return_output:
+            reasons = infer_finish_reasons(
+                new_tokens,
+                gen_kwargs,
+                eos_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.pad_token_id,
+            )
             if is_single:
-                return output
+                return Output(
+                    output_ids=new_tokens,
+                    adapted_input_ids=steered_input_ids,
+                    finish_reason=reasons[0],
+                )
             return [
                 Output(
-                    output_ids=output.output_ids[i:i + 1],
-                    adapted_input_ids=output.adapted_input_ids[i:i + 1] if output.adapted_input_ids is not None else None,
-                    runtime_kwargs=output.runtime_kwargs,
-                    finish_reason=output.finish_reason,
-                    metadata=output.metadata,
+                    output_ids=new_tokens[i:i + 1],
+                    adapted_input_ids=steered_input_ids[i:i + 1],
+                    finish_reason=reasons[i],
                 )
-                for i in range(output.output_ids.size(0))
+                for i in range(new_tokens.size(0))
             ]
 
         if not decode_text:

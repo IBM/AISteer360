@@ -82,8 +82,9 @@ prompt = "Tell me about your day."
 print(adapter_pipeline.generate(prompt, max_new_tokens=100))
 ```
 
-`SteeringPipeline.generate` is polymorphic: it accepts a `str`, `list[str]`, chat messages, or a pre-tokenized
-tensor, and returns the matching shape (decoded text for text/chat input, tensor for tensor input). Pass
+`SteeringPipeline.generate` dispatches on keyword: `text=` for a `str` or `list[str]`, `messages=` for chat
+messages, and `input_ids=` for a pre-tokenized tensor. A positional `str`/`list[str]` is a convenience for `text=`.
+The return shape matches the source (decoded text for text and chat input, a tensor for token input). Pass
 `return_output=True` to get an `Output` object instead.
 
 Swapping the transform for a projection (`DirectionalAblationTransform`), the explicit `layer_ids` for a
