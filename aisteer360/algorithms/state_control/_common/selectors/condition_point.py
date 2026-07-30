@@ -2,20 +2,20 @@
 import logging
 import warnings
 from dataclasses import dataclass
+from typing import Literal
 
 import torch
+import torch.nn.functional as F
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from ..gates.utils.scores import projected_cosine_similarity_tensor, rank_one_projector
-from ..render import render_contrastive
-from ..specs import Comparator, CompMode, ConditionSearchSpec, ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.core.internals.capture import layerwise_tokenwise_hidden
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
+from aisteer360.algorithms.core.internals.encoding import tokenize_texts
+from aisteer360.algorithms.core.internals.pooling import pool_over_spans, select_spans
+from aisteer360.algorithms.core.internals.render import render_contrastive
+from ..condition_scorers import projected_cosine_similarity_tensor, rank_one_projector
+from ..specs import Comparator, CompMode, ConditionSearchSpec, VectorTrainSpec
 from .base import BaseSelector
-from ..estimators.contrastive_direction import (
-    _pool_over_spans,
-    _select_spans,
-    _tokenize,
-)
-from ..estimators.utils import layerwise_tokenwise_hidden
 
 logger = logging.getLogger(__name__)
 
@@ -162,12 +162,13 @@ class ConditionPointSelector(BaseSelector[ConditionPoint]):
         fit_spec: VectorTrainSpec,
         search_spec: ConditionSearchSpec,
         comparison_mode: CompMode | None = None,
+        score: Literal["projected_cosine", "cosine"] = "projected_cosine",
     ) -> ConditionPoint:
         """Run the grid search.
 
         Calibration extracts hidden states at `location="layer_input"`, matching the residual-stream
-        boundary CAST's runtime condition pre-hook observes, and scores with the shared
-        `projected_cosine_similarity_tensor` so selector and runtime scores agree for the same input.
+        boundary CAST's runtime condition pre-hook observes, and scores with the same score function
+        the runtime scorer will apply, so selector and runtime scores agree for the same input.
         A `fit_spec` whose `location` is not `"layer_input"` means the condition direction was fit
         at a different boundary than it is calibrated and scored against, and triggers a
         `UserWarning`.
@@ -181,10 +182,25 @@ class ConditionPointSelector(BaseSelector[ConditionPoint]):
             search_spec: Search grid configuration.
             comparison_mode: The runtime condition aggregation mode CAST will use. Accepted for
                 caller symmetry with CAST; calibration pools over `fit_spec.accumulate` spans.
+            score: Score function applied to the calibration examples, matching the runtime
+                scorer the caller will build. `"projected_cosine"` scores a state as the cosine
+                similarity with its tanh'd rank-one projection onto the direction, which is
+                approximately `|cos(h, d)|` and therefore unsigned. `"cosine"` scores the signed
+                cosine similarity against the direction; signed scores can be negative, so pair
+                it with a `search_spec.threshold_range` that admits negative values, e.g.
+                `(-1.0, 1.0)`.
 
         Returns:
             ConditionPoint with the best (layer, threshold, comparator, f1).
+
+        Raises:
+            ValueError: If `score` is not `"projected_cosine"` or `"cosine"`.
         """
+        if score not in ("projected_cosine", "cosine"):
+            raise ValueError(
+                f"score must be 'projected_cosine' or 'cosine', got {score!r}."
+            )
+
         device = next(model.parameters()).device
 
         if fit_spec.location != "layer_input":
@@ -201,8 +217,8 @@ class ConditionPointSelector(BaseSelector[ConditionPoint]):
         rendered = render_contrastive(tokenizer, data, fit_spec.prompt_format)
 
         # tokenize
-        enc_pos = _tokenize(tokenizer, rendered.pos_texts, device, add_special_tokens=rendered.add_special_tokens)
-        enc_neg = _tokenize(tokenizer, rendered.neg_texts, device, add_special_tokens=rendered.add_special_tokens)
+        enc_pos = tokenize_texts(tokenizer, rendered.pos_texts, device, add_special_tokens=rendered.add_special_tokens)
+        enc_neg = tokenize_texts(tokenizer, rendered.neg_texts, device, add_special_tokens=rendered.add_special_tokens)
 
         # extract hidden states at the layer-input boundary the runtime pre-hook observes
         hs_pos = layerwise_tokenwise_hidden(model, enc_pos, batch_size=fit_spec.batch_size, location="layer_input")
@@ -215,13 +231,13 @@ class ConditionPointSelector(BaseSelector[ConditionPoint]):
         # tokenize prompts separately if needed
         prompt_enc = None
         if fit_spec.accumulate == "suffix-only" and rendered.prompt_texts is not None:
-            prompt_enc = _tokenize(
+            prompt_enc = tokenize_texts(
                 tokenizer, rendered.prompt_texts, device, add_special_tokens=rendered.add_special_tokens
             )
             prompt_enc = {k: v.cpu() for k, v in prompt_enc.items()}
 
-        spans_pos = _select_spans(enc_pos_cpu, prompt_enc, fit_spec.accumulate)
-        spans_neg = _select_spans(enc_neg_cpu, prompt_enc, fit_spec.accumulate)
+        spans_pos = select_spans(enc_pos_cpu, prompt_enc, fit_spec.accumulate)
+        spans_neg = select_spans(enc_neg_cpu, prompt_enc, fit_spec.accumulate)
 
         # determine layers to search (0-based, matching runtime condition layer ids)
         if search_spec.candidate_layers is not None:
@@ -240,16 +256,20 @@ class ConditionPointSelector(BaseSelector[ConditionPoint]):
             if lid not in condition_directions:
                 continue
 
-            Hp = _pool_over_spans(hs_pos[lid], spans_pos)
-            Hn = _pool_over_spans(hs_neg[lid], spans_neg)
+            Hp = pool_over_spans(hs_pos[lid], spans_pos)
+            Hn = pool_over_spans(hs_neg[lid], spans_neg)
             c = condition_directions[lid].to(device=Hp.device, dtype=Hp.dtype)
             # squeeze [K, D] → [D] for K=1 (unified SteeringVector format)
             if c.ndim == 2 and c.shape[0] == 1:
                 c = c.squeeze(0)
 
-            projector = rank_one_projector(c)
-            sims_p = projected_cosine_similarity_tensor(Hp, projector)
-            sims_n = projected_cosine_similarity_tensor(Hn, projector)
+            if score == "cosine":
+                sims_p = F.cosine_similarity(Hp.float(), c.float().unsqueeze(0), dim=-1)
+                sims_n = F.cosine_similarity(Hn.float(), c.float().unsqueeze(0), dim=-1)
+            else:
+                projector = rank_one_projector(c)
+                sims_p = projected_cosine_similarity_tensor(Hp, projector)
+                sims_n = projected_cosine_similarity_tensor(Hn, projector)
 
             cand = _best_point_for_layer(sims_p, sims_n, grid)
             if (cand["f1"], cand["margin"]) > (best["f1"], best["margin"]):

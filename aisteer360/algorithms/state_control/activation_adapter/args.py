@@ -56,7 +56,7 @@ class ActivationAdapterArgs(BaseArgs):
         condition_layer_ids: Layers to score for the gate (requires `score_fn` and a stateful `gate`).
         score_fn: Per-row condition scorer with signature
             `(hidden [B, T, H], layer_id, *, prompt_mask [B, T] | None) -> Tensor[B] | float`
-            (see `runtime.ConditionScorer`). Must return one score per row for batched
+            (see `condition_scorers.ConditionScorer`). Must return one score per row for batched
             generation; a float is accepted only for single-prompt calls. `prompt_mask` is the
             pad-aware prompt attention mask, supplied on the prefill pass only.
         token_scope: Which positions to steer (see `make_token_mask`).

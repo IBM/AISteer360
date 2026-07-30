@@ -2,12 +2,13 @@
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
+from aisteer360.algorithms.core.internals.capture import HiddenStateLocation
+from aisteer360.algorithms.core.internals.data import ContrastivePairs, as_contrastive_pairs  # re-export; removed next minor
 from aisteer360.utils.rendering import PromptFormat
 
 Comparator = Literal["larger", "smaller"]
 ComparatorInput = Literal["larger", "smaller", "score_above", "score_below"]
 CompMode = Literal["mean", "last"]
-HiddenStateLocation = Literal["layer_output", "layer_input"]
 
 _COMPARATOR_ALIASES: dict[str, Comparator] = {
     "larger": "larger", "score_above": "larger",
@@ -88,64 +89,6 @@ def as_labeled_examples(x) -> LabeledExamples:
     if isinstance(x, dict):
         return LabeledExamples(**x)
     raise TypeError("Expected LabeledExamples, ContrastivePairs, or dict with positives/negatives.")
-
-
-@dataclass(frozen=True)
-class ContrastivePairs:
-    """Paired positive/negative text data for contrastive estimation.
-
-    The token sequence the model sees for each example is produced by
-    `render_for_model` according to `VectorTrainSpec.prompt_format`, and the
-    rendered string is tokenized with `add_special_tokens=False`.
-
-    Attributes:
-        positives: Texts exhibiting the target behavior. Treated as completions
-            under `prompt_format="chat_completion"`, and as standalone prompts
-            under `prompt_format="chat_prompt"`.
-        negatives: Texts not exhibiting the target behavior (see `positives`).
-        prompts: Optional shared prompts. Used as the user turn under
-            `prompt_format="chat_completion"` and as the prefix under
-            `prompt_format="raw"`. Required when `accumulate == "suffix-only"`.
-            Ignored under `prompt_format="chat_prompt"`.
-    """
-
-    positives: Sequence[str]
-    negatives: Sequence[str]
-    prompts: Sequence[str] | None = None
-
-    def __post_init__(self):
-        if len(self.positives) == 0 or len(self.negatives) == 0:
-            raise ValueError("positives and negatives must each have at least one entry.")
-        if len(self.positives) != len(self.negatives):
-            raise ValueError(
-                f"positives ({len(self.positives)}) and negatives ({len(self.negatives)}) "
-                f"must have equal length."
-            )
-        if self.prompts is not None and len(self.prompts) != len(self.positives):
-            raise ValueError("prompts must have the same length as positives/negatives.")
-
-
-def as_contrastive_pairs(x) -> ContrastivePairs:
-    """Normalize input to ContrastivePairs.
-
-    Accepts:
-        - An existing ContrastivePairs instance (returned as-is).
-        - A dict with keys "positives", "negatives", and optionally "prompts".
-
-    Args:
-        x: Input to normalize.
-
-    Returns:
-        ContrastivePairs instance.
-
-    Raises:
-        TypeError: If input is neither ContrastivePairs nor a suitable dict.
-    """
-    if isinstance(x, ContrastivePairs):
-        return x
-    if isinstance(x, dict):
-        return ContrastivePairs(**x)
-    raise TypeError("Expected ContrastivePairs or dict with positives/negatives[/prompts].")
 
 
 @dataclass(frozen=True)

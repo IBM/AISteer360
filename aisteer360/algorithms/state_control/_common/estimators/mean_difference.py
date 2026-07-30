@@ -6,16 +6,17 @@ from typing import Callable
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
-from aisteer360.algorithms.state_control._common.estimators.utils import (
+from aisteer360.algorithms.core.internals.capture import layerwise_tokenwise_hidden
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
+from aisteer360.algorithms.core.internals.encoding import tokenize_pairs
+from aisteer360.algorithms.core.internals.pooling import (
     get_last_token_positions,
-    layerwise_tokenwise_hidden,
     select_at_positions,
-    tokenize_pairs,
 )
-from aisteer360.algorithms.state_control._common.gates.utils.scores import masked_mean as _masked_mean
-from aisteer360.algorithms.state_control._common.render import render_contrastive
-from aisteer360.algorithms.state_control._common.specs import ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.core.internals.pooling import masked_mean as _masked_mean
+from aisteer360.algorithms.core.internals.render import render_contrastive
+from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
+from aisteer360.algorithms.state_control._common.specs import VectorTrainSpec
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 logger = logging.getLogger(__name__)

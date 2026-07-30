@@ -3,14 +3,18 @@
 `TransformHookRuntime` builds the hook closures used by residual-stream state controls and
 owns one control's per-generation mutable state. It covers hidden-state extraction and
 re-wrapping, KV-cache position tracking, token-scope masking, condition scoring, and gated
-transform application. Three behaviors define the runtime's contract:
+transform application. Four behaviors define the runtime's contract:
 
-1. **Position tracking**: The model processes the full prompt on the prefill pass and one
-    new token per decode pass, and every hooked layer fires once per forward pass. The
-    position offset therefore advances once per pass rather than once per hook call. Exactly
-    one hook per generation is designated the pass opener, by convention the lowest hooked
-    layer. On each pass the opener snapshots the current offset and advances it by the
-    observed sequence length, and every other hook in that pass reads the snapshot.
+1. **Position tracking**: Each pass's absolute position offset is read from the `cache_position`
+    kwarg when the hooked module receives it (decoder layers do, throughout the supported
+    `transformers` range), so positions are exact per forwarded sequence even when a decoding
+    driver issues several `generate` calls or an output control forwards the model mid-step.
+    Hook points whose modules do not receive the kwarg (attention output projections, norm
+    sub-modules) fall back to counting, which assumes the model processes the full prompt on
+    the prefill pass and one new token per decode pass; exactly one designated pass-opener hook
+    advances the shared offset by the observed sequence length once per pass, and every other
+    hook in that pass reads the opener's snapshot. The fallback assumes a single `generate`
+    call per generation.
 
 2. **Row gating**: Gates hold one decision per logical row, one per prompt. HuggingFace
     `generate` may expand the hidden batch to `B_logical * num_beams` via
@@ -22,37 +26,28 @@ transform application. Three behaviors define the runtime's contract:
 3. **Condition scoring**: A condition hook computes scores only while its gate still expects
     evidence. Scoring stops for the remainder of the generation once `gate.is_ready()`
     returns True.
+
+4. **Auxiliary passes**: Forwards marked via `auxiliary_pass()` (same-model candidate scoring,
+    variant-prompt branches) never feed condition scorers or gates and never advance the
+    fallback counter. Trajectory-aligned auxiliary passes are transformed at their true
+    positions when `cache_position` is available; detached ones are never transformed.
 """
 from __future__ import annotations
 
-from typing import Callable, Literal, Protocol
+import warnings
+from typing import Callable, Literal
 
 import torch
 
+from aisteer360.algorithms.core.utils.auxiliary_pass import current_auxiliary_pass
+
+from .condition_scorers import ConditionScorer
 from .gates.base import BaseGate
 from .hook_utils import extract_hidden_states, replace_hidden_states
 from .token_scope import TokenScope, align_mask_to_batch, make_token_mask
 from .transforms.base import BaseTransform
 
 HookPoint = Literal["layer_output", "layer_input"]
-
-
-class ConditionScorer(Protocol):
-    """Per-row condition scorer.
-
-    Maps a layer's hidden states to one score per observed batch row. `prompt_mask` is the
-    pad-aware prompt attention mask (True at real tokens), supplied only on the prefill pass and
-    already aligned to the hidden batch; on decode passes it is None and `hidden` holds the newly
-    generated token(s). A python float return is permitted only for single-prompt generation.
-    """
-
-    def __call__(
-        self,
-        hidden: torch.Tensor,
-        layer_id: int,
-        *,
-        prompt_mask: torch.Tensor | None = None,
-    ) -> torch.Tensor | float: ...
 
 
 class TransformHookRuntime:
@@ -80,6 +75,8 @@ class TransformHookRuntime:
         self._pass_offset: int = 0
         self._prefill_seen: bool = False
         self._opener_built: bool = False
+        self._clock_seen: bool = False
+        self._warned: set[str] = set()
 
     def reset(
         self,
@@ -113,6 +110,8 @@ class TransformHookRuntime:
         self._pass_offset = 0
         self._prefill_seen = False
         self._opener_built = False
+        self._clock_seen = False
+        self._warned = set()
 
     @property
     def num_logical_rows(self) -> int:
@@ -125,7 +124,9 @@ class TransformHookRuntime:
         Two openers would advance the shared offset twice per forward pass, silently skewing
         every position-dependent token scope (e.g. `after_prompt` would steer the whole
         prompt). Controls must designate exactly one opener; when a layer hosts both a
-        condition and a behavior hook, the one registered first opens the pass.
+        condition and a behavior hook, the one registered first opens the pass. The opener only
+        matters for the fallback counter; when positions come from `cache_position`, every hook
+        resolves its offset independently.
         """
         if not is_pass_opener:
             return
@@ -137,28 +138,88 @@ class TransformHookRuntime:
             )
         self._opener_built = True
 
-    def _advance_pass(self, seq_len: int, is_pass_opener: bool) -> int:
-        """Return the position offset for the current pass, advancing the shared offset once per pass.
+    @staticmethod
+    def _extract_cache_position(forward_kwargs: dict | None) -> torch.Tensor | None:
+        """The `cache_position` kwarg of the hooked module's call, when present and non-empty."""
+        if not forward_kwargs:
+            return None
+        positions = forward_kwargs.get("cache_position")
+        if positions is None or not torch.is_tensor(positions) or positions.numel() == 0:
+            return None
+        return positions
 
-        The pass opener snapshots the current offset and advances it; every other hook reads the
-        snapshot taken by the opener earlier in the same pass. The first pass after `reset` is prefill
-        (offset 0).
+    def _warn_once(self, key: str, message: str) -> None:
+        """Emit `message` as a UserWarning at most once per generation (keyed by `key`)."""
+        if key in self._warned:
+            return
+        self._warned.add(key)
+        warnings.warn(message, UserWarning)
+
+    def _position_offset(
+        self, seq_len: int, cache_position: torch.Tensor | None, is_pass_opener: bool
+    ) -> int | None:
+        """Resolve the absolute position offset for the current pass, or None to skip the pass.
+
+        Auxiliary passes (marked via `auxiliary_pass()`) never advance the fallback counter. An
+        aligned auxiliary pass is positioned by `cache_position` when the hooked module receives it
+        and skipped otherwise; a detached auxiliary pass is always skipped. Ordinary passes take
+        their offset from `cache_position` when present. The opener maintains the fallback counter
+        on every ordinary pass, so hook points without the kwarg keep the one-pass-one-step
+        accounting unchanged and an anomalous pass missing the kwarg degrades to counting.
 
         Args:
             seq_len: The sequence length seen by this hook on this call.
+            cache_position: The pass's `cache_position` kwarg, when the hooked module receives it.
             is_pass_opener: Whether this hook is the designated pass opener.
 
         Returns:
-            The absolute position offset to use when building the token mask.
+            The absolute position offset to use when building the token mask, or None when the
+            pass must be skipped.
+
+        Warns:
+            UserWarning: Once per generation for each of: an aligned auxiliary pass at a hook point
+                without `cache_position` (its transform is skipped); a multi-token ordinary pass
+                after prefill at such a hook point (a multi-call decode pattern that counting cannot
+                place); `cache_position` disappearing after having been observed.
         """
+        aux = current_auxiliary_pass()
+        if aux is not None:
+            if not aux.aligned:
+                return None
+            if cache_position is not None:
+                return int(cache_position[0])
+            self._warn_once(
+                "aux_without_cache_position",
+                "Auxiliary same-model passes cannot be position-mapped at this hook point (the "
+                "hooked module does not receive `cache_position`); their transforms are skipped. "
+                "Hook decoder layers for exact composition with same-model output controls.",
+            )
+            return None
+
         if is_pass_opener:
             if self._prefill_seen:
+                if seq_len > 1 and cache_position is None:
+                    self._warn_once(
+                        "multi_call_without_cache_position",
+                        "Multiple generate calls detected at a hook point that does not receive "
+                        "`cache_position`; position scoping may be skewed for this generation.",
+                    )
                 self._pass_offset = self._offset
                 self._offset += seq_len
             else:
                 self._pass_offset = 0
                 self._offset = seq_len
                 self._prefill_seen = True
+
+        if cache_position is not None:
+            self._clock_seen = True
+            return int(cache_position[0])
+        if self._clock_seen:
+            self._warn_once(
+                "inconsistent_cache_position",
+                "`cache_position` was available on earlier passes but missing on this one; "
+                "falling back to pass counting for this pass.",
+            )
         return self._pass_offset
 
     def _collapse_to_rows(self, scores: torch.Tensor | float, hidden_batch: int) -> torch.Tensor | float:
@@ -264,7 +325,7 @@ class TransformHookRuntime:
                 if hidden is None:
                     return output
                 hidden = self._apply(hidden, layer_id, transform, gate, token_scope, last_k,
-                                     from_position, is_pass_opener)
+                                     from_position, is_pass_opener, forward_kwargs=kwargs)
                 return (hidden,) + output[1:] if isinstance(output, tuple) else hidden
 
             return _forward_hook
@@ -274,7 +335,7 @@ class TransformHookRuntime:
             if hidden is None:
                 return input_args, input_kwargs
             hidden = self._apply(hidden, layer_id, transform, gate, token_scope, last_k,
-                                 from_position, is_pass_opener)
+                                 from_position, is_pass_opener, forward_kwargs=input_kwargs)
             return replace_hidden_states(input_args, input_kwargs, hidden)
 
         return _pre_hook
@@ -295,6 +356,7 @@ class TransformHookRuntime:
         calls `gate.update(rows, key=layer_id)`. Once the gate is ready, scoring is skipped
         entirely, and a gate that never reports ready keeps re-scoring every pass. The hook still
         participates in pass-opener bookkeeping when the lowest hooked layer is a condition layer.
+        Auxiliary passes are ignored entirely: no scoring, no gate update, no accounting.
 
         Args:
             layer_id: Index of the hooked layer.
@@ -307,8 +369,11 @@ class TransformHookRuntime:
         """
         self._claim_opener(is_pass_opener)
 
-        def _score(hidden: torch.Tensor) -> None:
-            pass_offset = self._advance_pass(hidden.size(1), is_pass_opener)
+        def _score(hidden: torch.Tensor, forward_kwargs: dict | None) -> None:
+            if current_auxiliary_pass() is not None:
+                return
+            cache_position = self._extract_cache_position(forward_kwargs)
+            pass_offset = self._position_offset(hidden.size(1), cache_position, is_pass_opener)
             if gate.is_ready():
                 return
             prompt_mask = self._prefill_prompt_mask(hidden, pass_offset)
@@ -321,7 +386,7 @@ class TransformHookRuntime:
                 hidden = output[0] if isinstance(output, tuple) else output
                 if hidden is None:
                     return output
-                _score(hidden)
+                _score(hidden, kwargs)
                 return output
 
             return _forward_hook
@@ -330,7 +395,7 @@ class TransformHookRuntime:
             hidden = extract_hidden_states(input_args, input_kwargs)
             if hidden is None:
                 return input_args, input_kwargs
-            _score(hidden)
+            _score(hidden, input_kwargs)
             return input_args, input_kwargs
 
         return _pre_hook
@@ -345,10 +410,17 @@ class TransformHookRuntime:
         last_k: int | None,
         from_position: int | None,
         is_pass_opener: bool,
+        forward_kwargs: dict | None = None,
     ) -> torch.Tensor:
-        """Mask the current pass by token scope and per-row gate decision, then apply the transform."""
+        """Mask the current pass by token scope and per-row gate decision, then apply the transform.
+
+        Auxiliary passes without a resolvable position are returned unchanged.
+        """
         seq_len = hidden.size(1)
-        pass_offset = self._advance_pass(seq_len, is_pass_opener)
+        cache_position = self._extract_cache_position(forward_kwargs)
+        pass_offset = self._position_offset(seq_len, cache_position, is_pass_opener)
+        if pass_offset is None:
+            return hidden
 
         row_mask = self._row_mask_for(gate, hidden)  # [B_hidden, 1] or None (all closed)
         if row_mask is None:

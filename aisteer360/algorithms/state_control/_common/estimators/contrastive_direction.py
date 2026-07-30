@@ -1,17 +1,20 @@
 """Contrastive direction estimator using paired PCA."""
 import logging
 import math
-from typing import Callable, Literal, Sequence
+from typing import Callable, Literal
 
 import torch
 from sklearn.decomposition import PCA
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from ..render import render_contrastive
-from ..specs import ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.core.internals.capture import layerwise_tokenwise_hidden
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
+from aisteer360.algorithms.core.internals.encoding import tokenize_texts
+from aisteer360.algorithms.core.internals.pooling import pool_over_spans, select_spans
+from aisteer360.algorithms.core.internals.render import render_contrastive
+from ..specs import VectorTrainSpec
 from ..steering_vector import SteeringVector
 from .base import BaseEstimator
-from .utils import layerwise_tokenwise_hidden
 
 logger = logging.getLogger(__name__)
 
@@ -94,122 +97,6 @@ def _orient_direction(
     return direction
 
 
-def _tokenize(
-    tokenizer: PreTrainedTokenizerBase,
-    texts: Sequence[str],
-    device: torch.device | str,
-    *,
-    add_special_tokens: bool = True,
-) -> dict[str, torch.Tensor]:
-    """Tokenize a list of texts and move to device.
-
-    Args:
-        tokenizer: Tokenizer to use.
-        texts: List of text strings.
-        device: Target device.
-        add_special_tokens: Whether to add special tokens (e.g. BOS). Pass False
-            for chat-templated text that already contains them.
-
-    Returns:
-        Dictionary with input_ids and attention_mask tensors.
-    """
-    enc = tokenizer(
-        list(texts),
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        add_special_tokens=add_special_tokens,
-    )
-    return {k: v.to(device) for k, v in enc.items()}
-
-
-def _select_spans(
-    enc: dict[str, torch.Tensor],
-    prompt_enc: dict[str, torch.Tensor] | None,
-    accumulate: str,
-) -> list[tuple[int, int]]:
-    """Determine token spans to pool over for each sample.
-
-    Args:
-        enc: Tokenized full sequences (prompts + completions).
-        prompt_enc: Tokenized prompts only (if accumulate == "suffix-only").
-        accumulate: "all", "suffix-only", or "last_token".
-
-    Returns:
-        List of (start, end) tuples, one per sample.
-    """
-    if accumulate not in ("all", "suffix-only", "last_token"):
-        raise ValueError(
-            f"_select_spans does not support accumulate='{accumulate}'. "
-            "Expected one of: 'all', 'suffix-only', 'last_token'."
-        )
-
-    input_ids = enc["input_ids"]
-    attention_mask = enc.get("attention_mask")
-    N, T = input_ids.shape
-
-    spans = []
-    for i in range(N):
-        # number of prompt tokens to skip for suffix-only pooling (a count, not an absolute index)
-        if accumulate == "suffix-only" and prompt_enc is not None:
-            prompt_len = (
-                int(prompt_enc["attention_mask"][i].sum().item())
-                if "attention_mask" in prompt_enc
-                else prompt_enc["input_ids"].size(1)
-            )
-        else:
-            prompt_len = 0
-
-        # derive both bounds from the mask so the span excludes pads on either padding side
-        if attention_mask is not None:
-            non_pad = (attention_mask[i] == 1).nonzero(as_tuple=True)[0]
-            if len(non_pad) > 0:
-                first = int(non_pad[0].item())
-                last = int(non_pad[-1].item())
-            else:
-                first, last = 0, T - 1
-            if accumulate == "last_token":
-                # one-token span at the final non-pad position (mask-derived, so pad-side agnostic)
-                start, end = last, last + 1
-            else:
-                start = first + prompt_len
-                end = last + 1
-        else:
-            if accumulate == "last_token":
-                start, end = T - 1, T
-            else:
-                start = prompt_len
-                end = T
-
-        spans.append((start, end))
-
-    return spans
-
-
-def _pool_over_spans(
-    hidden: torch.Tensor,
-    spans: list[tuple[int, int]],
-) -> torch.Tensor:
-    """Mean-pool hidden states over specified spans.
-
-    Args:
-        hidden: Shape [N, T, H].
-        spans: List of (start, end) tuples.
-
-    Returns:
-        Pooled tensor of shape [N, H].
-    """
-    N, T, H = hidden.shape
-    pooled = []
-    for i, (start, end) in enumerate(spans):
-        if start >= end:
-            # fallback: use last token
-            pooled.append(hidden[i, -1, :])
-        else:
-            pooled.append(hidden[i, start:end, :].mean(dim=0))
-    return torch.stack(pooled, dim=0)
-
-
 class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
     """Learns per-layer direction vectors from contrastive text pairs via PCA.
 
@@ -261,13 +148,13 @@ class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
         )
 
         # tokenize
-        enc_pos = _tokenize(tokenizer, rendered.pos_texts, device, add_special_tokens=rendered.add_special_tokens)
-        enc_neg = _tokenize(tokenizer, rendered.neg_texts, device, add_special_tokens=rendered.add_special_tokens)
+        enc_pos = tokenize_texts(tokenizer, rendered.pos_texts, device, add_special_tokens=rendered.add_special_tokens)
+        enc_neg = tokenize_texts(tokenizer, rendered.neg_texts, device, add_special_tokens=rendered.add_special_tokens)
 
         # tokenize prompts separately if needed for suffix-only
         prompt_enc = None
         if spec.accumulate == "suffix-only" and rendered.prompt_texts is not None:
-            prompt_enc = _tokenize(
+            prompt_enc = tokenize_texts(
                 tokenizer, rendered.prompt_texts, device, add_special_tokens=rendered.add_special_tokens
             )
             prompt_enc = {k: v.cpu() for k, v in prompt_enc.items()}
@@ -298,8 +185,8 @@ class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
         enc_neg_cpu = {k: v.cpu() for k, v in enc_neg.items()}
 
         # select spans
-        spans_pos = _select_spans(enc_pos_cpu, prompt_enc, spec.accumulate)
-        spans_neg = _select_spans(enc_neg_cpu, prompt_enc, spec.accumulate)
+        spans_pos = select_spans(enc_pos_cpu, prompt_enc, spec.accumulate)
+        spans_neg = select_spans(enc_neg_cpu, prompt_enc, spec.accumulate)
 
         # compute directions via PCA
         directions: dict[int, torch.Tensor] = {}
@@ -310,8 +197,8 @@ class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
 
         for layer_id in range(num_layers):
             # pool over spans
-            Hp = _pool_over_spans(hs_pos[layer_id], spans_pos)  # [N, H]
-            Hn = _pool_over_spans(hs_neg[layer_id], spans_neg)  # [N, H]
+            Hp = pool_over_spans(hs_pos[layer_id], spans_pos)  # [N, H]
+            Hn = pool_over_spans(hs_neg[layer_id], spans_neg)  # [N, H]
 
             samples = _prepare_pca_samples(Hp, Hn, spec.method)  # [2N, H]
 
