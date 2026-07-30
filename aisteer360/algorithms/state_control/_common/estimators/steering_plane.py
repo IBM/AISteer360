@@ -8,7 +8,8 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
 from aisteer360.algorithms.state_control._common.estimators.mean_difference import MeanDifferenceEstimator
-from aisteer360.algorithms.state_control._common.specs import ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
+from aisteer360.algorithms.state_control._common.specs import VectorTrainSpec
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 logger = logging.getLogger(__name__)

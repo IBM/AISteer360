@@ -21,7 +21,7 @@ extraction settings, and fits one direction per layer when the adapter steers:
 
 ```python
 from aisteer360.algorithms.state_control._common.sources import ContrastiveFit
-from aisteer360.algorithms.state_control._common.specs import ContrastivePairs
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
 
 pairs = ContrastivePairs(
     positives=[

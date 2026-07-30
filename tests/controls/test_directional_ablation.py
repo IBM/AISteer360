@@ -159,7 +159,7 @@ class TestDirectionalAblationArgs:
             assert args.steering_vector.directions[0].size(0) == k
 
     def test_dict_data_coerced_to_contrastive_pairs(self):
-        from aisteer360.algorithms.state_control._common.specs import ContrastivePairs
+        from aisteer360.algorithms.core.internals.data import ContrastivePairs
 
         args = DirectionalAblationArgs(data={"positives": ["p1", "p2"], "negatives": ["n1", "n2"]})
         assert isinstance(args.data, ContrastivePairs)

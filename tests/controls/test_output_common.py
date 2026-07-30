@@ -42,7 +42,7 @@ from aisteer360.algorithms.output_control._common.processors.value_guided import
 )
 from aisteer360.algorithms.output_control._common.drivers.search import SearchDriver
 from aisteer360.algorithms.output_control._common.drivers.frontier import Frontier
-from aisteer360.algorithms.output_control._common.specs import LabeledExamples
+from aisteer360.algorithms.core.internals.data import LabeledExamples
 from aisteer360.algorithms.output_control._common.values.base import (
     BaseCandidateValue,
     StepContext,

@@ -13,7 +13,8 @@ from aisteer360.algorithms.core.internals.pooling import (
 )
 from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
 from aisteer360.algorithms.state_control._common.model_layout import resolve_model_layout
-from aisteer360.algorithms.state_control._common.specs import LabeledExamples, VectorTrainSpec
+from aisteer360.algorithms.core.internals.data import LabeledExamples
+from aisteer360.algorithms.state_control._common.specs import VectorTrainSpec
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 
 logger = logging.getLogger(__name__)

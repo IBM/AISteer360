@@ -13,7 +13,7 @@ from aisteer360.algorithms.output_control._common.estimators.linear_probe import
     LinearProbeEstimator,
 )
 from aisteer360.algorithms.output_control._common.processors.value_guided import ValueGuidedProcessor
-from aisteer360.algorithms.output_control._common.specs import LabeledExamples
+from aisteer360.algorithms.core.internals.data import LabeledExamples
 from aisteer360.algorithms.output_control._common.values.subspace_margin import SubspaceMarginValue
 from aisteer360.algorithms.output_control.base import OutputControl
 from aisteer360.algorithms.output_control.sasa.args import SASAArgs

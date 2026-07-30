@@ -19,9 +19,9 @@ from aisteer360.algorithms.core.internals.pooling import masked_mean
 from aisteer360.algorithms.state_control._common.selectors.condition_point import (
     ConditionPointSelector,
 )
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
 from aisteer360.algorithms.state_control._common.specs import (
     ConditionSearchSpec,
-    ContrastivePairs,
     VectorTrainSpec,
 )
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer

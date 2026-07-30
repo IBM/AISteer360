@@ -10,9 +10,9 @@ import torch
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.algorithms.state_control._common.selectors import ConditionPointSelector
 from aisteer360.algorithms.state_control._common.selectors.condition_point import ConditionPoint
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
 from aisteer360.algorithms.state_control._common.specs import (
     ConditionSearchSpec,
-    ContrastivePairs,
     VectorTrainSpec,
 )
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector

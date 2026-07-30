@@ -21,9 +21,9 @@ from aisteer360.algorithms.state_control._common.selectors.condition_point impor
     _best_point_for_layer,
     _threshold_grid,
 )
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
 from aisteer360.algorithms.state_control._common.specs import (
     ConditionSearchSpec,
-    ContrastivePairs,
     VectorTrainSpec,
 )
 

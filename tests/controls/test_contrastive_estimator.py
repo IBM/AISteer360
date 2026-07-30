@@ -16,7 +16,8 @@ from aisteer360.algorithms.state_control._common.estimators.contrastive_directio
 from aisteer360.algorithms.state_control._common.estimators.mean_difference import (
     MeanDifferenceEstimator,
 )
-from aisteer360.algorithms.state_control._common.specs import ContrastivePairs, VectorTrainSpec
+from aisteer360.algorithms.core.internals.data import ContrastivePairs
+from aisteer360.algorithms.state_control._common.specs import VectorTrainSpec
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 

@@ -20,11 +20,10 @@ from aisteer360.algorithms.state_control._common.estimators import (
     MeanDifferenceEstimator,
 )
 from aisteer360.algorithms.state_control._common.estimators.base import BaseEstimator
+from aisteer360.algorithms.core.internals.data import ContrastivePairs, as_contrastive_pairs
 from aisteer360.algorithms.state_control._common.specs import (
-    ContrastivePairs,
     HiddenStateLocation,
     VectorTrainSpec,
-    as_contrastive_pairs,
 )
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector
 from aisteer360.utils.rendering import PromptFormat
