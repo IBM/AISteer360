@@ -150,13 +150,6 @@ class ActivationAdapter(StateControl):
 
         return model
 
-    def reset(self):
-        """Reset the gate and runtime position/prefill state between generation calls."""
-        num_rows = max(self._runtime.num_logical_rows, 1) if self._runtime is not None else 1
-        self._gate.reset(num_rows)
-        if self._runtime is not None and self._runtime._prompt_lens is not None:
-            self._runtime.reset(self._runtime._prompt_lens, self._runtime._prompt_mask)
-
     def get_hooks(
         self,
         input_ids: torch.Tensor,

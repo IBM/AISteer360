@@ -159,9 +159,20 @@ class StateControl(ABC):
         """Context manager exit: clean up all hooks."""
         self.remove_hooks()
 
-    def reset(self):
-        """Optional reset call for state control."""
-        pass
+    def reset(self) -> None:
+        """Between-generations reset for runtime-backed controls.
+
+        Covers the `_gate`/`_runtime` convention used across `state_control._common`: clear the
+        gate, then re-clear the runtime's per-generation counters (preserving its stored prompt
+        lengths and mask). No-op for controls that expose neither attribute. Controls with
+        additional per-generation state override this and may call `super().reset()`.
+        """
+        gate = getattr(self, "_gate", None)
+        if gate is not None:
+            gate.reset()
+        runtime = getattr(self, "_runtime", None)
+        if runtime is not None:
+            runtime.reset_between_generations()
 
     def cleanup(self) -> None:
         """Release resources allocated during steer().
@@ -201,8 +212,4 @@ class NoStateControl(StateControl):
 
     def set_hooks(self, hooks: dict[str, list[HookSpec]]):
         """Null set operation."""
-        pass
-
-    def reset(self):
-        """Null reset operation."""
         pass

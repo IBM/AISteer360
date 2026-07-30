@@ -288,7 +288,8 @@ own in the common case. Required hooks per category:
 - **structural**: `steer(model, tokenizer, **kwargs) -> PreTrainedModel`; return the new or modified model.
 - **state**: `get_hooks(input_ids, runtime_kwargs, **kwargs) -> {"pre": [...], "forward": [...], "backward": [...]}`
   where each spec is `{"module": <dotted submodule path>, "hook_func": <callable>}`. Registration, context-managed
-  lifetime, and removal are provided by the base; override `reset()` for per-generation state.
+  lifetime, and removal are provided by the base; a default `reset()` covers the `_gate`/`_runtime`
+  convention, so override (optionally calling `super().reset()`) only for additional per-generation state.
 - **output**, step-level: `get_logits_processors(...)` and `get_stopping_criteria(...)`, returning fresh instances on
   each call. Loop-owning methods subclass `DecodingDriver` and implement `decode(input_ids, attention_mask, model,
   logits_processors, stopping_criteria, runtime_kwargs, **gen_kwargs)`, returning full prompt-plus-continuation ids

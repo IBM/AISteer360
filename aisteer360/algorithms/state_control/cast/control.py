@@ -222,12 +222,6 @@ class CAST(StateControl):
             "comparison_mode": cfg.comparison_mode,
         }
 
-    def reset(self):
-        """Reset gate and runtime position/prefill state between generation calls."""
-        self._gate.reset(max(self._runtime.num_logical_rows, 1))
-        if self._runtime._prompt_lens is not None:
-            self._runtime.reset(self._runtime._prompt_lens, self._runtime._prompt_mask)
-
     def steer(
         self,
         model: PreTrainedModel,

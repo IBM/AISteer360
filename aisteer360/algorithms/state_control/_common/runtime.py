@@ -113,6 +113,14 @@ class TransformHookRuntime:
         self._clock_seen = False
         self._warned = set()
 
+    def reset_between_generations(self) -> None:
+        """Re-clear the per-generation counters, preserving the stored prompt lengths and mask.
+
+        No-op before the first `reset(prompt_lens, ...)` call (nothing to preserve yet).
+        """
+        if self._prompt_lens is not None:
+            self.reset(self._prompt_lens, self._prompt_mask)
+
     @property
     def num_logical_rows(self) -> int:
         """Logical batch size (one row per prompt); 0 before `reset`."""
