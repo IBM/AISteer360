@@ -18,7 +18,7 @@ from aisteer360.algorithms.input_control.base import InputControl
 from aisteer360.algorithms.input_control._common.formatters.system_prompt import (
     SystemPromptFormatter,
 )
-from aisteer360.algorithms.input_control._common.memory.text_memory import TextMemory
+from aisteer360.algorithms.input_control._common.memory.text import TextMemory
 from aisteer360.algorithms.input_control._common.proposers.llm_meta_prompt import (
     LLMMetaPromptProposer,
 )

@@ -3,6 +3,14 @@
 Tests evaluate control implementations across a set of control arguments, models (listed in `tests/utils/ci_models.yaml`),
 and the available devices on the machine.
 
+The test tree is organized by area:
+
+- `tests/controls/` covers individual steering controls
+- `tests/core/` covers the pipeline, registry, and other core functionality
+- `tests/internals/` covers the `core/internals` substrate and probes
+- `tests/evaluation/` covers metrics and benchmarks
+- `tests/utils/` holds shared test utilities
+
 ## Executing tests
 
 Running tests requires that the toolkit is installed with `dev` dependencies. First, run:

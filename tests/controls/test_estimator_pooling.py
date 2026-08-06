@@ -7,10 +7,8 @@ the learned direction, regardless of padding side.
 import pytest
 import torch
 
-from aisteer360.algorithms.state_control._common.estimators.contrastive_direction import (
-    _pool_over_spans,
-    _select_spans,
-)
+from aisteer360.algorithms.core.internals.pooling import pool_over_spans as _pool_over_spans
+from aisteer360.algorithms.core.internals.pooling import select_spans as _select_spans
 from aisteer360.algorithms.state_control._common.estimators.mean_difference import _masked_mean
 
 

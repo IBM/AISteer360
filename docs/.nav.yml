@@ -22,6 +22,7 @@ nav:
   - Concepts:
     - Concepts: concepts/index.md
     - Controls: concepts/controls.md
+    - Probes: concepts/probes.md
     - Steering pipelines: concepts/steering_pipelines.md
 #    - Use cases & benchmarking: concepts/benchmarks.md
   - Tutorials:
@@ -38,28 +39,39 @@ nav:
     - Notebooks: examples/index.md
     - Controls:
       - Input control:
-        - CPO: "examples/notebooks/cpo.ipynb"
-        - FewShot: "examples/notebooks/few_shot.ipynb"
-        - GEPA: "examples/notebooks/gepa.ipynb"
-        - PRewrite: "examples/notebooks/prewrite.ipynb"
+        - CPO: "examples/notebooks/algorithms/cpo.ipynb"
+        - FewShot: "examples/notebooks/algorithms/few_shot.ipynb"
+        - GEPA: "examples/notebooks/algorithms/gepa.ipynb"
+        - PRewrite: "examples/notebooks/algorithms/prewrite.ipynb"
       - Structural control:
-        - MergeKit wrapper: "examples/notebooks/mergekit_wrapper.ipynb"
-        - TRL wrapper: "examples/notebooks/trl_wrapper.ipynb"
+        - MergeKit wrapper: "examples/notebooks/algorithms/mergekit.ipynb"
+        - TRL wrapper: "examples/notebooks/algorithms/trl.ipynb"
       - State control:
-        - ActAdd: "examples/notebooks/act_add.ipynb"
-        - CAA: "examples/notebooks/caa.ipynb"
-        - CAST: "examples/notebooks/cast.ipynb"
-        - ITI: "examples/notebooks/iti.ipynb"
-        - PASTA: "examples/notebooks/pasta.ipynb"
+        - ActAdd: "examples/notebooks/algorithms/act_add.ipynb"
+        - CAA: "examples/notebooks/algorithms/caa.ipynb"
+        - CAST: "examples/notebooks/algorithms/cast.ipynb"
+        - ITI: "examples/notebooks/algorithms/iti.ipynb"
+        - PASTA: "examples/notebooks/algorithms/pasta.ipynb"
       - Output control:
-        - DeAL: "examples/notebooks/deal.ipynb"
-        - RAD: "examples/notebooks/rad.ipynb"
-        - SASA: "examples/notebooks/sasa.ipynb"
-        - ThinkingIntervention: "examples/notebooks/thinking_intervention.ipynb"
+        - BestOfN: "examples/notebooks/algorithms/best_of_n.ipynb"
+        - BudgetForcing: "examples/notebooks/algorithms/budget_forcing.ipynb"
+        - ContrastiveDecoding: "examples/notebooks/algorithms/contrastive_decoding.ipynb"
+        - ContrastiveGuidance: "examples/notebooks/generics/contrastive_guidance.ipynb"
+        - DeAL: "examples/notebooks/algorithms/deal.ipynb"
+        - DExperts: "examples/notebooks/algorithms/dexperts.ipynb"
+        - PhasedDecoding: "examples/notebooks/generics/phased_decoding.ipynb"
+        - RAD: "examples/notebooks/algorithms/rad.ipynb"
+        - SASA: "examples/notebooks/algorithms/sasa.ipynb"
+        - SearchDecoding: "examples/notebooks/generics/search_decoding.ipynb"
+        - StoppingRules: "examples/notebooks/generics/stopping_rules.ipynb"
+        - ThinkingIntervention: "examples/notebooks/algorithms/thinking_intervention.ipynb"
+        - ValueGuidance: "examples/notebooks/generics/value_guidance.ipynb"
+    - Recipes:
+      - Routed decoding: "examples/notebooks/recipes/routed_decoding.ipynb"
     - Benchmarks:
-      - Commonsense MCQA: "examples/notebooks/benchmark_commonsense_mcqa/commonsense_mcqa.ipynb"
-      - Instruction following: "examples/notebooks/benchmark_instruction_following/instruction_following.ipynb"
-      - Composite steering for truthfulness: "examples/notebooks/benchmark_truthful_qa_composite_steering/truthful_qa_composite_steering.ipynb"
+      - Commonsense MCQA: "examples/notebooks/benchmarks/commonsense_mcqa/commonsense_mcqa.ipynb"
+      - Instruction following: "examples/notebooks/benchmarks/instruction_following/instruction_following.ipynb"
+      - Composite steering for truthfulness: "examples/notebooks/benchmarks/truthful_qa_composite_steering/truthful_qa_composite_steering.ipynb"
 #  - Developer notes:
 #      - Developer notes: dev_notes/index.md
 #      - "dev_notes/steering_lifecycle.md"
@@ -67,7 +79,11 @@ nav:
   - API Reference:
     - Overview: reference/index.md
     - Algorithms:
-        - Core: reference/algorithms/core.md
+        - Core:
+            - Core: reference/algorithms/core.md
+            - Internals:
+                - Internals: reference/algorithms/core/internals.md
+                - Probes: reference/algorithms/core/probes.md
         - Input control:
             - Base classes: reference/algorithms/input_control/base_input_control.md
             - Common library: reference/algorithms/input_control/_common.md
@@ -91,10 +107,21 @@ nav:
             - PASTA: reference/algorithms/state_control/pasta.md
         - Output control:
             - Base classes: reference/algorithms/output_control/base_output_control.md
+            - Common library: reference/algorithms/output_control/_common.md
+            - BestOfN: reference/algorithms/output_control/best_of_n.md
+            - BudgetForcing: reference/algorithms/output_control/budget_forcing.md
+            - ContrastiveDecoding: reference/algorithms/output_control/contrastive_decoding.md
+            - ContrastiveGuidance: reference/algorithms/output_control/contrastive_guidance.md
             - DeAL: reference/algorithms/output_control/deal.md
+            - DExperts: reference/algorithms/output_control/dexperts.md
+            - PhasedDecoding: reference/algorithms/output_control/phased_decoding.md
             - RAD: reference/algorithms/output_control/rad.md
+            - RoutedDecoding: reference/algorithms/output_control/routed_decoding.md
             - SASA: reference/algorithms/output_control/sasa.md
+            - SearchDecoding: reference/algorithms/output_control/search_decoding.md
+            - StoppingRules: reference/algorithms/output_control/stopping_rules.md
             - ThinkingIntervention: reference/algorithms/output_control/thinking_intervention.md
+            - ValueGuidance: reference/algorithms/output_control/value_guidance.md
     - Evaluation:
         - Metrics:
           - Base classes: reference/evaluation/metrics/base_metrics.md

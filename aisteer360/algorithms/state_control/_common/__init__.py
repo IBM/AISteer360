@@ -1,5 +1,5 @@
 """State control component library."""
-from .estimators.utils import measure_residual_norms
+from aisteer360.algorithms.core.internals.stats import measure_residual_norms
 from .runtime import TransformHookRuntime
 from .selectors import FixedLayerSelector, FractionalDepthSelector, TopKHeadSelector
 from .specs import (

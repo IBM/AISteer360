@@ -6,6 +6,7 @@ import logging
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
+from aisteer360.algorithms.core.internals.fingerprint import model_fingerprint
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.state_control._common.gates import AlwaysOpenGate
 from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
@@ -119,6 +120,27 @@ class ActivationAdapter(StateControl):
             if not 0 <= lid < num_layers:
                 raise ValueError(f"condition_layer_id {lid} out of range [0, {num_layers}).")
 
+        # optional scorer attributes (see ConditionScorer): a scorer that records the boundary
+        # or model identity it was fitted at is validated against this adapter and model
+        scorer_location = getattr(self.score_fn, "location", None)
+        if scorer_location is not None and scorer_location != self.hook_point:
+            raise ValueError(
+                f"Condition scorer expects features at '{scorer_location}' but this adapter "
+                f"hooks '{self.hook_point}'. Construct the adapter with "
+                f"hook_point='{scorer_location}', or refit the probe with "
+                f"location='{self.hook_point}'."
+            )
+        scorer_fingerprint = getattr(self.score_fn, "model_fingerprint", None)
+        if scorer_fingerprint is not None:
+            live_fingerprint = model_fingerprint(model)
+            if scorer_fingerprint != live_fingerprint:
+                raise ValueError(
+                    f"Condition scorer was fitted on a different model (fingerprint "
+                    f"{scorer_fingerprint!r} vs {live_fingerprint!r}). Refit the probe on this "
+                    "model, or disarm the check with allow_model_mismatch=True on "
+                    "probe_condition() or Probe.as_condition()."
+                )
+
         # transform resolution (no artifact logic; the transform carries its own)
         self._transform = resolve_transform_slot(self.transform, model, tokenizer, layer_ids)
 
@@ -150,7 +172,7 @@ class ActivationAdapter(StateControl):
 
         Args:
             input_ids: Prompt token ids of shape `[B, T]` or `[T]`.
-            runtime_kwargs: Unused in v1.
+            runtime_kwargs: Unused.
             attention_mask: The prompt attention mask matching `input_ids` (forwarded by the
                 pipeline). Handed to condition scorers on the prefill pass so condition scores
                 align with real (non-pad) prompt positions.

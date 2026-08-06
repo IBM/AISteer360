@@ -16,5 +16,6 @@
         show_symbol_type_toc: true
         filters:
           - "!^_"
+          - "!^internals"
           - "!^registry"
           - "!^STEERING_METHOD"

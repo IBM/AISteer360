@@ -46,6 +46,8 @@ class Benchmark:
         steering_pipelines: Mapping from pipeline name to a list of controls or `ControlSpec` objects; empty list
             denotes a baseline (no steering).
         runtime_overrides: Optional overrides passed through to `UseCase.generate` for runtime control parameters.
+            Overrides are routed by control class name over the pipeline's supplied controls, so two instances of
+            the same class in one pipeline share a single override entry.
         hf_model_kwargs: Extra kwargs forwarded to `AutoModelForCausalLM.from_pretrained`.
         gen_kwargs: Generation kwargs forwarded to :meth:`UseCase.generate`.
         device_map: Device placement strategy used when loading models.
@@ -284,8 +286,8 @@ class Benchmark:
         finally:
             # cleanup controls that may hold GPU resources (e.g., reward models)
             if pipeline is not None:
-                for control in (pipeline.structural_control, pipeline.input_control,
-                                *pipeline.state_controls, pipeline.output_control):
+                for control in (*pipeline.structural_controls, *pipeline.input_controls,
+                                *pipeline.state_controls, *pipeline.output_controls):
                     cleanup_fn = getattr(control, "cleanup", None)
                     if callable(cleanup_fn):
                         try:
@@ -333,6 +335,15 @@ class Benchmark:
                 - "params": Mapping from spec name to full constructor kwargs for the given configuration
         """
         existing_runs = existing_runs or []
+
+        # resolved spec names key the params dict (and thus config identity); duplicates would overwrite
+        resolved_names = [spec.name or spec.control_cls.__name__ for spec in control_specs]
+        duplicates = sorted({name for name in resolved_names if resolved_names.count(name) > 1})
+        if duplicates:
+            raise ValueError(
+                f"Pipeline '{pipeline_name}' has multiple ControlSpecs resolving to the same name(s): "
+                f"{duplicates}. Give each spec a distinct `name=` so their parameters are tracked separately."
+            )
 
         base_context = {
             "pipeline_name": pipeline_name,

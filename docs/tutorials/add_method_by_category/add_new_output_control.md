@@ -1,29 +1,80 @@
 # Adding an output control method
 
-**Required override**: `generate`
+Output control methods constrain or transform what leaves the decoder.
 
-Output control methods constrain or transform what leaves the decoder. In this tutorial we implement `KeywordReranker`,
-an output control that:
-- Generates multiple candidates by asking the base model for N continuations.
-- Scores each candidate by counting occurrences of target keywords.
-- Returns the best candidate (the one whose text contains the most keywords).
+## Config first, subclass second
 
-The registry entry is given by:
+The first design decision is **config first, subclass second**: before writing a class, check whether the method is an
+*assignment of a config* of one of the [generic controls](../../concepts/controls.md#generic-controls). Most output
+methods from the literature are:
+
+- reshapes the next-token distribution from a per-candidate score → [`ValueGuidance`](../../concepts/controls.md#generic-controls) (FUDGE, ARGS, RAD, SASA);
+- mixes weighted full-vocabulary log-prob sources → [`ContrastiveGuidance`](../../concepts/controls.md#generic-controls) (DExperts, contrastive decoding, proxy-tuning);
+- changes the shape of the search (propose / score / keep / iterate) → [`SearchDecoding`](../../concepts/controls.md#generic-controls) (best-of-N, self-consistency, DeAL);
+- splices forced and generated segments → [`PhasedDecoding`](../../concepts/controls.md#generic-controls) (budget forcing, response prefill, thinking intervention);
+- stops on a substring / token / budget → [`StoppingRules`](../../concepts/controls.md#generic-controls).
+
+If so, ship the method as a config, not a class. When a config earns a name through use, promote it with a small preset
+subclass over the generic that maps its named args onto the generic's fields (the pattern the named methods already
+follow — `BestOfN` over `SearchDecoding`'s shape, `BudgetForcing` over `PhasedDecoding`'s):
+
 ```python
-from .control import KeywordReranker
-from .args import KeywordRerankerArgs
+class BestOfN(SearchDecoding):
+    """Sample n continuations, return the scorer's argmax (rejection sampling)."""
+    Args = BestOfNArgs          # fields: n, scorer
+
+    def _configure(self):
+        self.num_candidates = self.n
+        self.keep_k = 1
+        self.max_iterations = 1
+        self.segment_len = None
+        self.propose_mode = "sample"
+        self.tokenizer = None
+```
+
+Write a full control class only when the method needs behavior no config expresses — a new candidate policy, a new
+value / source / scorer component, or a bespoke decode loop.
+
+## Contribute or drive?
+
+If you are writing a class, output controls participate through one of **two mechanisms**, and the first design
+decision is choosing which:
+
+- **Contribute**: supply logits processors and/or stopping criteria. The pipeline composes every step-level control's
+  processors in `controls`-list order into one stack (and likewise for stopping criteria), then hands the stacks to
+  whichever driver owns the loop. A step-level control never runs the decode loop itself, so it composes with other
+  step-level controls and with a driver. **Override**: `get_logits_processors` and/or `get_stopping_criteria`.
+- **Drive**: own the decode loop. A driver subclasses `DecodingDriver` and implements `decode(...)`, applying the
+  composed stacks in every forward pass it issues. The loop does not compose, so a pipeline admits **at most one**
+  enabled driver; with none, decoding defaults to the model's own `generate`. **Override**: `decode`.
+
+Rule of thumb: if the method reshapes the next-token distribution one step at a time (reward shifts, contrastive
+mixtures, constraint masks), it is a **step-level control**. If it changes the shape of the search (lookahead, re-ranking,
+phased generation, best-of-N), it is a **driver**.
+
+Both modes may also implement `steer()` (one-time preparation, e.g. loading a reward model) and `cleanup()` (release
+those resources). Each method is a package directory with `args.py`, `control.py`, and a `STEERING_METHOD` export in
+`__init__.py` that the registry discovers:
+
+```python
+from .control import KeywordBooster
+from .args import KeywordBoosterArgs
 
 STEERING_METHOD = {
     "category": "output_control",
-    "name": "keyword_reranker",
-    "control": KeywordReranker,
-    "args": KeywordRerankerArgs,
+    "name": "keyword_booster",
+    "control": KeywordBooster,
+    "args": KeywordBoosterArgs,
 }
 ```
 
-Next, the args dataclass defines three parameters for the method: `num_candidates` and `case_insensitive`. The target
-keywords are passed in at inference time since they are tied to the specific prompt that is passed in to the model.
+## Contribute: logits processors
 
+`KeywordBooster` adds a fixed bias to the logits of a set of keyword tokens at every step, making those words more
+likely. It is a pure step-level edit of the distribution, so it is a step-level control.
+
+The args dataclass declares the hyper-parameters; the keyword strings are supplied at inference time (they are tied to
+the prompt), so they arrive via `runtime_kwargs`, not the constructor.
 
 ```python
 from dataclasses import dataclass, field
@@ -31,146 +82,194 @@ from aisteer360.algorithms.core.base_args import BaseArgs
 
 
 @dataclass
-class KeywordRerankerArgs(BaseArgs):
-    num_candidates: int = field(
-        default=5,
-        metadata={"help": "How many beams / candidates to generate before reranking."},
-    )
-    case_insensitive: bool = field(
-        default=True,
-        metadata={"help": "Match keywords ignoring case."},
+class KeywordBoosterArgs(BaseArgs):
+    boost: float = field(
+        default=5.0,
+        metadata={"help": "Additive logit bias applied to each keyword token."},
     )
 
-    # validation
     def __post_init__(self):
-        if self.num_candidates < 1:
-            raise ValueError("`num_candidates` must be >= 1.")
+        if self.boost < 0:
+            raise ValueError("`boost` must be non-negative.")
 ```
 
-Lastly, the control is implemented as follows:
+The control returns a **fresh** processor from `get_logits_processors` on every call — the hook is invoked once per
+`generate()` / `compute_logprobs()`, precisely so that per-generation state is isolated. A processor is any callable
+`(input_ids, scores) -> scores` following the Hugging Face `LogitsProcessor` convention:
 
 ```python
-from typing import Any
+from transformers import PreTrainedModel, PreTrainedTokenizer
+
+from aisteer360.algorithms.output_control.base import OutputControl
+from aisteer360.algorithms.output_control.keyword_booster.args import KeywordBoosterArgs
+
+
+class KeywordBooster(OutputControl):
+    """Adds a fixed logit bias to a set of keyword tokens at every decoding step."""
+
+    Args = KeywordBoosterArgs
+
+    tokenizer: PreTrainedTokenizer | None = None
+
+    def steer(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizer | None = None, **__) -> PreTrainedModel:
+        self.tokenizer = tokenizer or getattr(model, "tokenizer", None)
+        return model
+
+    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs) -> list:
+        runtime_kwargs = runtime_kwargs or {}
+        keywords = runtime_kwargs.get("keywords", [])
+        keyword_ids = [
+            token_id
+            for word in keywords
+            for token_id in self.tokenizer.encode(word, add_special_tokens=False)
+        ]
+
+        def _boost(prefix_ids, scores):
+            scores = scores.clone()
+            for token_id in keyword_ids:
+                scores[:, token_id] += self.boost
+            return scores
+
+        return [_boost]  # fresh instance per call
+```
+
+Because it only contributes, `KeywordBooster` composes freely: `controls=[KeywordBooster(...), DeAL(...)]` applies the
+boost inside every DeAL rollout, and `controls=[KeywordBooster(...)]` alone runs under the default `model.generate`
+loop.
+
+!!! note "Processor purity"
+    A processor must behave as a function of `(prefix_ids, scores)`. Drivers may restart, rewind, or reorder sequences
+    (segment search re-enters from a shorter frontier; beam search permutes rows), and `compute_logprobs` replays
+    prefixes teacher-forced, so any internal state must be memoization keyed on the prefix. Subclass
+    [`PrefixKeyedProcessor`](../../reference/algorithms/output_control/_common.md) to get this contract mechanically; it
+    calls your `reset_state(input_ids)` whenever the observed prefix no longer extends the last one.
+
+By default a step-level control's logits edits also apply during `compute_logprobs`, so scoring reflects the steered
+distribution. Set `include_in_scoring = False` (a class attribute) to opt out when the per-position cost is prohibitive.
+
+## Drive: a decoding driver
+
+`ShortestOfN` samples N continuations and returns the shortest one. It changes the shape of the search, so it is a
+driver. A driver receives the composed `logits_processors` / `stopping_criteria` as explicit parameters and **must** apply
+them in every forward pass it issues; delegating to `model.generate(..., logits_processor=..., stopping_criteria=...)`
+satisfies this. The helper `stack_generate_kwargs` builds those two kwargs, including each only when non-empty.
+
+```python
+from dataclasses import dataclass, field
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
-from aisteer360.algorithms.output_control.base import OutputControl
-from aisteer360.algorithms.output_control.keyword_reranker.args import KeywordRerankerArgs
+from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.output_control.base import DecodingDriver, stack_generate_kwargs
 
 
-class KeywordReranker(OutputControl):
-    """ Generates N continuations, keeps the one that mentions the most target keywords. """
-    Args = KeywordRerankerArgs
+@dataclass
+class ShortestOfNArgs(BaseArgs):
+    n: int = field(default=4, metadata={"help": "Number of candidates to sample."})
 
-    # class attributes (filled by steer)
-    model: PreTrainedModel | None = None
+    def __post_init__(self):
+        if self.n < 1:
+            raise ValueError("`n` must be >= 1.")
+
+
+class ShortestOfN(DecodingDriver):
+    """Samples `n` continuations and returns the shortest (fewest non-pad tokens)."""
+
+    Args = ShortestOfNArgs
+
     tokenizer: PreTrainedTokenizer | None = None
-    base_generate = None
 
-    def steer(
-            self,
-            model: PreTrainedModel,
-            tokenizer: PreTrainedTokenizer | None = None,
-            **__,
-    ) -> PreTrainedModel:
-        self.model = model
+    def steer(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizer | None = None, **__) -> PreTrainedModel:
         self.tokenizer = tokenizer or getattr(model, "tokenizer", None)
-        self.base_generate = model.generate
         return model
 
-    # required override for output control methods
-    def generate(
-            self,
-            input_ids: torch.Tensor,
-            runtime_kwargs: dict[str, Any] | None,
-            model: PreTrainedModel,
-            **gen_kwargs,
-    ) -> torch.Tensor:
-        """Generates multiple candidates and selects the one with the most keyword matches.
+    def decode(self, input_ids, attention_mask, model, logits_processors,
+               stopping_criteria, runtime_kwargs, **gen_kwargs) -> torch.Tensor:
+        if input_ids.size(0) != 1:
+            raise NotImplementedError("ShortestOfN handles one prompt at a time (batch size 1).")
 
-        Args:
-            input_ids (torch.Tensor): Input token IDs (batch size must be 1).
-            runtime_kwargs (dict[str, Any] | None): Additional runtime configuration.
-            model (PreTrainedModel): The language model used for generation.
-            **gen_kwargs: Additional generation arguments.
+        extra = stack_generate_kwargs(logits_processors, stopping_criteria)  # apply the composed stacks
+        kwargs = dict(gen_kwargs)  # merge first so the driver's settings win without duplicate-kwarg errors
+        kwargs.update({"do_sample": True, "num_return_sequences": self.n})
+        candidates = model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            **extra,
+            **kwargs,
+        )
 
-        Returns:
-            torch.Tensor: The selected continuation.
-        """
-        runtime_kwargs = runtime_kwargs or {}
-
-        # get keywords from runtime_kwargs
-        keywords = runtime_kwargs.get("keywords", [])
-        if not keywords:
-            raise ValueError("KeywordReranker requires 'keywords' in runtime_kwargs")
-
-        if input_ids.dim() != 2 or input_ids.size(0) != 1:
-            raise NotImplementedError("KeywordReranker currently handles batch size 1.")
-
-        # ensure we produce multiple candidates
-        gen_kwargs.setdefault("num_beams", self.num_candidates)
-        gen_kwargs.setdefault("num_return_sequences", self.num_candidates)
-
-        # generate candidates
-        candidates = self.base_generate(input_ids=input_ids, **gen_kwargs)
-
-        # decode to text
-        continuations: list[str] = self.tokenizer.batch_decode(candidates[:, input_ids.size(1):], skip_special_tokens=True)
-
-        # simple keyword score
-        keyset = [k.lower() if self.case_insensitive else k for k in keywords]
-
-        def score(txt: str) -> int:
-            txt_cmp = txt.lower() if self.case_insensitive else txt
-            return sum(kw in txt_cmp for kw in keyset)
-
-        scores = [score(t) for t in continuations]
-        best_idx = int(torch.tensor(scores).argmax())
-
-        return candidates[best_idx].unsqueeze(0)
+        prompt_len = input_ids.size(1)
+        pad_id = self.tokenizer.pad_token_id
+        lengths = [int((row[prompt_len:] != pad_id).sum()) for row in candidates]
+        best = int(torch.tensor(lengths).argmin())
+        return candidates[best].unsqueeze(0)  # full sequence: prompt + continuation
 ```
 
-The control can then be run as follows:
+!!! note "The driver contract"
+    `logits_processors` and `stopping_criteria` are the composed, authoritative stacks for this generation; apply them in
+    every forward pass. `gen_kwargs` reaching `decode` never contains `logits_processor` / `stopping_criteria` (the
+    pipeline pops caller-supplied ones and composes them into the stacks), so a driver that deep-copies its `gen_kwargs`
+    is safe by construction. `decode` returns the full sequence ids (prompt + continuation); the pipeline strips the
+    prompt prefix. Resolve `model.generate` lazily (`runtime_kwargs.get("base_generate") or model.generate`) if you want
+    callers to inject a generate function in tests.
+
+## Prefer the `_common` library
+
+Most methods do not start from scratch. The [`output_control._common`](../../reference/algorithms/output_control/_common.md)
+library factors the category into reusable components, and the shipped methods are thin recipes over them:
+
+- `ValueGuidedProcessor` (step-level candidate scoring) — `RAD`, `SASA`.
+- `ContrastiveMixtureProcessor` (mix full-vocabulary logit sources) — `DExperts`, `ContrastiveDecoding`.
+- `SearchDriver` (propose → score → keep top-k → iterate) — `DeAL`, `BestOfN`.
+- `PhasedDriver` (forced / generated segments with boundary rules) — `ThinkingIntervention`, `BudgetForcing`.
+
+A driver built on `SearchDriver` or `PhasedDriver` is a *preset*: it declares an `Args` dataclass, calls
+`OutputControl.__init__` from its own `__init__`, and overrides `_configure()` to map its mirrored args onto the generic
+base's fields — so it never bypasses the parent constructor. See `deal/control.py` and `thinking_intervention/control.py`
+for the pattern. An argument-free control (no hyper-parameters) sets `Args = None` and takes no constructor arguments.
+
+## Running the control
+
+Either mode is instantiated and added to a pipeline the same way:
 
 ```python
-from aisteer360.algorithms.output_control.keyword_reranker.control import KeywordReranker
+from aisteer360.algorithms.output_control.keyword_booster.control import KeywordBooster
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 
 MODEL_NAME = "microsoft/Phi-3.5-mini-instruct"
 
-keyword_reranker = KeywordReranker(num_candidates=4)
+keyword_booster = KeywordBooster(boost=6.0)
 
-keyword_reranker_pipeline = SteeringPipeline(
+pipeline = SteeringPipeline(
     model_name_or_path=MODEL_NAME,
-    controls=[keyword_reranker],
+    controls=[keyword_booster],
     device_map="auto",
 )
+pipeline.steer()
 
-keyword_reranker_pipeline.steer()
-
-# example prompt
 prompt = "Explain linear algebra in two sentences."
-chat = keyword_reranker_pipeline.tokenizer.apply_chat_template(
+chat = pipeline.tokenizer.apply_chat_template(
     [{"role": "user", "content": prompt}],
     tokenize=False,
-    add_generation_prompt=True
+    add_generation_prompt=True,
 )
+inputs = pipeline.tokenizer(chat, return_tensors="pt").to(pipeline.model.device)
 
-output = keyword_reranker_pipeline.generate(
-    chat,
+output = pipeline.generate(
+    input_ids=inputs.input_ids,
     runtime_kwargs={"keywords": ["matrix", "vector"]},
     max_new_tokens=50,
-    temperature=0.7
+    do_sample=True,
 )
-print(output)
+print(pipeline.tokenizer.decode(output[0], skip_special_tokens=True))
 
-# different keywords can be passed in at inference time (without resteering)
-output = keyword_reranker_pipeline.generate(
-    chat,
-    runtime_kwargs={"keywords": ["eigenvalue", "determinant"], "case_insensitive": False},
+# different keywords can be supplied at inference time, without re-steering
+output = pipeline.generate(
+    input_ids=inputs.input_ids,
+    runtime_kwargs={"keywords": ["eigenvalue", "determinant"]},
     max_new_tokens=50,
-    temperature=0.7
+    do_sample=True,
 )
-print(output)
+print(pipeline.tokenizer.decode(output[0], skip_special_tokens=True))
 ```

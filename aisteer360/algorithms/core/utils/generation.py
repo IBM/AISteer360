@@ -13,25 +13,31 @@ if TYPE_CHECKING:
 
 
 def apply_adapt_messages_and_tokenize(
-        input_control: "InputControl",
+        input_controls: "list[InputControl]",
         tokenizer: "PreTrainedTokenizerBase",
         messages_batch: list[list[dict]],
         runtime_kwargs: dict,
-) -> tuple[torch.Tensor, torch.Tensor | None, bool]:
-    """Run `input_control.adapt_messages` (if supplied) then chat-template tokenize.
+) -> tuple[torch.Tensor, torch.Tensor | None, set[int]]:
+    """Fold every input control's `adapt_messages` over the message batch, then chat-template tokenize once.
+
+    Controls run in list order. A non-None return becomes the input to the next control and marks
+    that control as handled at message level; a None return passes the messages through unchanged
+    and leaves the control unmarked, so the pipeline later runs its token-level `adapt` instead.
+    Each control is therefore applied exactly once per call.
 
     Returns:
-        tuple[input_ids, attention_mask, handled] where `handled` is True iff the control's
-        `adapt_messages` returned a non-None result (i.e., the adaptation already happened at the
-        message level and the token-level `adapt()` must not run again for this call).
+        tuple[input_ids, attention_mask, handled] where `handled` contains `id(control)` for each
+        control whose `adapt_messages` returned a non-None result.
     """
-    adapted = input_control.adapt_messages(
-        messages_batch,
-        runtime_kwargs=runtime_kwargs,
-    )
-    handled = adapted is not None
-    if handled:
-        messages_batch = adapted
+    handled: set[int] = set()
+    for control in input_controls:
+        adapted = control.adapt_messages(
+            messages_batch,
+            runtime_kwargs=runtime_kwargs,
+        )
+        if adapted is not None:
+            messages_batch = adapted
+            handled.add(id(control))
 
     encoded = tokenizer.apply_chat_template(
         messages_batch,

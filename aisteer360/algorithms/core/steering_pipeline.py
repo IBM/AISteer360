@@ -10,7 +10,13 @@ from typing import Any, Literal, Sequence, overload
 
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    LogitsProcessorList,
+    PreTrainedModel,
+    StoppingCriteriaList,
+)
 
 from aisteer360.algorithms.core.utils.controls import (
     merge_controls,
@@ -28,7 +34,11 @@ from aisteer360.utils.tokenization import (
     warn_if_duplicate_bos,
 )
 from aisteer360.algorithms.input_control.base import InputControl
-from aisteer360.algorithms.output_control.base import OutputControl
+from aisteer360.algorithms.output_control.base import (
+    DecodingDriver,
+    HFGenerateDriver,
+    OutputControl,
+)
 from aisteer360.algorithms.state_control.base import StateControl
 from aisteer360.algorithms.structural_control.base import StructuralControl
 
@@ -53,9 +63,11 @@ class SteeringPipeline:
             Required when `lazy_init=False`. Ignored when `lazy_init=True` and the structural
             control returns a model.
         controls (Sequence[StructuralControl | StateControl | InputControl | OutputControl], optional):
-            Controls for the steering pipeline. The state category accepts any number of controls
-            (applied in list order); the input, structural, and output categories accept at most one
-            each. Omitted categories fall back to no-op controls (see control base classes).
+            Controls for the steering pipeline. Every category accepts any number of controls,
+            applied in list order. The output category additionally accepts at most one enabled
+            `DecodingDriver` (the decode loop does not compose). Omitted input/structural categories
+            fall back to no-op controls; an omitted output category uses the default decoding driver
+            (`model.generate`).
         tokenizer_name_or_path (str, optional): Tokenizer location. Defaults to `model_name_or_path`.
         device_map (str or dict[str, int], optional): Device map (passed to
             `transformers.AutoModelForCausalLM.from_pretrained`). Defaults to `"auto"`.
@@ -73,12 +85,13 @@ class SteeringPipeline:
 
     Raises:
         RuntimeError: If `generate()` is called before `steer()`
-        ValueError: If multiple controls provided for same category or required arguments missing
+        ValueError: If more than one enabled `DecodingDriver` is supplied or required arguments are missing
 
     Note:
 
-    - The state category accepts multiple controls; the other categories accept at most one each.
-        Omitted categories use no-op defaults.
+    - Every category accepts multiple controls, applied in list order. Omitted input/structural
+        categories use no-op defaults; an omitted output category uses the pipeline's default
+        decoding driver.
     - Controls with a `tokenizer` attribute will have it auto-injected if not already set
 
     For the state category, list order in `controls` defines the composition surface. List order sets
@@ -87,6 +100,22 @@ class SteeringPipeline:
     likewise on inputs. Combinations that do not commute, such as ablate after add versus add after
     ablate, therefore produce order-sensitive results. A gated or condition-scoring control placed after
     another observes activations already edited at earlier layers by upstream list entries.
+
+    For the input category, adaptation runs in two phases. On chat input, every control's
+    `adapt_messages` runs in list order over the message batch (each non-None return feeds the next
+    control); the result is templated and tokenized once, then every control whose `adapt_messages`
+    returned None runs its token-level `adapt` in list order over the token stream. On text/tensor
+    input there is no message phase; every control's `adapt` runs in list order. List order is
+    authoritative within each phase, but the message phase structurally precedes the token phase:
+    with `[TokenOnlyControl, MessageLevelControl]` on chat input, the message-level control's effect
+    lands first even though it is listed second (tokens do not exist before templating). Place
+    semantic rewriters (e.g. `PRewrite`, `CPO`, `GEPA`) before surface formatting (e.g. `FewShot`),
+    since a rewriter trained on bare instructions degrades on exemplar-prepended input.
+
+    For the structural category, `steer()` threads the model through the controls in list order:
+    each control receives the previous control's returned model (and the possibly mutated tokenizer).
+    Nothing implicit happens between stages (no adapter merging, no embedding-resize reconciliation);
+    stage compatibility is the caller's responsibility.
     """
 
     # construction args
@@ -103,10 +132,11 @@ class SteeringPipeline:
     model: PreTrainedModel | None = field(init=False, default=None)
     tokenizer: AutoTokenizer | None = field(init=False, default=None)
 
-    structural_control: StructuralControl = field(init=False)
-    input_control: InputControl = field(init=False)
+    structural_controls: list[StructuralControl] = field(init=False)
+    input_controls: list[InputControl] = field(init=False)
     state_controls: list[StateControl] = field(init=False)
-    output_control: OutputControl = field(init=False)
+    output_controls: list[OutputControl] = field(init=False)
+    _default_driver: DecodingDriver = field(init=False, repr=False)
 
     _is_steered: bool = field(default=False, init=False, repr=False)
     _warned_tensor_with_adapt_messages: bool = field(default=False, init=False, repr=False)
@@ -116,10 +146,11 @@ class SteeringPipeline:
 
         # sort/validate the supplied steering methods
         controls_merged = merge_controls(self.controls)
-        self.structural_control = controls_merged["structural_control"]
-        self.input_control = controls_merged["input_control"]
+        self.structural_controls = controls_merged["structural_controls"]
+        self.input_controls = controls_merged["input_controls"]
         self.state_controls = controls_merged["state_controls"]
-        self.output_control = controls_merged["output_control"]
+        self.output_controls = controls_merged["output_controls"]
+        self._default_driver = HFGenerateDriver()
 
         # load HF artifacts
         if not self.lazy_init:
@@ -158,30 +189,23 @@ class SteeringPipeline:
                 self.tokenizer = ensure_pad_token(self.tokenizer)
 
         # late‑inject tokenizer into controls that accept it
-        controls_iter = (self.structural_control, self.input_control, *self.state_controls, self.output_control)
+        controls_iter = (*self.structural_controls, *self.input_controls, *self.state_controls, *self.output_controls)
         for control in controls_iter:
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer") is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
     @property
-    def state_control(self) -> StateControl:
-        """Deprecated: use `state_controls`. Returns the sole state control; raises if multiple."""
-        warnings.warn("`state_control` is deprecated; use `state_controls`.", DeprecationWarning, stacklevel=2)
-        if len(self.state_controls) != 1:
-            raise RuntimeError(
-                f"Pipeline has {len(self.state_controls)} state controls; use `state_controls`."
-            )
-        return self.state_controls[0]
-
-    @property
     def supports_batching(self) -> bool:
         """Return True if all enabled controls in this pipeline are batch-safe.
+
+        The default decoding driver is batch-safe, so an empty `output_controls` list is vacuously
+        true and does not constrain batching.
         """
         controls = (
-            self.structural_control,
-            self.input_control,
+            *self.structural_controls,
+            *self.input_controls,
             *self.state_controls,
-            self.output_control,
+            *self.output_controls,
         )
         return all(
             getattr(control, "supports_batching", False)
@@ -189,17 +213,51 @@ class SteeringPipeline:
             if getattr(control, "enabled", True)
         )
 
+    def _warn_on_runtime_kwargs_overlap(self) -> None:
+        """Warn (UserWarning, once) when two or more enabled controls declare the same
+        `RUNTIME_KWARGS_SCHEMA` variable name.
+
+        All controls read from the single `runtime_kwargs` dict passed to `generate()`, so a shared
+        name means one value feeds several controls. Sharing can be intentional, hence a warning
+        rather than an error.
+        """
+        declared: dict[str, list[str]] = {}
+        controls = (*self.structural_controls, *self.input_controls, *self.state_controls, *self.output_controls)
+        for control in controls:
+            if not getattr(control, "enabled", True):
+                continue
+            for entry in getattr(control, "RUNTIME_KWARGS_SCHEMA", []):
+                name = entry.get("name")
+                if name:
+                    declared.setdefault(name, []).append(type(control).__name__)
+        overlaps = {name: owners for name, owners in declared.items() if len(owners) > 1}
+        if overlaps:
+            details = "; ".join(
+                f"'{name}' is declared by {', '.join(owners)}" for name, owners in overlaps.items()
+            )
+            warnings.warn(
+                f"Multiple controls declare the same runtime_kwargs variable: {details}. "
+                "All controls read from the one runtime_kwargs dict, so these controls will share "
+                "the same value at inference time.",
+                UserWarning,
+            )
+
     def steer(self, **steer_kwargs) -> None:
         """Apply all steering controls to the model in place.
 
-        Executes each control's steer() method in a fixed bottom-up order: structural -> input -> state -> output.
-        This ensures that higher-level controls always see the final configured model from lower levels.
+        Executes each control's steer() method in a fixed bottom-up order: structural -> input -> state -> output,
+        and in list order within each category. This ensures that higher-level controls always see the final
+        configured model from lower levels.
 
-        If any control's steer() method returns a PreTrainedModel instance, it replaces the current model for subsequent
-        controls.
+        If any control's steer() method returns a PreTrainedModel instance, it replaces the current model for
+        subsequent controls, so structural controls thread the model through in list order.
 
         Args:
             **steer_kwargs: Keyword arguments passed to all control steer() methods
+
+        Warns:
+            UserWarning: If two or more enabled controls declare the same `RUNTIME_KWARGS_SCHEMA`
+                variable name.
 
         Raises:
             RuntimeError: If called more than once or no model available after steering
@@ -207,8 +265,10 @@ class SteeringPipeline:
         if self._is_steered:
             return
 
+        self._warn_on_runtime_kwargs_overlap()
+
         # steer each control (bottom-up order: structural -> input -> state -> output)
-        for control in (self.structural_control, self.input_control, *self.state_controls, self.output_control):
+        for control in (*self.structural_controls, *self.input_controls, *self.state_controls, *self.output_controls):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
                 maybe_new_model = steer_fn(self.model, tokenizer=self.tokenizer, **steer_kwargs)
@@ -224,9 +284,12 @@ class SteeringPipeline:
 
         if self.tokenizer is None:
             repo = getattr(self.model, "name_or_path", None)
+            source = repo or self._structural_out_path()
+            if source is None:
+                raise RuntimeError("Failed to resolve tokenizer post‑steer.")
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
-                    repo or Path(getattr(self.structural_control.args, "out_path", "")),
+                    source,
                     trust_remote_code=self.trust_remote_code,
                 )
                 self.tokenizer = ensure_pad_token(self.tokenizer)
@@ -234,32 +297,55 @@ class SteeringPipeline:
             except Exception as exception:
                 raise RuntimeError("Failed to resolve tokenizer post‑steer.") from exception
 
-        for control in (self.structural_control, self.input_control, *self.state_controls, self.output_control):
+        for control in (*self.structural_controls, *self.input_controls, *self.state_controls, *self.output_controls):
             if hasattr(control, "tokenizer") and getattr(control, "tokenizer", None) is None:
                 setattr(control, "tokenizer", self.tokenizer)
 
         # return steered pipeline
         self._is_steered = True
 
+    def _structural_out_path(self) -> Path | None:
+        """The last structural control's non-empty `args.out_path`, as a tokenizer-directory fallback.
+
+        Scans `structural_controls` in reverse so the most recently produced artifact wins; controls
+        without an `args` attribute or without `out_path` are skipped. When more than one control
+        defines `out_path`, logs at info level which path won.
+        """
+        candidates = [
+            (type(control).__name__, out_path)
+            for control in self.structural_controls
+            if (out_path := getattr(getattr(control, "args", None), "out_path", None))
+        ]
+        if not candidates:
+            return None
+        winner_name, winner_path = candidates[-1]
+        if len(candidates) > 1:
+            logger.info(
+                "Multiple structural controls define out_path (%s); using %s from %s.",
+                ", ".join(name for name, _ in candidates), winner_path, winner_name,
+            )
+        return Path(winner_path)
+
     def _prepare_inputs(
             self,
             input_ids: list[int] | torch.LongTensor,
             attention_mask: torch.Tensor | None,
             runtime_kwargs: dict | None,
-            skip_adapt: bool = False,
+            message_handled: frozenset[int] = frozenset(),
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Apply input control and normalize input tensors.
+        """Apply the token-level input-control chain and normalize input tensors.
 
-        Transforms the prompt via the input control's adapter and ensures both input_ids and attention_mask are
-        properly shaped tensors on the correct device.
+        Runs each input control's `adapt` in list order (each control receives the previous
+        control's output), then ensures both input_ids and attention_mask are properly shaped
+        tensors on the correct device.
 
         Args:
             input_ids: Input token IDs as list or tensor [seq_len] or [batch, seq_len]
             attention_mask: Optional attention mask matching input_ids shape
-            runtime_kwargs: Per-call parameters for input control
-            skip_adapt: When True, skip the token-level `input_control.adapt()` call (used by the chat path
-                when `adapt_messages` already performed the adaptation before tokenization, so the control is
-                not applied twice to the same prompt).
+            runtime_kwargs: Per-call parameters for input controls
+            message_handled: `id()`s of input controls whose `adapt_messages` already performed the
+                adaptation before tokenization for this call; their token-level `adapt` is skipped so
+                no control is applied twice to the same prompt.
 
         Returns:
             tuple[torch.Tensor, torch.Tensor]: (steered_input_ids, attention_mask), both as 2D tensors on model device
@@ -267,12 +353,13 @@ class SteeringPipeline:
         runtime_kwargs = runtime_kwargs or {}
         device = self.model.device
 
-        # apply input control (unless message-level adaptation already ran for this call)
-        if skip_adapt:
-            steered_input_ids = input_ids
-        else:
-            steered_input_ids = self.input_control.adapt(
-                input_ids,
+        # token-phase chain (controls already handled at message level are skipped)
+        steered_input_ids = input_ids
+        for control in self.input_controls:
+            if id(control) in message_handled:
+                continue
+            steered_input_ids = control.adapt(
+                steered_input_ids,
                 runtime_kwargs=runtime_kwargs,
             )
 
@@ -334,6 +421,90 @@ class SteeringPipeline:
             )
             state_control.set_hooks(hooks)
             state_control._model_ref = self.model
+
+    def _resolve_decoding_driver(self) -> DecodingDriver:
+        """The sole enabled DecodingDriver, else the default (model.generate).
+
+        merge_controls guarantees at most one enabled driver at construction; `enabled` is
+        re-checked here so a driver disabled afterward falls back cleanly.
+        """
+        for control in self.output_controls:
+            if isinstance(control, DecodingDriver) and getattr(control, "enabled", True):
+                return control
+        return self._default_driver
+
+    def _collect_processors_and_criteria(
+        self, input_ids, runtime_kwargs, attention_mask=None, for_scoring=False, **kwargs,
+    ) -> tuple[list, list]:
+        """(processors, criteria) from enabled output controls, in controls-list order.
+
+        With `for_scoring=True`, only `include_in_scoring` controls contribute processors and
+        criteria are skipped (there is no loop to stop). Each hook result is guarded with `or []`.
+        """
+        processors, criteria = [], []
+        for control in self.output_controls:
+            if not getattr(control, "enabled", True):
+                continue
+            if for_scoring and not getattr(control, "include_in_scoring", True):
+                logger.info(
+                    "compute_logprobs: skipping %s (include_in_scoring=False); scored logprobs will "
+                    "not reflect this control's logits processors.",
+                    type(control).__name__,
+                )
+                continue
+            processors.extend(control.get_logits_processors(
+                input_ids, runtime_kwargs, attention_mask=attention_mask, **kwargs) or [])
+            if not for_scoring:
+                criteria.extend(control.get_stopping_criteria(
+                    input_ids, runtime_kwargs, attention_mask=attention_mask, **kwargs) or [])
+        return processors, criteria
+
+    def _compose_stacks(self, input_ids, runtime_kwargs, attention_mask, gen_kwargs,
+                        ) -> tuple[LogitsProcessorList, StoppingCriteriaList]:
+        """Compose the controls' processors and criteria, then append caller extras popped from
+        `gen_kwargs` (mutates `gen_kwargs`).
+
+        Caller-supplied `logits_processor` / `stopping_criteria` entries append after the
+        pipeline's own processors and criteria (per-call extras apply on top of the pipeline's
+        standing configuration) and the keys are removed from `gen_kwargs`, so exactly one
+        authoritative stack of each kind exists, travelling as an explicit parameter. gen_kwargs
+        reaching the driver never contains processor or criteria objects, so drivers that copy or
+        serialize their kwargs are safe by construction, and a driver that ignores the stacks
+        visibly ignores named parameters.
+        """
+        processors, criteria = self._collect_processors_and_criteria(
+            input_ids, runtime_kwargs, attention_mask=attention_mask, **gen_kwargs
+        )
+        user_processors = gen_kwargs.pop("logits_processor", None) or []
+        user_criteria = gen_kwargs.pop("stopping_criteria", None) or []
+        return (
+            LogitsProcessorList([*processors, *user_processors]),
+            StoppingCriteriaList([*criteria, *user_criteria]),
+        )
+
+    def _apply_scoring_processors(self, logits, steered_input_ids, ref_output_ids,
+                                  runtime_kwargs, attention_mask, is_encoder_decoder,
+                                  **forward_kwargs) -> torch.Tensor:
+        """Apply scoring-time logits processors position-by-position (teacher forcing).
+
+        Processors receive the same `(prefix_ids, scores)` view as during generation. For causal
+        models the prefix is `input ++ ref[:t]` when scoring `ref[t]`; for encoder-decoder models
+        the prefix is the decoder ids `ref[:t+1]` when scoring `ref[t+1]` (matching the existing
+        target alignment in both paths).
+        """
+        processors, _ = self._collect_processors_and_criteria(
+            steered_input_ids, runtime_kwargs, attention_mask=attention_mask,
+            for_scoring=True, **forward_kwargs,
+        )
+        if not processors:
+            return logits
+        stack = LogitsProcessorList(processors)
+        with torch.no_grad():
+            for t in range(logits.size(1)):
+                prefix = (ref_output_ids[:, : t + 1] if is_encoder_decoder
+                          else torch.cat([steered_input_ids, ref_output_ids[:, :t]], dim=1))
+                logits[:, t, :] = stack(prefix, logits[:, t, :])
+        return logits
 
     @staticmethod
     def _classify_inputs(
@@ -446,9 +617,11 @@ class SteeringPipeline:
         `return_full_sequence=True` to get HF-style prompt+continuation output.
 
         `attention_mask` is meaningful only for tensor inputs; it is ignored (with a warning) for text and chat
-        inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to
-        `adapt(input_ids, ...)`. For chat input, when `adapt_messages` returns a non-None result the token-level
-        `adapt()` is not called for that generation, so the input control is applied exactly once per call.
+        inputs. The `adapt_messages` hook fires only on chat input; text and tensor inputs go straight to the
+        token-level `adapt(input_ids, ...)` chain. For chat input, each input control whose `adapt_messages`
+        returns a non-None result is not additionally run at token level for that generation, so every input
+        control is applied exactly once per call: at message level if it handled the messages, else at token
+        level.
 
         Args:
             inputs: One of the modalities above.
@@ -481,15 +654,15 @@ class SteeringPipeline:
         modality, is_single, normalized = self._classify_inputs(inputs)
 
         # resolve the prompt input_ids (and attention_mask) per modality
-        message_level_handled = False
+        message_handled: set[int] = set()
         if modality == "chat":
             if attention_mask is not None:
                 warnings.warn(
                     "`attention_mask` is ignored for chat input; it is rebuilt after tokenization.",
                     UserWarning,
                 )
-            prompt_input_ids, prompt_attention_mask, message_level_handled = (
-                apply_adapt_messages_and_tokenize(self.input_control, self.tokenizer, normalized, runtime_kwargs)
+            prompt_input_ids, prompt_attention_mask, message_handled = (
+                apply_adapt_messages_and_tokenize(self.input_controls, self.tokenizer, normalized, runtime_kwargs)
             )
         elif modality == "text":
             if attention_mask is not None:
@@ -498,7 +671,7 @@ class SteeringPipeline:
                     UserWarning,
                 )
             self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
-                self.input_control, self._warned_tensor_with_adapt_messages
+                self.input_controls, self._warned_tensor_with_adapt_messages
             )
             tokenized = self.tokenizer(
                 list(normalized),
@@ -509,17 +682,17 @@ class SteeringPipeline:
             prompt_attention_mask = tokenized.get("attention_mask")
         else:  # tensor
             self._warned_tensor_with_adapt_messages = warn_if_adapt_messages_bypassed(
-                self.input_control, self._warned_tensor_with_adapt_messages
+                self.input_controls, self._warned_tensor_with_adapt_messages
             )
             prompt_input_ids = normalized
             prompt_attention_mask = attention_mask
 
-        # input control (tensor-level adapt) + normalize
+        # input controls (token-level adapt chain) + normalize
         steered_input_ids, steered_attention_mask = self._prepare_inputs(
             input_ids=prompt_input_ids,
             attention_mask=prompt_attention_mask,
             runtime_kwargs=runtime_kwargs,
-            skip_adapt=message_level_handled,
+            message_handled=frozenset(message_handled),
         )
 
         # state controls
@@ -527,16 +700,23 @@ class SteeringPipeline:
             steered_input_ids, runtime_kwargs, attention_mask=steered_attention_mask, **gen_kwargs
         )
 
-        # output control
+        # output controls: compose the processor and criteria stacks (list order), then drive the loop
+        logits_processors, stopping_criteria = self._compose_stacks(
+            steered_input_ids, runtime_kwargs, steered_attention_mask, gen_kwargs
+        )
+        decoding_driver = self._resolve_decoding_driver()
+
         with contextlib.ExitStack() as stack:  # hooks live only for duration of decoding
             for state_control in self.state_controls:
                 stack.enter_context(state_control)
-            full_output_ids = self.output_control.generate(
+            full_output_ids = decoding_driver.decode(
                 input_ids=steered_input_ids,
                 attention_mask=steered_attention_mask,
-                runtime_kwargs=runtime_kwargs,
                 model=self.model,
-                **gen_kwargs
+                logits_processors=logits_processors,
+                stopping_criteria=stopping_criteria,
+                runtime_kwargs=runtime_kwargs,
+                **gen_kwargs,
             )
 
         prompt_len = steered_input_ids.size(1)
@@ -587,8 +767,14 @@ class SteeringPipeline:
             runtime_kwargs: dict | None = None,
             **forward_kwargs: Any,
     ) -> torch.Tensor:
-        """Compute per-token log-probabilities of ref_output_ids with structural, input, and state steering controls
-        applied. Output controls are not applied, since they concern scoring rather than generation.
+        """Compute per-token log-probabilities of ref_output_ids with structural, input, state, and output steering
+        controls applied.
+
+        Step-level output controls' logits processors are part of the steered next-token distribution, so they are
+        applied here position-by-position (teacher-forced), for every enabled output control whose
+        `include_in_scoring` is True. The exclusive mechanism has no scoring analogue: decoding drivers are not
+        invoked and stopping criteria are not applied. A control opts out of scoring by setting
+        `include_in_scoring=False` (e.g. processors too expensive to evaluate per reference position).
 
         Uses teacher forcing to compute log P(ref_t | steered_input, ref_1, ..., ref_{t-1}) for each
         token in the reference sequence.
@@ -631,7 +817,7 @@ class SteeringPipeline:
 
         # batched path (all controls are batch-safe)
         if self.supports_batching:
-            # input control
+            # input controls
             steered_input_ids, attention_mask = self._prepare_inputs(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -692,9 +878,15 @@ class SteeringPipeline:
                         logits = outputs.logits[:, input_len - 1: input_len + ref_len - 1, :]
                         target_ids = ref_output_ids
 
-            # compute logprobs
-            logprobs = torch.log_softmax(logits, dim=-1)
-            return logprobs.gather(dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
+                # apply output-control scoring processors under the steered distribution
+                logits = self._apply_scoring_processors(
+                    logits, steered_input_ids, ref_output_ids, runtime_kwargs,
+                    attention_mask, is_encoder_decoder, **forward_kwargs,
+                )
+
+                # compute logprobs
+                logprobs = torch.log_softmax(logits, dim=-1)
+                return logprobs.gather(dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
 
         # sequential fallback (one or more controls do not support batching)
 
@@ -728,7 +920,7 @@ class SteeringPipeline:
             single_attention_mask = attention_mask[i:i + 1] if attention_mask is not None else None
             single_ref = ref_output_ids[i:i + 1]
 
-            # input control
+            # input controls
             steered_input_ids, steered_attention_mask = self._prepare_inputs(
                 input_ids=single_input_ids,
                 attention_mask=single_attention_mask,
@@ -771,9 +963,15 @@ class SteeringPipeline:
                         logits = outputs.logits[:, input_len - 1: input_len + ref_len - 1, :]
                         target_ids = single_ref
 
-            # compute logprobs
-            logprobs = torch.log_softmax(logits, dim=-1)
-            token_logprobs = logprobs.gather(dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
+                # apply output-control scoring processors under the steered distribution
+                logits = self._apply_scoring_processors(
+                    logits, steered_input_ids, single_ref, runtime_kwargs,
+                    steered_attention_mask, is_encoder_decoder, **forward_kwargs,
+                )
+
+                # compute logprobs
+                logprobs = torch.log_softmax(logits, dim=-1)
+                token_logprobs = logprobs.gather(dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)
             all_logprobs.append(token_logprobs)
 
         return torch.cat(all_logprobs, dim=0)

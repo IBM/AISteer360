@@ -6,7 +6,7 @@ import torch
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
 from aisteer360.algorithms.input_control._common.formatters.few_shot_block import FewShotBlockFormatter
-from aisteer360.algorithms.input_control._common.memory.text_memory import TextMemory
+from aisteer360.algorithms.input_control._common.memory.text import TextMemory
 from aisteer360.algorithms.input_control.few_shot.control import FewShot
 from tests.utils.sweep import build_param_grid
 

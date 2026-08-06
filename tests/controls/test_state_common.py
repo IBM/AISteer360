@@ -721,7 +721,7 @@ class TestProjectedCosineSimilarity:
 
     def test_known_values(self):
         """Test against known values."""
-        from aisteer360.algorithms.state_control._common.gates.utils.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.condition_scorers import projected_cosine_similarity
 
         # create a simple case
         hidden = torch.tensor([1.0, 0.0, 0.0])
@@ -739,7 +739,7 @@ class TestProjectedCosineSimilarity:
 
     def test_orthogonal_vectors(self):
         """Test with orthogonal vectors."""
-        from aisteer360.algorithms.state_control._common.gates.utils.scores import projected_cosine_similarity
+        from aisteer360.algorithms.state_control._common.condition_scorers import projected_cosine_similarity
 
         hidden = torch.tensor([1.0, 0.0, 0.0])
         direction = torch.tensor([0.0, 1.0, 0.0])

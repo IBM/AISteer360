@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Iterable, Type
 
 from aisteer360.algorithms.input_control.base import InputControl, NoInputControl
-from aisteer360.algorithms.output_control.base import NoOutputControl, OutputControl
+from aisteer360.algorithms.output_control.base import DecodingDriver, OutputControl
 from aisteer360.algorithms.state_control.base import NoStateControl, StateControl
 from aisteer360.algorithms.structural_control.base import (
     NoStructuralControl,
@@ -15,7 +15,7 @@ _DEFAULT_FACTORIES: dict[Type, callable] = {
     InputControl: NoInputControl,
     StructuralControl: NoStructuralControl,
     StateControl: NoStateControl,
-    OutputControl: NoOutputControl,
+    OutputControl: None,  # output has no phantom no-op; the pipeline owns a default driver
 }
 
 
@@ -24,21 +24,28 @@ def merge_controls(
 ) -> dict[str, object]:
     """Sort supplied controls by category.
 
-    The state category admits any number of controls (returned as an ordered list under
-    `"state_controls"`, in encounter order); the input, structural, and output categories admit at
-    most one each (returned as a single instance). Omitted categories fall back to a fresh no-op.
+    Every category admits any number of controls, returned as ordered lists (in encounter order)
+    under `"input_controls"`, `"structural_controls"`, `"state_controls"`, and `"output_controls"`.
+    Omitted input/structural/state categories fall back to a single fresh no-op; an omitted output
+    category stays an empty list (the pipeline supplies the default decoding driver as
+    infrastructure, not a control entry).
+
+    The output category additionally admits at most one enabled `DecodingDriver`; the decode loop
+    does not compose. Input controls chain in two phases (message-level, then token-level); see
+    `SteeringPipeline.generate` for the per-control application contract.
 
     Args:
        supplied: List of control instances to organize
 
     Returns:
-       Dict with keys `"input_control"`, `"structural_control"`, `"output_control"` (single control
-       instances) and `"state_controls"` (a list of state controls), with default no-ops for
-       unspecified categories.
+       Dict with keys `"input_controls"`, `"structural_controls"`, `"state_controls"`, and
+       `"output_controls"`, each an ordered list of controls, with a single default no-op for
+       unspecified input/structural/state categories and an empty list for an unspecified output
+       category.
 
     Raises:
-       ValueError: If the same control instance is supplied more than once, or if multiple input,
-           structural, or output controls are supplied
+       ValueError: If the same control instance is supplied more than once, or if more than one
+           enabled `DecodingDriver` is supplied
        TypeError: If an unrecognized control type is supplied
     """
     supplied = list(supplied)
@@ -62,34 +69,33 @@ def merge_controls(
         else:
             raise TypeError(f"Unknown control type: {type(control)}")
 
-    # only the state category admits multiple controls; the others stay singular
-    for category, controls in bucket.items():
-        if category is not StateControl and len(controls) > 1:
-            names = [type(control).__name__ for control in controls]
-            raise ValueError(f"Multiple {category.__name__}s supplied: {names}")
+    # at most one enabled DecodingDriver; the decode loop does not compose
+    drivers = [
+        control for control in bucket.get(OutputControl, [])
+        if isinstance(control, DecodingDriver) and getattr(control, "enabled", True)
+    ]
+    if len(drivers) > 1:
+        names = [type(control).__name__ for control in drivers]
+        raise ValueError(
+            f"Multiple decoding drivers supplied: {names}. The decode loop does not compose; "
+            "keep one DecodingDriver and express the rest as logits processors or stopping criteria."
+        )
 
     out: dict[str, object] = {}
-    for category, factory in _DEFAULT_FACTORIES.items():
-        if category is StateControl:
-            # ordered list in encounter order; fresh no-op when none supplied
-            out["state_controls"] = bucket.get(category) or [factory()]
-            continue
-        instance = bucket.get(category, [factory()])[0]  # fresh instance every time
-        out_key = (
-            "input_control" if category is InputControl else
-            "structural_control" if category is StructuralControl else
-            "output_control"
-        )
-        out[out_key] = instance
+    out["state_controls"] = bucket.get(StateControl) or [NoStateControl()]
+    out["output_controls"] = list(bucket.get(OutputControl, []))  # empty stays empty
+    out["input_controls"] = bucket.get(InputControl) or [NoInputControl()]
+    out["structural_controls"] = bucket.get(StructuralControl) or [NoStructuralControl()]
     return out
 
 
-def warn_if_adapt_messages_bypassed(input_control: InputControl, already_warned: bool) -> bool:
-    """Warn (UserWarning) when `input_control` overrides `adapt_messages` but the caller used
-    tensor/text input, bypassing chat-template tokenization. Returns the updated warned-state.
+def warn_if_adapt_messages_bypassed(input_controls: list[InputControl], already_warned: bool) -> bool:
+    """Warn (UserWarning) when any control in `input_controls` overrides `adapt_messages` but the
+    caller used tensor/text input, bypassing chat-template tokenization. The warning names each
+    bypassed control class. Returns the updated warned-state.
 
     Args:
-        input_control: The pipeline's input control.
+        input_controls: The pipeline's input controls, in list order.
         already_warned: Whether the bypass warning has already fired for this pipeline.
 
     Returns:
@@ -97,10 +103,14 @@ def warn_if_adapt_messages_bypassed(input_control: InputControl, already_warned:
     """
     if already_warned:
         return already_warned
-    cls = type(input_control)
-    if cls.adapt_messages is not InputControl.adapt_messages:
+    bypassed = [
+        type(control).__name__
+        for control in input_controls
+        if type(control).adapt_messages is not InputControl.adapt_messages
+    ]
+    if bypassed:
         warnings.warn(
-            f"{cls.__name__} overrides `adapt_messages` but received tensor/text input; "
+            f"{', '.join(bypassed)} override(s) `adapt_messages` but received tensor/text input; "
             "the message-level adaptation will not run. Pass `list[dict]` or `list[list[dict]]` "
             "to engage `adapt_messages`.",
             UserWarning,

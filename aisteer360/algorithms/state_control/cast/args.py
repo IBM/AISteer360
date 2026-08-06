@@ -52,7 +52,7 @@ class CASTArgs(BaseArgs):
             `Callable[[TransformContext], BaseTransform]`. The transform is the sole artifact carrier,
             so it is mutually exclusive with `behavior_vector`/`behavior_data` and with the additive
             knobs `behavior_vector_strength`, `use_explained_variance`, and
-            `use_ooi_preventive_normalization` (fold those into the transform instead). The transform
+            `use_ooi_preventive_normalization` (incorporate those into the transform instead). The transform
             is applied at the pre-hook input of the behavior layers, the same one-layer skew as the
             additive path; a `ContrastiveFit` source defaults to `location="layer_output"` to match
             the behavior convention, and users who want the artifact fit at the applied boundary pass

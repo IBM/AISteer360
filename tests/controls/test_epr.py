@@ -8,7 +8,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline
-from aisteer360.algorithms.input_control._common.memory.pool_memory import PoolMemory
+from aisteer360.algorithms.input_control._common.memory.pool import PoolMemory
 from aisteer360.algorithms.input_control._common.selectors.base import BaseSelector
 from aisteer360.algorithms.input_control.few_shot import FewShot
 from aisteer360.algorithms.input_control.few_shot.selectors.epr import EPRSelector

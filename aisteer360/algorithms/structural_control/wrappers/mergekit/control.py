@@ -1,5 +1,8 @@
 from pathlib import Path
 
+from aisteer360.utils.optional import require
+
+require("mergekit")
 import mergekit.config as mk_config
 import mergekit.merge as mk_merge
 import torch

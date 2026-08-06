@@ -13,11 +13,11 @@ from aisteer360.algorithms.state_control._common.estimators import (
     ContrastiveDirectionEstimator,
     MeanDifferenceEstimator,
 )
+from aisteer360.algorithms.state_control._common.condition_scorers import ProjectedCosineScorer
 from aisteer360.algorithms.state_control._common.gates import (
     AlwaysOpenGate,
     CacheOnceGate,
     MultiKeyThresholdGate,
-    ProjectedCosineScorer,
 )
 from aisteer360.algorithms.state_control._common.hook_utils import get_model_layer_list
 from aisteer360.algorithms.state_control._common.runtime import TransformHookRuntime

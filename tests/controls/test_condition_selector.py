@@ -9,8 +9,8 @@ from aisteer360.algorithms.state_control._common.estimators import MeanDifferenc
 from aisteer360.algorithms.state_control._common.estimators.contrastive_direction import (
     ContrastiveDirectionEstimator,
 )
-from aisteer360.algorithms.state_control._common.estimators.utils import layerwise_tokenwise_hidden
-from aisteer360.algorithms.state_control._common.gates.utils.scores import (
+from aisteer360.algorithms.core.internals.capture import layerwise_tokenwise_hidden
+from aisteer360.algorithms.state_control._common.condition_scorers import (
     projected_cosine_similarity,
     projected_cosine_similarity_tensor,
     rank_one_projector,

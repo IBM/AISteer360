@@ -38,21 +38,15 @@ dependencies = [
     "absl-py>=2.2.2,<3.0.0",
     "accelerate>=1.3.0,<2.0.0",
     "datasets>=3.5.0,<4.0.0",
-    "econml>=0.16.0,<0.17.0",
     "einops>=0.7.0,<1.0.0",
-    "gdown==5.2.0",
     "immutabledict>=4.2.1,<5.0.0",
     "langdetect==1.0.9",
-    "matplotlib>=3.8.0,<4.0.0",
-    "mergekit>=0.1.4,<0.2.0",
     "nltk>=3.9.1,<4.0.0",
-    "notebook>=7.4.5",
     "numpy>=1.16.0",
     "pandas>=2.2.3,<3.0.0",
     "peft>=0.15.2,<0.16.0",
     "python-dotenv>=1.0.1,<2.0.0",
     "scikit-learn>=1.6.1,<2.0.0",
-    "seaborn>=0.13.2,<0.14.0",
     "torch>=2.5.1,<3.0.0",
     "transformers>=4.52.0,<5.0.0",
     "tqdm>=4.66.5,<5.0.0",
@@ -61,7 +55,21 @@ dependencies = [
 
 # optional groups
 [project.optional-dependencies]
+merging = [
+    "mergekit>=0.1.4,<0.2.0",
+]
+cpo = [
+    "econml>=0.16.0,<0.17.0",
+]
+plots = [
+    "matplotlib>=3.8.0,<4.0.0",
+    "seaborn>=0.13.2,<0.14.0",
+]
+all = [
+    "aisteer360[merging,cpo,plots]",
+]
 docs = [
+    "aisteer360[all]",
     "mkdocs-material",
     "mkdocs-jupyter",
     "mkdocs-click",
@@ -75,17 +83,16 @@ docs = [
 ]
 
 dev = [
+    "aisteer360[all]",
+    "notebook>=7.4.5",
     "pytest>=8.3.2,<9.0.0",
-    "pre-commit>=4.3.0"
+    "pre-commit>=4.3.0",
 ]
 
 # tools
 [tool.uv.build-backend]
 module-root = ""
 module-name = "aisteer360"
-
-[tool.uv]
-override-dependencies = ["accelerate==1.3.0"]
 
 # build
 [build-system]

@@ -7,3 +7,7 @@ conceptual [guide on controls](controls.md).
 The toolkit additionally allows for controls (from different categories) to be composed into a single operation on the
 model. These composed controls are referred to as *steering pipelines*. For a conceptual outline of what steering
 pipelines are, please see the [guide on pipelines](steering_pipelines.md).
+
+Alongside steering, the toolkit reads model internals for detection through calibrated probes, which drive
+conditional steering and routed decoding. For the conceptual overview of detection, please see the
+[guide on probes](probes.md).

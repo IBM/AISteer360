@@ -206,7 +206,7 @@ https://arxiv.org/abs/2402.06147
 ```
 
 
-Show off how cool your method is by writing a notebook (in `../examples/notebooks/<custom_control>/`). A good notebook
+Show off how cool your method is by writing a notebook (in `../examples/notebooks/algorithms/`). A good notebook
 should contain the following:
 
 - A description of what the method does and how it works
@@ -214,4 +214,4 @@ should contain the following:
 - A simple example of it working; it's helpful to illustrate how the steered behavior compares with the baseline
 (non-steered) behavior
 
-See the [DeAL notebook](`../examples/notebooks/deal.ipynb`) for an example.
+See the [DeAL notebook](`../examples/notebooks/algorithms/deal.ipynb`) for an example.

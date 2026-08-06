@@ -21,6 +21,7 @@ from aisteer360.algorithms.state_control._common.steering_vector import Steering
 from aisteer360.algorithms.state_control.act_add.control import ActAdd
 from aisteer360.algorithms.state_control.angular_steering.control import AngularSteering
 from aisteer360.algorithms.state_control.iti.control import ITI
+from tests.utils.runtime_helpers import strip_clock
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 HIDDEN = 32
@@ -86,12 +87,28 @@ GOLDENS: dict[tuple[str, int], list[int]] = {
 }
 
 
-def _generate(control_name: str, prompt_len: int) -> list[int]:
+def _strip_clock_from_hooks(control) -> None:
+    """Wrap the control's hook callables so they drop `cache_position` (fallback counting)."""
+    original_get_hooks = control.get_hooks
+
+    def stripped_get_hooks(*args, **kwargs):
+        hooks = original_get_hooks(*args, **kwargs)
+        for phase in ("pre", "forward"):
+            for spec in hooks.get(phase, []):
+                spec["hook_func"] = strip_clock(spec["hook_func"])
+        return hooks
+
+    control.get_hooks = stripped_get_hooks
+
+
+def _generate(control_name: str, prompt_len: int, strip: bool = False) -> list[int]:
     torch.manual_seed(0)
     model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
     tokenizer = wordlevel_tokenizer()
 
     control = CONTROL_FACTORIES[control_name]()
+    if strip:
+        _strip_clock_from_hooks(control)
     pipeline = SteeringPipeline(controls=[control], lazy_init=True)
     pipeline.model = model
     pipeline.tokenizer = tokenizer
@@ -107,11 +124,12 @@ def _generate(control_name: str, prompt_len: int) -> list[int]:
     return out[0].tolist()
 
 
+@pytest.mark.parametrize("strip", [False, True], ids=["clock", "fallback"])
 @pytest.mark.parametrize("control_name", list(CONTROL_FACTORIES))
 @pytest.mark.parametrize("prompt_len", [1, 4])
-def test_position_tracking_goldens(control_name, prompt_len):
-    """Greedy generation is bit-identical to the recorded golden sequence."""
-    produced = _generate(control_name, prompt_len)
+def test_position_tracking_goldens(control_name, prompt_len, strip):
+    """Greedy generation is bit-identical to the recorded golden sequence in both position modes."""
+    produced = _generate(control_name, prompt_len, strip=strip)
 
     if os.environ.get("AISTEER_CAPTURE_GOLDENS"):
         print(f'    ("{control_name}", {prompt_len}): {produced},')

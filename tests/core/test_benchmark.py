@@ -35,7 +35,6 @@ from tests.conftest import (  # Base classes; Mock controls; Mock metrics and us
     MockStructuralControl,
     MockUseCase,
     NoInputControl,
-    NoOutputControl,
     NoStateControl,
     NoStructuralControl,
     OutputControl,
@@ -136,10 +135,10 @@ class MockSteeringPipeline:
     def __post_init__(self):
         self._is_steered = False
         controls_merged = merge_controls(self.controls)
-        self.structural_control = controls_merged["structural_control"]
+        self.structural_controls = controls_merged["structural_controls"]
         self.state_controls = controls_merged["state_controls"]
-        self.input_control = controls_merged["input_control"]
-        self.output_control = controls_merged["output_control"]
+        self.input_controls = controls_merged["input_controls"]
+        self.output_controls = controls_merged["output_controls"]
 
         self.model = create_mock_model()
         self.tokenizer = create_mock_tokenizer()
@@ -147,8 +146,8 @@ class MockSteeringPipeline:
 
     @property
     def supports_batching(self):
-        controls = (self.structural_control, *self.state_controls,
-                    self.input_control, self.output_control)
+        controls = (*self.structural_controls, *self.input_controls,
+                    *self.state_controls, *self.output_controls)
         return all(
             getattr(c, "supports_batching", False)
             for c in controls if getattr(c, "enabled", True)
@@ -157,8 +156,8 @@ class MockSteeringPipeline:
     def steer(self, **kwargs):
         if self._is_steered:
             return
-        for control in (self.structural_control, *self.state_controls,
-                        self.input_control, self.output_control):
+        for control in (*self.structural_controls, *self.input_controls,
+                        *self.state_controls, *self.output_controls):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
                 maybe_new_model = steer_fn(self.model, tokenizer=self.tokenizer, **kwargs)
@@ -533,6 +532,22 @@ class TestBenchmarkRun:
         profiles = benchmark.run()
 
         assert "combined" in profiles
+
+    def test_run_two_input_controls_and_state_control(self, basic_use_case):
+        """Two input controls plus a state control in one fixed pipeline run end-to-end."""
+        benchmark = Benchmark(
+            use_case=basic_use_case,
+            base_model_name_or_path="test-model",
+            steering_pipelines={
+                "multi_input": [MockInputControl(), MockInputControl(), MockStateControl()],
+            },
+        )
+
+        profiles = benchmark.run()
+
+        assert "multi_input" in profiles
+        assert len(profiles["multi_input"]) == 1
+        assert "generations" in profiles["multi_input"][0]
 
 
 # Benchmark Evaluation Tests

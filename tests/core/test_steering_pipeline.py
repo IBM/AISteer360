@@ -14,6 +14,7 @@ Tests cover:
 """
 import contextlib
 import logging
+import warnings
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 
@@ -24,13 +25,14 @@ from aisteer360.algorithms.core.steering_pipeline import SteeringPipeline as Rea
 from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
 
 from tests.conftest import (  # Base classes; Mock controls; Utilities
+    DecodingDriver,
+    HFGenerateDriver,
     InputControl,
     MockInputControl,
     MockOutputControl,
     MockStateControl,
     MockStructuralControl,
     NoInputControl,
-    NoOutputControl,
     NoStateControl,
     NoStructuralControl,
     OutputControl,
@@ -62,10 +64,11 @@ class MockSteeringPipeline:
 
         # Merge controls
         controls_merged = merge_controls(self.controls)
-        self.structural_control = controls_merged["structural_control"]
-        self.input_control = controls_merged["input_control"]
+        self.structural_controls = controls_merged["structural_controls"]
+        self.input_controls = controls_merged["input_controls"]
         self.state_controls = controls_merged["state_controls"]
-        self.output_control = controls_merged["output_control"]
+        self.output_controls = controls_merged["output_controls"]
+        self._default_driver = HFGenerateDriver()
 
         # Mock model and tokenizer
         if not self.lazy_init:
@@ -80,10 +83,10 @@ class MockSteeringPipeline:
     def supports_batching(self) -> bool:
         """Return True if all enabled controls support batching."""
         controls = (
-            self.structural_control,
-            self.input_control,
+            *self.structural_controls,
+            *self.input_controls,
             *self.state_controls,
-            self.output_control,
+            *self.output_controls,
         )
         return all(
             getattr(c, "supports_batching", False)
@@ -97,10 +100,10 @@ class MockSteeringPipeline:
             return
 
         for control in (
-            self.structural_control,
-            self.input_control,
+            *self.structural_controls,
+            *self.input_controls,
             *self.state_controls,
-            self.output_control
+            *self.output_controls,
         ):
             steer_fn = getattr(control, "steer", None)
             if callable(steer_fn):
@@ -123,9 +126,11 @@ class MockSteeringPipeline:
         runtime_kwargs = runtime_kwargs or {}
         device = self.model.device
 
-        # Apply input control adapter
-        adapter = self.input_control.get_prompt_adapter(runtime_kwargs)
-        steered_input_ids = adapter(input_ids, runtime_kwargs)
+        # Apply input control adapters (chained in list order)
+        steered_input_ids = input_ids
+        for control in self.input_controls:
+            adapter = control.get_prompt_adapter(runtime_kwargs)
+            steered_input_ids = adapter(steered_input_ids, runtime_kwargs)
 
         # Normalize input_ids to 2D tensor
         if isinstance(steered_input_ids, list):
@@ -189,19 +194,60 @@ class MockSteeringPipeline:
         # State control
         self._setup_state_control(steered_input_ids, runtime_kwargs, **gen_kwargs)
 
-        # Output control: generate with hooks active
+        # output controls: compose the processor and criteria stacks (list order), then drive the loop
+        logits_processors, stopping_criteria = self._compose_stacks(
+            steered_input_ids, runtime_kwargs, attention_mask, gen_kwargs
+        )
+        decoding_driver = self._resolve_decoding_driver()
+
         with contextlib.ExitStack() as stack:
             for state_control in self.state_controls:
                 stack.enter_context(state_control)
-            output_ids = self.output_control.generate(
+            output_ids = decoding_driver.decode(
                 input_ids=steered_input_ids,
                 attention_mask=attention_mask,
-                runtime_kwargs=runtime_kwargs,
                 model=self.model,
-                **gen_kwargs
+                logits_processors=logits_processors,
+                stopping_criteria=stopping_criteria,
+                runtime_kwargs=runtime_kwargs,
+                **gen_kwargs,
             )
 
         return output_ids
+
+    def _resolve_decoding_driver(self):
+        for control in self.output_controls:
+            if isinstance(control, DecodingDriver) and getattr(control, "enabled", True):
+                return control
+        return self._default_driver
+
+    def _collect_processors_and_criteria(self, input_ids, runtime_kwargs, attention_mask=None,
+                                      for_scoring=False, **kwargs):
+        from transformers import LogitsProcessorList, StoppingCriteriaList  # noqa: F401
+        processors, criteria = [], []
+        for control in self.output_controls:
+            if not getattr(control, "enabled", True):
+                continue
+            if for_scoring and not getattr(control, "include_in_scoring", True):
+                continue
+            processors.extend(control.get_logits_processors(
+                input_ids, runtime_kwargs, attention_mask=attention_mask, **kwargs) or [])
+            if not for_scoring:
+                criteria.extend(control.get_stopping_criteria(
+                    input_ids, runtime_kwargs, attention_mask=attention_mask, **kwargs) or [])
+        return processors, criteria
+
+    def _compose_stacks(self, input_ids, runtime_kwargs, attention_mask, gen_kwargs):
+        from transformers import LogitsProcessorList, StoppingCriteriaList
+        processors, criteria = self._collect_processors_and_criteria(
+            input_ids, runtime_kwargs, attention_mask=attention_mask, **gen_kwargs
+        )
+        user_processors = gen_kwargs.pop("logits_processor", None) or []
+        user_criteria = gen_kwargs.pop("stopping_criteria", None) or []
+        return (
+            LogitsProcessorList([*processors, *user_processors]),
+            StoppingCriteriaList([*criteria, *user_criteria]),
+        )
 
     def generate_text(self, *args, **kwargs) -> str | list[str]:
         """Generate text and decode to string(s)."""
@@ -285,12 +331,25 @@ class MockSteeringPipeline:
                     logits = outputs.logits[:, input_len - 1: input_len + ref_len - 1, :]
                     target_ids = ref_output_ids
 
-        # Compute logprobs via gather
-        logprobs = torch.log_softmax(logits, dim=-1)
-        token_logprobs = logprobs.gather(
-            dim=-1,
-            index=target_ids.unsqueeze(-1),
-        ).squeeze(-1)
+            # Apply output-control scoring logits processors under the steered distribution
+            from transformers import LogitsProcessorList
+            processors, _ = self._collect_processors_and_criteria(
+                steered_input_ids, runtime_kwargs, attention_mask=attention_mask,
+                for_scoring=True, **forward_kwargs,
+            )
+            if processors:
+                proc_stack = LogitsProcessorList(processors)
+                for t in range(logits.size(1)):
+                    prefix = (ref_output_ids[:, : t + 1] if is_encoder_decoder
+                              else torch.cat([steered_input_ids, ref_output_ids[:, :t]], dim=1))
+                    logits[:, t, :] = proc_stack(prefix, logits[:, t, :])
+
+            # Compute logprobs via gather
+            logprobs = torch.log_softmax(logits, dim=-1)
+            token_logprobs = logprobs.gather(
+                dim=-1,
+                index=target_ids.unsqueeze(-1),
+            ).squeeze(-1)
 
         return token_logprobs
 
@@ -321,10 +380,10 @@ class TestPipelineInitialization:
             controls=[input_ctrl, state_ctrl],
         )
 
-        assert pipeline.input_control is input_ctrl
+        assert pipeline.input_controls == [input_ctrl]
         assert pipeline.state_controls == [state_ctrl]
-        assert isinstance(pipeline.structural_control, NoStructuralControl)
-        assert isinstance(pipeline.output_control, NoOutputControl)
+        assert isinstance(pipeline.structural_controls[0], NoStructuralControl)
+        assert pipeline.output_controls == []
 
     def test_initialization_with_all_controls(self):
         """Test initialization with all four control types."""
@@ -338,10 +397,10 @@ class TestPipelineInitialization:
             controls=[input_ctrl, structural_ctrl, state_ctrl, output_ctrl],
         )
 
-        assert pipeline.input_control is input_ctrl
-        assert pipeline.structural_control is structural_ctrl
+        assert pipeline.input_controls == [input_ctrl]
+        assert pipeline.structural_controls == [structural_ctrl]
         assert pipeline.state_controls == [state_ctrl]
-        assert pipeline.output_control is output_ctrl
+        assert pipeline.output_controls == [output_ctrl]
 
     def test_lazy_initialization(self):
         """Test lazy initialization mode."""
@@ -575,8 +634,8 @@ class TestPipelineGenerate:
 
         assert state_ctrl._hooks_created
 
-    def test_generate_calls_output_control(self):
-        """Test that generate calls output control's generate."""
+    def test_generate_requests_output_logits_processors(self):
+        """Test that generate gathers the output control's logits processors."""
         output_ctrl = MockOutputControl()
         pipeline = MockSteeringPipeline(
             model_name_or_path="test-model",
@@ -586,7 +645,7 @@ class TestPipelineGenerate:
 
         pipeline.generate(torch.tensor([[1, 2, 3]]))
 
-        assert output_ctrl._generate_called
+        assert output_ctrl._processors_requested
 
 
 # Pipeline Compute Logprobs Tests
@@ -877,8 +936,8 @@ class TestPipelineComputeLogprobs:
 
         assert logprobs.shape == (batch_size, 3)
 
-    def test_compute_logprobs_does_not_call_output_control(self):
-        """Test that compute_logprobs does NOT use output control."""
+    def test_compute_logprobs_applies_scoring_logits_processors(self):
+        """compute_logprobs gathers include_in_scoring logits processors (but never drives a loop)."""
         output_ctrl = MockOutputControl()
         pipeline = MockSteeringPipeline(
             model_name_or_path="test-model",
@@ -891,8 +950,28 @@ class TestPipelineComputeLogprobs:
             ref_output_ids=torch.tensor([[4, 5, 6]]),
         )
 
-        # Output control's generate should NOT be called
-        assert not output_ctrl._generate_called
+        # scoring-time logits processors ARE requested from the output control
+        assert output_ctrl._processors_requested
+
+    def test_compute_logprobs_respects_include_in_scoring_opt_out(self):
+        """A control with include_in_scoring=False does not contribute during scoring."""
+
+        class OptOutControl(MockOutputControl):
+            include_in_scoring = False
+
+        output_ctrl = OptOutControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[output_ctrl],
+        )
+        pipeline.steer()
+
+        pipeline.compute_logprobs(
+            input_ids=torch.tensor([[1, 2, 3]]),
+            ref_output_ids=torch.tensor([[4, 5, 6]]),
+        )
+
+        assert not output_ctrl._processors_requested
 
     def test_compute_logprobs_passes_forward_kwargs(self):
         """Test that forward_kwargs are passed to model forward."""
@@ -998,13 +1077,14 @@ class TestPipelineGenerateText:
 class TestPipelineErrorHandling:
     """Tests for pipeline error handling."""
 
-    def test_duplicate_control_type_raises(self):
-        """Test that duplicate control types raise error."""
-        with pytest.raises(ValueError, match="Multiple"):
-            MockSteeringPipeline(
-                model_name_or_path="test-model",
-                controls=[MockInputControl(), MockInputControl()],
-            )
+    def test_duplicate_control_type_composes_in_order(self):
+        """Two controls of the same category are accepted and kept in list order."""
+        ctrl1, ctrl2 = MockInputControl(), MockInputControl()
+        pipeline = MockSteeringPipeline(
+            model_name_or_path="test-model",
+            controls=[ctrl1, ctrl2],
+        )
+        assert pipeline.input_controls == [ctrl1, ctrl2]
 
     def test_unknown_control_type_raises(self):
         """Test that unknown control type raises error."""
@@ -1173,3 +1253,27 @@ class TestDuplicateBosGuard:
         with caplog.at_level(logging.WARNING, logger="aisteer360.utils.tokenization"):
             pipeline.generate(ids, attention_mask=attention_mask, max_new_tokens=1)
         assert [r for r in caplog.records if "Duplicate BOS" in r.getMessage()]
+
+
+from aisteer360.algorithms.output_control.base import OutputControl as RealOutputControl
+
+
+class TestSameModelForwardsMetadata:
+    """`same_model_forwards` is declarative component metadata on the declaring classes."""
+
+    def test_declared_flags(self):
+        from aisteer360.algorithms.output_control._common.logit_sources import PromptVariantSource
+        from aisteer360.algorithms.output_control._common.values.subspace_margin import SubspaceMarginValue
+        from aisteer360.algorithms.output_control.sasa.control import SASA
+
+        assert SASA.same_model_forwards is True
+        assert SubspaceMarginValue.same_model_forwards is True
+        assert PromptVariantSource.same_model_forwards is True
+        assert RealOutputControl.same_model_forwards is False
+
+    def test_prompt_variant_source_construction_emits_no_warning(self):
+        from aisteer360.algorithms.output_control._common.logit_sources import PromptVariantSource
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            PromptVariantSource(lambda text: text)

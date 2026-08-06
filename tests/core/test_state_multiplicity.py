@@ -8,7 +8,6 @@ chain (so composition is order-sensitive by design), `ExitStack` unwinds cleanly
 Runs hub-free on a tiny randomly-initialized Llama.
 """
 import contextlib
-import warnings
 
 import pytest
 import torch
@@ -124,9 +123,10 @@ class TestMergeControlsMultiplicity:
         result = merge_controls([a, b])
         assert result["state_controls"] == [a, b]
 
-    def test_two_input_controls_still_raise(self):
-        with pytest.raises(ValueError, match="Multiple InputControl"):
-            merge_controls([NoInputControl(), NoInputControl()])
+    def test_two_input_controls_encounter_order(self):
+        a, b = NoInputControl(), NoInputControl()
+        result = merge_controls([a, b])
+        assert result["input_controls"] == [a, b]
 
     def test_unknown_type_raises(self):
         with pytest.raises(TypeError, match="Unknown control type"):
@@ -137,7 +137,7 @@ class TestMergeControlsMultiplicity:
         r2 = merge_controls([])
         assert len(r1["state_controls"]) == 1
         assert isinstance(r1["state_controls"][0], NoStateControl)
-        assert isinstance(r1["input_control"], NoInputControl)
+        assert isinstance(r1["input_controls"][0], NoInputControl)
         # fresh instance per call
         assert r1["state_controls"][0] is not r2["state_controls"][0]
 
@@ -285,21 +285,3 @@ class TestComputeLogprobsComposition:
         lp_one = p_one.compute_logprobs(input_ids=input_ids, ref_output_ids=ref)
 
         assert torch.allclose(lp_two, lp_one, atol=1e-4)
-
-
-# deprecated property
-class TestDeprecatedStateControlProperty:
-    def test_returns_sole_control_with_warning(self):
-        control = _ConstantAddControl(1, 1.0)
-        pipeline = SteeringPipeline(controls=[control], lazy_init=True)
-        with pytest.warns(DeprecationWarning, match="state_control.*deprecated"):
-            assert pipeline.state_control is control
-
-    def test_raises_with_multiple(self):
-        pipeline = SteeringPipeline(
-            controls=[_ConstantAddControl(1, 1.0), _ConstantAddControl(2, 1.0)], lazy_init=True
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            with pytest.raises(RuntimeError, match="2 state controls"):
-                _ = pipeline.state_control

@@ -3,9 +3,13 @@
 from pathlib import Path
 from typing import Any, Sequence
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+from aisteer360.utils.optional import require
+
+require("matplotlib")
+import matplotlib.pyplot as plt
 
 _COLOR_CYCLE = [
     "#348ABD",
@@ -765,10 +769,7 @@ def plot_metric_heatmap(
     Returns:
         The matplotlib axes with the heatmap.
     """
-    try:
-        import seaborn as sns
-    except ImportError as e:
-        raise ImportError("seaborn is required for heatmap plots") from e
+    sns = require("seaborn")
 
     if ax is None:
         _, ax = plt.subplots(figsize=(8, 5))
@@ -1096,10 +1097,6 @@ def plot_tradeoff(
         ax.get_figure().savefig(save_path, bbox_inches="tight", dpi=150)
 
     return ax
-
-
-# alias for backward compatibility
-plot_tradeoff_with_pareto = plot_tradeoff
 
 
 def create_tradeoff_figure(
