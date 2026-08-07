@@ -27,8 +27,7 @@ See Also:
 - `aisteer360.algorithms.state_control`: Implementations of state control methods
 - `aisteer360.core.steering_pipeline`: Integration with steering pipeline
 """
-from abc import ABC, abstractmethod
-from dataclasses import fields
+from abc import abstractmethod
 from typing import Callable
 
 import torch
@@ -36,6 +35,7 @@ import torch.nn as nn
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.core.base_control import BaseControl
 
 PreHook = Callable[[nn.Module, tuple], tuple | torch.Tensor]
 ForwardHook = Callable[[nn.Module, tuple, torch.Tensor], torch.Tensor]
@@ -43,7 +43,7 @@ BackwardHook = Callable[[nn.Module, tuple, tuple], tuple]
 HookSpec = dict[str, str | PreHook | ForwardHook | BackwardHook]
 
 
-class StateControl(ABC):
+class StateControl(BaseControl):
     """Abstract base class for state control steering methods.
 
     Modifies internal model states during forward passes via hooks.
@@ -68,20 +68,7 @@ class StateControl(ABC):
     _model_ref: PreTrainedModel | None = None
 
     def __init__(self, *args, **kwargs) -> None:
-        if self.Args is None:  # null control
-            if args or kwargs:
-                raise TypeError(f"{type(self).__name__} accepts no constructor arguments.")
-            return
-
-        self.args: BaseArgs = self.Args.validate(*args, **kwargs)
-
-        # move fields to attributes, skipping any name the control exposes as a property
-        # (e.g. CAST.condition_point); the raw value stays reachable via self.args.<name>
-        for field in fields(self.args):
-            if isinstance(getattr(type(self), field.name, None), property):
-                continue
-            setattr(self, field.name, getattr(self.args, field.name))
-
+        super().__init__(*args, **kwargs)
         self.hooks: dict[str, list[HookSpec]] = {"pre": [], "forward": [], "backward": []}
         self.registered: list[torch.utils.hooks.RemovableHandle] = []
 
@@ -159,17 +146,20 @@ class StateControl(ABC):
         """Context manager exit: clean up all hooks."""
         self.remove_hooks()
 
-    def reset(self):
-        """Optional reset call for state control."""
-        pass
+    def reset(self) -> None:
+        """Between-generations reset for runtime-backed controls.
 
-    def cleanup(self) -> None:
-        """Release resources allocated during steer().
-
-        Override this method in subclasses that allocate GPU memory or other resources
-        during steering to ensure proper cleanup.
+        Covers the `_gate`/`_runtime` convention used across `state_control._common`: clear the
+        gate, then re-clear the runtime's per-generation counters (preserving its stored prompt
+        lengths and mask). No-op for controls that expose neither attribute. Controls with
+        additional per-generation state override this and may call `super().reset()`.
         """
-        pass
+        gate = getattr(self, "_gate", None)
+        if gate is not None:
+            gate.reset()
+        runtime = getattr(self, "_runtime", None)
+        if runtime is not None:
+            runtime.reset_between_generations()
 
 
 class NoStateControl(StateControl):
@@ -201,8 +191,4 @@ class NoStateControl(StateControl):
 
     def set_hooks(self, hooks: dict[str, list[HookSpec]]):
         """Null set operation."""
-        pass
-
-    def reset(self):
-        """Null reset operation."""
         pass

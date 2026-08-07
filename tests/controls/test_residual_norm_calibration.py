@@ -218,7 +218,7 @@ class TestDosedVectorEndToEnd:
         pipeline.tokenizer = tokenizer
         pipeline.steer()
 
-        out = pipeline.generate([{"role": "user", "content": "the cat sat"}], max_new_tokens=3, do_sample=False)
+        out = pipeline.generate(messages=[{"role": "user", "content": "the cat sat"}], max_new_tokens=3, do_sample=False)
         assert isinstance(out, str)
 
     def test_activation_adapter_binds_and_generates(self):
@@ -237,5 +237,5 @@ class TestDosedVectorEndToEnd:
         pipeline.tokenizer = tokenizer
         pipeline.steer()
 
-        out = pipeline.generate([{"role": "user", "content": "the cat sat"}], max_new_tokens=3, do_sample=False)
+        out = pipeline.generate(messages=[{"role": "user", "content": "the cat sat"}], max_new_tokens=3, do_sample=False)
         assert isinstance(out, str)

@@ -18,8 +18,8 @@ from .processors import (
     PrefixKeyedProcessor,
     ValueGuidedProcessor,
 )
+from aisteer360.algorithms.core.internals.data import LabeledExamples, as_labeled_examples
 from .scorers import MajorityVoteScorer, MetricScorer, RewardModelScorer, SequenceScorer
-from .specs import LabeledExamples, as_labeled_examples
 from .values import (
     BaseCandidateValue,
     CallableValue,

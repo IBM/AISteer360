@@ -7,13 +7,12 @@ from typing import TYPE_CHECKING, Callable, Sequence
 
 from aisteer360.algorithms.core.base_args import BaseArgs
 from aisteer360.algorithms.state_control._common.selectors.condition_point import ConditionPoint
+from aisteer360.algorithms.core.internals.data import ContrastivePairs, as_contrastive_pairs
 from aisteer360.algorithms.state_control._common.specs import (
     ComparatorInput,
     CompMode,
     ConditionSearchSpec,
-    ContrastivePairs,
     VectorTrainSpec,
-    as_contrastive_pairs,
     normalize_comparator,
 )
 from aisteer360.algorithms.state_control._common.steering_vector import SteeringVector

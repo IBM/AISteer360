@@ -115,7 +115,7 @@ pipeline = SteeringPipeline(
 pipeline.steer()  # required once before generate(); heavy work (training, fitting) happens here
 
 response = pipeline.generate(
-    [{"role": "user", "content": "Where is the Eiffel Tower?"}],
+    messages=[{"role": "user", "content": "Where is the Eiffel Tower?"}],
     max_new_tokens=64,
 )
 ```
@@ -155,25 +155,27 @@ The registered names at the time of writing:
 
 ### Pipeline semantics
 
-`generate()` is polymorphic over input modality and returns the matching shape:
+`generate()` dispatches on the declared keyword source (exactly one per call) and returns the matching shape:
 
-| Input | Tokenization | Return |
+| Source | Tokenization | Return |
 | --- | --- | --- |
-| `str` | plain text | `str` |
-| `list[str]` | batched text | `list[str]` |
-| `list[dict]` (one chat) | chat template | `str` |
-| `list[list[dict]]` (batch of chats) | batched chat template | `list[str]` |
-| `torch.Tensor` / token id lists | passed through | `torch.Tensor` |
+| `text=` (`str`) | plain text | `str` |
+| `text=` (`list[str]`) | batched text | `list[str]` |
+| `messages=` (one chat) | chat template | `str` |
+| `messages=` (batch of chats) | batched chat template | `list[str]` |
+| `input_ids=` (tensor / token id lists) | passed through | `torch.Tensor` |
+
+Positional `str`/`list[str]` behaves like `text=`; any other positional shape raises a `TypeError`.
 
 Behaviors that differ from bare Hugging Face usage:
 
 - Returned token ids exclude the prompt by default. Do not slice the result by prompt length; pass
   `return_full_sequence=True` for HF-style prompt-plus-continuation output.
-- `generate(..., return_output=True)` returns an `Output` object (or list of them) with `output_ids`,
-  `adapted_input_ids` (the prompt after input controls, useful for inspecting the steered prompt), `runtime_kwargs`,
-  `finish_reason`, and `metadata`.
+- `generate(..., return_output=True)` returns an `Output` object (or list of them) with three fields: `output_ids`,
+  `adapted_input_ids` (the prompt after input controls, useful for inspecting the steered prompt), and a per-item
+  `finish_reason` (`"eos"`, `"length"`, or `None`). Import it via `from aisteer360.algorithms.core import Output`.
 - `generate()` before `steer()` raises `RuntimeError`; a second `steer()` call is a silent no-op.
-- `attention_mask` is honored only for tensor input; for text and chat input it is ignored with a warning and rebuilt.
+- `attention_mask` is valid only with `input_ids=`; it is derived automatically for `text=` and `messages=`, and passing it with either (or with positional text) raises a `TypeError`.
 - `device` and a non-default `device_map` are mutually exclusive on the `SteeringPipeline` constructor.
 - Pass `lazy_init=True` when a structural control produces the final weights itself (e.g. `mergekit`); the base model
   is then not loaded at construction and the structural control must return one during `steer()`.
@@ -286,7 +288,8 @@ own in the common case. Required hooks per category:
 - **structural**: `steer(model, tokenizer, **kwargs) -> PreTrainedModel`; return the new or modified model.
 - **state**: `get_hooks(input_ids, runtime_kwargs, **kwargs) -> {"pre": [...], "forward": [...], "backward": [...]}`
   where each spec is `{"module": <dotted submodule path>, "hook_func": <callable>}`. Registration, context-managed
-  lifetime, and removal are provided by the base; override `reset()` for per-generation state.
+  lifetime, and removal are provided by the base; a default `reset()` covers the `_gate`/`_runtime`
+  convention, so override (optionally calling `super().reset()`) only for additional per-generation state.
 - **output**, step-level: `get_logits_processors(...)` and `get_stopping_criteria(...)`, returning fresh instances on
   each call. Loop-owning methods subclass `DecodingDriver` and implement `decode(input_ids, attention_mask, model,
   logits_processors, stopping_criteria, runtime_kwargs, **gen_kwargs)`, returning full prompt-plus-continuation ids

@@ -31,7 +31,7 @@ def category_modules(modules):
         if not name.startswith("aisteer360.algorithms."):
             continue
         segments = name.split(".")
-        if any(segment.endswith("_control") for segment in segments[2:]):
+        if len(segments) > 2 and segments[2].endswith("_control"):
             bad.append(name)
     return sorted(bad)
 """

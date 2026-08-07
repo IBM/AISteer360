@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Literal, Sequence
 
 from aisteer360.algorithms.core.internals.capture import HiddenStateLocation
-from aisteer360.algorithms.core.internals.data import ContrastivePairs, as_contrastive_pairs  # re-export; removed next minor
 from aisteer360.utils.rendering import PromptFormat
 
 Comparator = Literal["larger", "smaller"]
@@ -42,53 +41,6 @@ def normalize_comparator(value: str) -> Comparator:
         raise ValueError(
             f"Unknown comparator {value!r}; expected one of {sorted(_COMPARATOR_ALIASES)}."
         ) from None
-
-
-@dataclass(frozen=True)
-class LabeledExamples:
-    """Independent positive/negative text data with binary labels.
-
-    The positive and negative lists need not be the same length. Useful for methods where
-    positive and negative examples are independent and unpaired, and the estimator concatenates
-    them.
-
-    Attributes:
-        positives: Texts exhibiting the target behavior (label=1).
-        negatives: Texts not exhibiting the target behavior (label=0).
-    """
-
-    positives: Sequence[str]
-    negatives: Sequence[str]
-
-    def __post_init__(self):
-        if len(self.positives) == 0 or len(self.negatives) == 0:
-            raise ValueError("positives and negatives must each have at least one entry.")
-
-
-def as_labeled_examples(x) -> LabeledExamples:
-    """Normalize input to LabeledExamples.
-
-    Accepts:
-        - An existing LabeledExamples instance (returned as-is).
-        - A ContrastivePairs instance (converted; pairing is dropped).
-        - A dict with keys "positives" and "negatives".
-
-    Args:
-        x: Input to normalize.
-
-    Returns:
-        LabeledExamples instance.
-
-    Raises:
-        TypeError: If input is not LabeledExamples, ContrastivePairs, or a suitable dict.
-    """
-    if isinstance(x, LabeledExamples):
-        return x
-    if isinstance(x, ContrastivePairs):
-        return LabeledExamples(positives=x.positives, negatives=x.negatives)
-    if isinstance(x, dict):
-        return LabeledExamples(**x)
-    raise TypeError("Expected LabeledExamples, ContrastivePairs, or dict with positives/negatives.")
 
 
 @dataclass(frozen=True)

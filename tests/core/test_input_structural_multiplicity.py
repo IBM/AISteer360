@@ -136,14 +136,14 @@ class TestInputChainOrder:
         model = tiny_llama()
         a, b = _AppendTokenControl(THE), _AppendTokenControl(CAT)
         pipeline_ab = _pipeline([a, b], model=model)
-        out_ab = pipeline_ab.generate(torch.tensor([5, 6]), return_output=True, **GEN_KWARGS)
+        out_ab = pipeline_ab.generate(input_ids=torch.tensor([5, 6]), return_output=True, **GEN_KWARGS)
         assert out_ab.adapted_input_ids[0, -2:].tolist() == [THE, CAT]
         assert a.adapt_calls == 1
         assert b.adapt_calls == 1
 
         c, d = _AppendTokenControl(THE), _AppendTokenControl(CAT)
         pipeline_ba = _pipeline([d, c], model=model)
-        out_ba = pipeline_ba.generate(torch.tensor([5, 6]), return_output=True, **GEN_KWARGS)
+        out_ba = pipeline_ba.generate(input_ids=torch.tensor([5, 6]), return_output=True, **GEN_KWARGS)
         assert out_ba.adapted_input_ids[0, -2:].tolist() == [CAT, THE]
         assert out_ab.adapted_input_ids[0].tolist() != out_ba.adapted_input_ids[0].tolist()
 
@@ -158,7 +158,7 @@ class TestMixedPhasesChat:
         pipeline = _pipeline(controls)
 
         out = pipeline.generate(
-            [{"role": "user", "content": "the dog"}], return_output=True, **GEN_KWARGS
+            messages=[{"role": "user", "content": "the dog"}], return_output=True, **GEN_KWARGS
         )
         adapted = out.adapted_input_ids[0].tolist()
 
@@ -177,7 +177,7 @@ class TestMessagePhaseFold:
         second = _MessageControl(content="span")
         pipeline = _pipeline([first, second])
 
-        out = pipeline.generate([{"role": "user", "content": "cat"}], return_output=True, **GEN_KWARGS)
+        out = pipeline.generate(messages=[{"role": "user", "content": "cat"}], return_output=True, **GEN_KWARGS)
 
         assert second.seen_messages[0][0] == {"role": "system", "content": "attention"}
         assert first.adapt_calls == 0
@@ -190,7 +190,7 @@ class TestMessagePhaseFold:
         declining = _MessageControl(content="attention", handle=False)
         pipeline = _pipeline([declining])
 
-        pipeline.generate([{"role": "user", "content": "cat"}], **GEN_KWARGS)
+        pipeline.generate(messages=[{"role": "user", "content": "cat"}], **GEN_KWARGS)
 
         assert declining.adapt_messages_calls == 1
         assert declining.adapt_calls == 1
@@ -205,7 +205,7 @@ class TestBypassWarning:
 
         with warnings.catch_warnings(record=True) as recorded:
             warnings.simplefilter("always")
-            pipeline.generate(torch.tensor([[5, 6]]), **GEN_KWARGS)
+            pipeline.generate(input_ids=torch.tensor([[5, 6]]), **GEN_KWARGS)
 
         bypass = [w for w in recorded if "adapt_messages" in str(w.message)]
         assert len(bypass) == 1

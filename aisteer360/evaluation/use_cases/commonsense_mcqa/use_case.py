@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from aisteer360.evaluation.use_cases.base import UseCase
-from aisteer360.evaluation.utils.generation_utils import batch_retry_generate
+from aisteer360.evaluation.utils.generation_utils import (
+    batch_retry_generate,
+    log_truncation_count,
+    output_record_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +135,7 @@ class CommonsenseMCQA(UseCase):
                 )
 
         # batch template/generate/decode
-        choices = batch_retry_generate(
+        choices, _, outputs = batch_retry_generate(
             prompt_data=prompt_data,
             model_or_pipeline=model_or_pipeline,
             tokenizer=tokenizer,
@@ -139,8 +143,11 @@ class CommonsenseMCQA(UseCase):
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=self.evaluation_data,
+            return_outputs=True,
             batch_size=batch_size
         )
+
+        log_truncation_count(outputs)
 
         # store
         generations = [
@@ -149,8 +156,9 @@ class CommonsenseMCQA(UseCase):
                 "prompt": prompt_dict["prompt"],
                 "question_id": prompt_dict["id"],
                 "reference_answer": prompt_dict["reference_answer"],
+                **output_record_fields(output, tokenizer),
             }
-            for prompt_dict, choice in zip(prompt_data, choices)
+            for prompt_dict, choice, output in zip(prompt_data, choices, outputs)
         ]
 
         return generations

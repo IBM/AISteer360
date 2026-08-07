@@ -8,7 +8,7 @@ estimation:
 - `encoding`: text-to-tensor tokenization entry points.
 - `pooling`: token, span, and position aggregation.
 - `render`: `ContrastivePairs` to model-ready text.
-- `data`: contrastive data containers.
+- `data`: contrastive and labeled-example data containers.
 - `stats`: ambient activation statistics and residual-norm characterization.
 - `fingerprint`: digests identifying the model a fitted artifact was estimated on.
 
@@ -23,7 +23,7 @@ Layering rules:
     capabilities become sibling subpackages.
 """
 from .capture import HiddenStateLocation, layerwise_tokenwise_hidden
-from .data import ContrastivePairs, as_contrastive_pairs
+from .data import ContrastivePairs, LabeledExamples, as_contrastive_pairs, as_labeled_examples
 from .encoding import tokenize_pairs, tokenize_texts
 from .fingerprint import model_fingerprint
 from .pooling import (
@@ -41,10 +41,12 @@ __all__ = [
     "ActivationStats",
     "ContrastivePairs",
     "HiddenStateLocation",
+    "LabeledExamples",
     "RenderedContrastive",
     "StatsSpec",
     "aggregate_condition_hidden",
     "as_contrastive_pairs",
+    "as_labeled_examples",
     "get_last_token_positions",
     "layerwise_tokenwise_hidden",
     "masked_mean",

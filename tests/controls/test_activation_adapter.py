@@ -439,6 +439,47 @@ class TestGating:
         assert "behavior" in order
 
 
+# reset() / get_hooks() gate re-sizing across consecutive generations
+def _row_gated_adapter(threshold=0.5, score_value=0.9, condition_layer=0, behavior_layer=1):
+    """A gated adapter whose scorer returns per-row scores, so it batches natively."""
+    gate = CacheOnceGate(MultiKeyThresholdGate(
+        threshold=threshold, comparator="score_above", expected_keys={condition_layer}))
+    return ActivationAdapter(
+        transform=AdditiveTransform(_sv(13), strength=1.0), layer_ids=[behavior_layer], token_scope="all",
+        gate=gate, condition_layer_ids=[condition_layer],
+        score_fn=lambda h, l, _v=score_value, **_: torch.full((h.size(0),), _v),
+    )
+
+
+def test_consecutive_generations_across_batch_sizes():
+    """A steered pipeline generating batch-of-4 then batch-of-2 leaves no state from the first call.
+
+    `reset()` clears the row gate to a single row without knowing the next batch; `get_hooks` re-sizes
+    it to the true batch before any gate read. The batch-of-2 outputs must match a freshly steered,
+    identically configured pipeline given only the batch-of-2, and the gate must be sized to 2 after.
+    """
+    torch.manual_seed(0)
+    model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
+
+    batch4 = torch.stack([torch.arange(3, 7), torch.arange(4, 8), torch.arange(5, 9), torch.arange(6, 10)])
+    batch2 = torch.stack([torch.arange(3, 7), torch.arange(4, 8)])
+    gen = dict(max_new_tokens=4, do_sample=False, eos_token_id=None)
+
+    adapter = _row_gated_adapter()
+    pipeline = _pipe(adapter, model)
+    pipeline.generate(input_ids=batch4, **gen)
+    out_after_4 = pipeline.generate(input_ids=batch2, **gen)
+
+    fresh_model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
+    fresh_model.load_state_dict(model.state_dict())
+    fresh_adapter = _row_gated_adapter()
+    fresh_pipeline = _pipe(fresh_adapter, fresh_model)
+    out_fresh = fresh_pipeline.generate(input_ids=batch2, **gen)
+
+    assert torch.equal(out_after_4, out_fresh)  # no state from the batch-of-4 leaked into the batch-of-2
+    assert adapter._gate.num_rows == 2  # get_hooks re-sized the gate past the unsized reset() clear
+
+
 # CosineDirectionScorer
 class TestCosineDirectionScorer:
     def test_matches_legacy_lambda(self):

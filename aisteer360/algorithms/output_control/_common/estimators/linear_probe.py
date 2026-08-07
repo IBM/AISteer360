@@ -16,10 +16,7 @@ from dataclasses import dataclass
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from aisteer360.algorithms.output_control._common.specs import (
-    LabeledExamples,
-    as_labeled_examples,
-)
+from aisteer360.algorithms.core.internals.data import LabeledExamples, as_labeled_examples
 
 logger = logging.getLogger(__name__)
 

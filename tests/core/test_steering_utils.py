@@ -1,31 +1,26 @@
 """
-Tests for steering utility functions.
+Tests for control-composition and tokenizer utilities.
 
 Tests cover:
 
-- merge_controls function
-- ensure_pad_token function
-- Control categorization and validation
+- `merge_controls` categorization, defaults, ordering, and error handling
+- `ensure_pad_token`
 """
 from unittest.mock import MagicMock
 
 import pytest
 
-from tests.conftest import (  # Base classes; Mock controls; Utilities
-    HFGenerateDriver,
-    InputControl,
+from aisteer360.algorithms.core.utils.controls import merge_controls
+from aisteer360.algorithms.input_control.base import InputControl, NoInputControl
+from aisteer360.algorithms.output_control.base import HFGenerateDriver
+from aisteer360.algorithms.state_control.base import NoStateControl, StateControl
+from aisteer360.algorithms.structural_control.base import NoStructuralControl, StructuralControl
+from aisteer360.utils.tokenization import ensure_pad_token
+from tests.conftest import (
     MockInputControl,
     MockOutputControl,
     MockStateControl,
     MockStructuralControl,
-    NoInputControl,
-    NoStateControl,
-    NoStructuralControl,
-    OutputControl,
-    StateControl,
-    StructuralControl,
-    ensure_pad_token,
-    merge_controls,
 )
 
 
@@ -34,7 +29,8 @@ class TestMergeControlsEmpty:
     """Tests for merge_controls with empty or minimal input."""
 
     def test_empty_list_returns_all_defaults(self):
-        """Test that empty list returns all null controls."""
+        """An empty list yields identity controls for input/structural/state and an empty
+        output list."""
         result = merge_controls([])
 
         assert "input_controls" in result
@@ -51,27 +47,25 @@ class TestMergeControlsEmpty:
         assert result["output_controls"] == []
 
     def test_empty_iterable_returns_defaults(self):
-        """Test that any empty iterable returns defaults."""
+        """Any empty iterable yields the defaults."""
         result = merge_controls(iter([]))
         assert isinstance(result["input_controls"][0], NoInputControl)
 
 
 class TestMergeControlsSingleCategory:
-    """Tests for merge_controls with single category controls."""
+    """Tests for merge_controls with single-category controls."""
 
     def test_single_input_control(self):
-        """Test merging single input control."""
         control = MockInputControl()
         result = merge_controls([control])
 
         assert result["input_controls"] == [control]
-        # Other categories should be defaults
+        # other categories fall back to defaults
         assert isinstance(result["structural_controls"][0], NoStructuralControl)
         assert isinstance(result["state_controls"][0], NoStateControl)
         assert result["output_controls"] == []
 
     def test_single_structural_control(self):
-        """Test merging single structural control."""
         control = MockStructuralControl()
         result = merge_controls([control])
 
@@ -79,7 +73,6 @@ class TestMergeControlsSingleCategory:
         assert isinstance(result["input_controls"][0], NoInputControl)
 
     def test_single_state_control(self):
-        """Test merging single state control."""
         control = MockStateControl()
         result = merge_controls([control])
 
@@ -87,7 +80,6 @@ class TestMergeControlsSingleCategory:
         assert result["state_controls"] == [control]
 
     def test_single_output_control(self):
-        """Test merging single output control."""
         control = MockOutputControl()
         result = merge_controls([control])
 
@@ -95,10 +87,9 @@ class TestMergeControlsSingleCategory:
 
 
 class TestMergeControlsMultipleCategories:
-    """Tests for merge_controls with multiple category controls."""
+    """Tests for merge_controls with controls from multiple categories."""
 
     def test_two_different_categories(self):
-        """Test merging controls from two categories."""
         input_ctrl = MockInputControl()
         state_ctrl = MockStateControl()
 
@@ -110,7 +101,6 @@ class TestMergeControlsMultipleCategories:
         assert result["output_controls"] == []
 
     def test_all_four_categories(self):
-        """Test merging controls from all four categories."""
         input_ctrl = MockInputControl()
         structural_ctrl = MockStructuralControl()
         state_ctrl = MockStateControl()
@@ -124,7 +114,7 @@ class TestMergeControlsMultipleCategories:
         assert result["output_controls"] == [output_ctrl]
 
     def test_order_independent_across_categories(self):
-        """Test that cross-category control order doesn't matter."""
+        """Cross-category ordering does not change per-category results."""
         input_ctrl = MockInputControl()
         state_ctrl = MockStateControl()
 
@@ -135,11 +125,10 @@ class TestMergeControlsMultipleCategories:
         assert result1["state_controls"] == result2["state_controls"]
 
 
-class TestMergeControlsErrors:
-    """Tests for merge_controls error handling."""
+class TestMergeControlsMultiplicityAndErrors:
+    """Tests for within-category multiplicity and error handling."""
 
     def test_multiple_input_controls_returned_in_order(self):
-        """Multiple input controls are allowed and returned in encounter order."""
         ctrl1 = MockInputControl()
         ctrl2 = MockInputControl()
 
@@ -147,7 +136,6 @@ class TestMergeControlsErrors:
         assert result["input_controls"] == [ctrl1, ctrl2]
 
     def test_multiple_structural_controls_returned_in_order(self):
-        """Multiple structural controls are allowed and returned in encounter order."""
         ctrl1 = MockStructuralControl()
         ctrl2 = MockStructuralControl()
 
@@ -155,7 +143,6 @@ class TestMergeControlsErrors:
         assert result["structural_controls"] == [ctrl1, ctrl2]
 
     def test_multiple_state_controls_returned_in_order(self):
-        """Multiple state controls are allowed and returned in encounter order."""
         ctrl1 = MockStateControl()
         ctrl2 = MockStateControl()
 
@@ -163,7 +150,6 @@ class TestMergeControlsErrors:
         assert result["state_controls"] == [ctrl1, ctrl2]
 
     def test_multiple_output_controls_returned_in_order(self):
-        """Multiple output controls are allowed and returned in encounter order."""
         ctrl1 = MockOutputControl()
         ctrl2 = MockOutputControl()
 
@@ -183,7 +169,7 @@ class TestMergeControlsErrors:
             merge_controls([DriverA(), DriverB()])
 
     def test_step_level_control_plus_driver_allowed(self):
-        """A step-level control alongside a single driver is fine (returned in order)."""
+        """A step-level control alongside a single driver is accepted, in encounter order."""
         step_level_control = MockOutputControl()
         driver = HFGenerateDriver()
 
@@ -191,7 +177,6 @@ class TestMergeControlsErrors:
         assert result["output_controls"] == [step_level_control, driver]
 
     def test_unknown_control_type_raises(self):
-        """Test that unknown control type raises TypeError."""
         class UnknownControl:
             pass
 
@@ -199,7 +184,6 @@ class TestMergeControlsErrors:
             merge_controls([UnknownControl()])
 
     def test_duplicate_instance_error_includes_control_name(self):
-        """The same-instance-twice error message includes the control class name."""
         ctrl = MockInputControl()
 
         with pytest.raises(ValueError) as exc_info:
@@ -212,11 +196,9 @@ class TestMergeControlsWithSubclasses:
     """Tests for merge_controls with control subclasses."""
 
     def test_subclass_recognized_as_parent_category(self):
-        """Test that subclasses are recognized by parent category."""
-        # Create a custom subclass
         class CustomInputControl(InputControl):
-            def get_prompt_adapter(self, runtime_kwargs=None):
-                return lambda ids, _: ids
+            def adapt(self, input_ids, runtime_kwargs=None):
+                return input_ids
 
         control = CustomInputControl()
         result = merge_controls([control])
@@ -224,12 +206,13 @@ class TestMergeControlsWithSubclasses:
         assert isinstance(result["input_controls"][0], CustomInputControl)
 
     def test_different_subclasses_of_same_category_compose_in_order(self):
-        """Different subclasses of the same category are returned in encounter order."""
         class CustomInput1(InputControl):
-            pass
+            def adapt(self, input_ids, runtime_kwargs=None):
+                return input_ids
 
         class CustomInput2(InputControl):
-            pass
+            def adapt(self, input_ids, runtime_kwargs=None):
+                return input_ids
 
         first, second = CustomInput1(), CustomInput2()
         result = merge_controls([first, second])
@@ -238,10 +221,9 @@ class TestMergeControlsWithSubclasses:
 
 # ensure_pad_token Tests
 class TestEnsurePadToken:
-    """Tests for ensure_pad_token utility function."""
+    """Tests for the `ensure_pad_token` utility."""
 
     def test_sets_pad_token_when_none(self):
-        """Test that pad_token is set when None."""
         tokenizer = MagicMock()
         tokenizer.pad_token_id = None
         tokenizer.eos_token_id = 1
@@ -253,7 +235,6 @@ class TestEnsurePadToken:
         assert result.pad_token == "</s>"
 
     def test_preserves_existing_pad_token(self):
-        """Test that existing pad_token is preserved."""
         tokenizer = MagicMock()
         tokenizer.pad_token_id = 0
         tokenizer.pad_token = "<pad>"
@@ -265,7 +246,6 @@ class TestEnsurePadToken:
         assert result.pad_token == "<pad>"
 
     def test_returns_same_tokenizer(self):
-        """Test that the same tokenizer instance is returned."""
         tokenizer = MagicMock()
         tokenizer.pad_token_id = 0
 
@@ -276,18 +256,15 @@ class TestEnsurePadToken:
 
 # Control Type Detection Tests
 class TestControlTypeDetection:
-    """Tests for control type detection in merge_controls."""
+    """Tests for category detection in merge_controls."""
 
     def test_detects_input_control(self):
-        """Test detection of InputControl type."""
         control = MockInputControl()
         result = merge_controls([control])
         assert "input_controls" in result
         assert result["input_controls"] == [control]
 
     def test_detects_by_inheritance(self):
-        """Test that detection works via inheritance chain."""
-        # MockInputControl inherits from InputControl
         control = MockInputControl()
         assert isinstance(control, InputControl)
 
@@ -295,21 +272,19 @@ class TestControlTypeDetection:
         assert result["input_controls"] == [control]
 
     def test_null_controls_have_correct_types(self):
-        """Test that null controls are correctly typed."""
         result = merge_controls([])
 
         assert isinstance(result["input_controls"][0], InputControl)
         assert isinstance(result["structural_controls"][0], StructuralControl)
         assert isinstance(result["state_controls"][0], StateControl)
-        assert result["output_controls"] == []  # no phantom output no-op
+        assert result["output_controls"] == []  # no output no-op
 
 
 # Edge Cases
 class TestMergeControlsEdgeCases:
-    """Edge case tests for merge_controls."""
+    """Edge-case tests for merge_controls."""
 
     def test_generator_input(self):
-        """Test that generator input works."""
         def control_generator():
             yield MockInputControl()
             yield MockStateControl()
@@ -319,13 +294,11 @@ class TestMergeControlsEdgeCases:
         assert isinstance(result["state_controls"][0], MockStateControl)
 
     def test_single_element_list(self):
-        """Test single element list."""
         control = MockInputControl()
         result = merge_controls([control])
         assert result["input_controls"] == [control]
 
     def test_preserves_control_state(self):
-        """Test that control state is preserved after merging."""
         control = MockInputControl(prefix="test_", num_examples=5)
         result = merge_controls([control])
 
@@ -333,7 +306,6 @@ class TestMergeControlsEdgeCases:
         assert result["input_controls"][0].num_examples == 5
 
     def test_controls_not_modified(self):
-        """Test that original controls are not modified."""
         control = MockInputControl()
         original_enabled = control.enabled
 

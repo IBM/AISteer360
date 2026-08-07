@@ -26,20 +26,20 @@ See Also:
 """
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import fields
+from abc import abstractmethod
 from typing import TYPE_CHECKING
 
 import torch
 from transformers import PreTrainedTokenizerBase
 
 from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.core.base_control import BaseControl
 
 if TYPE_CHECKING:
     from aisteer360.algorithms.input_control._common.memory.base import Memory
 
 
-class InputControl(ABC):
+class InputControl(BaseControl):
     """Abstract base class for input control steering methods.
 
     Transforms a prompt before it reaches the model, steering behavior via the input alone (no changes to weights,
@@ -67,18 +67,6 @@ class InputControl(ABC):
     supports_batching: bool = False
 
     memory: Memory | None = None  # subclasses populate in steer()
-
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is None:  # null control
-            if args or kwargs:
-                raise TypeError(f"{type(self).__name__} accepts no constructor arguments.")
-            return
-
-        self.args: BaseArgs = self.Args.validate(*args, **kwargs)
-
-        # move fields to attributes
-        for field in fields(self.args):
-            setattr(self, field.name, getattr(self.args, field.name))
 
     @abstractmethod
     def adapt(
@@ -127,14 +115,6 @@ class InputControl(ABC):
         **kwargs,
     ) -> None:
         """Optional offline preparation. Default is no-op."""
-        pass
-
-    def cleanup(self) -> None:
-        """Release resources allocated during `steer()`.
-
-        Override this method in subclasses that allocate GPU memory or other resources during steering to ensure proper
-        cleanup.
-        """
         pass
 
 

@@ -156,9 +156,3 @@ class ActAdd(StateControl):
             "forward": [],
             "backward": [],
         }
-
-    def reset(self):
-        """Reset internal state between generation calls."""
-        self._gate.reset()
-        if self._runtime._prompt_lens is not None:
-            self._runtime.reset(self._runtime._prompt_lens)

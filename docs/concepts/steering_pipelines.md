@@ -90,10 +90,22 @@ Steering must be called exactly once before using the pipeline for inference.
 
 ## Running inference on the pipeline
 
-Once the pipeline has been steered, inference can be run using the `generate()` method. AISteer360 has been built to be
-tightly integrated with Hugging Face and thus running inference on a steering pipeline is operationally similar to
-running inference on a Hugging Face model. As with Hugging Face models, prompts must first be encoded via the pipeline's
-tokenizer. It is also recommended to apply the tokenizer's chat template if available:
+Once the pipeline has been steered, inference can be run using the `generate()` method. The prompt source is declared
+by keyword, with exactly one source per call: `text=` for a `str` or `list[str]`, `messages=` for one conversation
+(a sequence of chat-message mappings) or a batch of conversations, and `input_ids=` for a pre-tokenized 1-D/2-D
+integer tensor (`attention_mask` is valid only alongside `input_ids=`, and is derived automatically for `text=` and
+`messages=`). A positional `str`/`list[str]` is also accepted as a convenience for text prompts. The `text=` and
+`messages=` paths tokenize for you, so passing chat directly is the most direct route:
+
+```python
+output = pipeline.generate(
+    messages=[{"role": "user", "content": PROMPT}],
+    max_new_tokens=20,
+)
+```
+
+To tokenize explicitly and pass token IDs, encode via the pipeline's tokenizer, applying the chat template if
+available:
 
 ```python
 tokenizer = pipeline.tokenizer

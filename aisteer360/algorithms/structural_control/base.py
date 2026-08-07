@@ -24,15 +24,15 @@ See Also:
 - `aisteer360.algorithms.structural_control`: Implementations of structural control methods
 - `aisteer360.core.steering_pipeline`: Integration with steering pipeline
 """
-from abc import ABC, abstractmethod
-from dataclasses import fields
+from abc import abstractmethod
 
 from transformers import PreTrainedModel, PreTrainedTokenizer
 
 from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.core.base_control import BaseControl
 
 
-class StructuralControl(ABC):
+class StructuralControl(BaseControl):
     """Abstract base class for structural control steering methods.
 
     Modifies model parameters or architecture persistently, returning a new model instance with transformed weights.
@@ -47,18 +47,6 @@ class StructuralControl(ABC):
     enabled: bool = True
     supports_batching: bool = True
 
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is None:  # null control
-            if args or kwargs:
-                raise TypeError(f"{type(self).__name__} accepts no constructor arguments.")
-            return
-
-        self.args: BaseArgs = self.Args.validate(*args, **kwargs)
-
-        # move fields to attributes
-        for field in fields(self.args):
-            setattr(self, field.name, getattr(self.args, field.name))
-
     @abstractmethod
     def steer(
             self,
@@ -67,14 +55,6 @@ class StructuralControl(ABC):
             **kwargs
     ) -> PreTrainedModel:
         """Required steering/preparation."""
-        pass
-
-    def cleanup(self) -> None:
-        """Release resources allocated during steer().
-
-        Override this method in subclasses that allocate GPU memory or other resources
-        during steering to ensure proper cleanup.
-        """
         pass
 
 

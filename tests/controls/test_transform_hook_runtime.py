@@ -417,3 +417,118 @@ class TestFallbackMultiCallHeuristic:
             warnings.simplefilter("always")
             hook(None, (), {}, (hidden,))
         assert not [w for w in caught if "Multiple generate calls" in str(w.message)]
+
+
+class TestResetBetweenGenerations:
+    def test_noop_before_first_reset(self):
+        """Before any `reset(prompt_lens, ...)` there is nothing to preserve; the call is a no-op."""
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        runtime.reset_between_generations()
+        assert runtime._prompt_lens is None
+        assert runtime._prompt_mask is None
+        assert runtime.num_logical_rows == 0
+
+    def test_reclears_counters_and_preserves_lens_and_mask(self):
+        """After a `reset`, it re-clears the per-generation counters and keeps lens/mask."""
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        prompt_lens = torch.tensor([4, 3])
+        prompt_mask = torch.tensor([[1, 1, 1, 1], [1, 1, 1, 0]], dtype=torch.bool)
+        runtime.reset(prompt_lens, prompt_mask)
+
+        # dirty the per-generation counters as a live generation would
+        runtime._offset = 5
+        runtime._pass_offset = 2
+        runtime._prefill_seen = True
+        runtime._opener_built = True
+        runtime._clock_seen = True
+        runtime._warned = {"clock_disappeared"}
+
+        runtime.reset_between_generations()
+
+        assert runtime._offset == 0
+        assert runtime._pass_offset == 0
+        assert runtime._prefill_seen is False
+        assert runtime._opener_built is False
+        assert runtime._clock_seen is False
+        assert runtime._warned == set()
+        # stored prompt state survives the between-generations reset
+        assert torch.equal(runtime._prompt_lens, prompt_lens)
+        assert runtime._prompt_mask is not None
+        assert torch.equal(runtime._prompt_mask, prompt_mask)
+
+
+class _RecordingGate(BaseGate):
+    """Gate that records each `reset(num_rows)` call and always reports open."""
+
+    def __init__(self):
+        self.reset_calls: list[int] = []
+
+    def reset(self, num_rows: int = 1) -> None:
+        self.reset_calls.append(num_rows)
+        super().reset(num_rows)
+
+    def update(self, scores, *, key=None):
+        pass
+
+    def open_rows(self):
+        return torch.ones(self.num_rows, dtype=torch.bool)
+
+    def is_ready(self):
+        return True
+
+
+class TestDefaultStateControlReset:
+    """The base `StateControl.reset` duck-types over the `_gate`/`_runtime` convention."""
+
+    def _make_control(self):
+        from aisteer360.algorithms.state_control.base import StateControl
+
+        class _Bare(StateControl):
+            def get_hooks(self, input_ids, runtime_kwargs=None, **__):
+                return {"pre": [], "forward": [], "backward": []}
+
+        return _Bare()
+
+    def test_reset_noops_without_attrs(self):
+        """A pasta-shaped control exposing neither `_gate` nor `_runtime` resets without error."""
+        control = self._make_control()
+        assert not hasattr(control, "_gate")
+        assert not hasattr(control, "_runtime")
+        control.reset()  # must not raise
+
+    def test_reset_clears_gate_and_reclears_runtime(self):
+        """With both attrs present, `reset` clears the gate and re-clears the runtime counters."""
+        control = self._make_control()
+        gate = _RecordingGate()
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        runtime.reset(torch.tensor([4]))
+        runtime._offset = 7
+        runtime._prefill_seen = True
+        control._gate = gate
+        control._runtime = runtime
+
+        control.reset()
+
+        assert gate.reset_calls == [1]  # gate cleared to its default single row
+        assert runtime._offset == 0  # runtime counters re-cleared
+        assert runtime._prefill_seen is False
+        assert torch.equal(runtime._prompt_lens, torch.tensor([4]))  # lens preserved
+
+    def test_reset_gate_only(self):
+        """A control with a gate but no runtime clears the gate and does not raise."""
+        control = self._make_control()
+        gate = _RecordingGate()
+        control._gate = gate
+        control.reset()
+        assert gate.reset_calls == [1]
+
+    def test_reset_runtime_only(self):
+        """A control with a runtime but no gate re-clears the runtime and does not raise."""
+        control = self._make_control()
+        runtime = TransformHookRuntime(hook_point="layer_output")
+        runtime.reset(torch.tensor([2, 5]))
+        runtime._pass_offset = 3
+        control._runtime = runtime
+        control.reset()
+        assert runtime._pass_offset == 0
+        assert torch.equal(runtime._prompt_lens, torch.tensor([2, 5]))

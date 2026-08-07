@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from aisteer360.evaluation.use_cases.base import UseCase
-from aisteer360.evaluation.utils.generation_utils import batch_retry_generate
+from aisteer360.evaluation.utils.generation_utils import (
+    batch_retry_generate,
+    log_truncation_count,
+    output_record_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,15 +90,18 @@ class InstructionFollowing(UseCase):
             user_prompt = [{"role": "user", "content": instance["prompt"]}]
             prompt_data.append({"prompt": user_prompt})
 
-        responses = batch_retry_generate(
+        responses, _, outputs = batch_retry_generate(
             prompt_data=prompt_data,
             model_or_pipeline=model_or_pipeline,
             tokenizer=tokenizer,
             gen_kwargs=gen_kwargs,
             runtime_overrides=runtime_overrides,
             evaluation_data=self.evaluation_data,
+            return_outputs=True,
             batch_size=batch_size
         )
+
+        log_truncation_count(outputs)
 
         generations = [
             {
@@ -103,8 +110,9 @@ class InstructionFollowing(UseCase):
                 "instructions": eval_data["instructions"],
                 "instruction_id_list": eval_data["instruction_id_list"],
                 "kwargs": eval_data["kwargs"],
+                **output_record_fields(output, tokenizer),
             }
-            for eval_data, response in zip(self.evaluation_data, responses)
+            for eval_data, response, output in zip(self.evaluation_data, responses, outputs)
         ]
 
         return generations
@@ -140,7 +148,7 @@ class InstructionFollowing(UseCase):
         """
         folder_path = Path(save_dir)
         folder_path.mkdir(parents=True, exist_ok=True)
-        steering_methods, predictions, follow_instructions = [], {}, {}
+        steering_methods, predictions, follow_instructions, finish_reasons, adapted_prompts = [], {}, {}, {}, {}
         inputs = None
 
         for steering_method, runs in profiles.items():
@@ -150,6 +158,8 @@ class InstructionFollowing(UseCase):
             generations = first_run["generations"]
             steering_methods.append(steering_method)
             predictions[steering_method] = [gen["response"] for gen in generations]
+            finish_reasons[steering_method] = [gen.get("finish_reason") for gen in generations]
+            adapted_prompts[steering_method] = [gen.get("adapted_prompt") for gen in generations]
 
             # get instruction following details from the StrictInstruction metric
             evaluations = first_run.get("evaluations", {})
@@ -166,6 +176,10 @@ class InstructionFollowing(UseCase):
             for method in steering_methods:
                 response[method] = predictions[method][idx]
                 response[f"{method}_instr_follow"] = follow_instructions[method][idx]
+                response[f"{method}_finish_reason"] = finish_reasons[method][idx]
+                adapted_prompt = adapted_prompts[method][idx]
+                if adapted_prompt is not None:
+                    response[f"{method}_adapted_prompt"] = adapted_prompt
             responses.append(response)
 
         with open(folder_path / "responses.json", "w") as f:

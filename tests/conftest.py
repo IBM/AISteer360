@@ -1,25 +1,35 @@
 """
-Shared fixtures and mock classes for tests.
+Shared fixtures and mock components for tests.
 
 This module provides:
 
 - Device and model fixtures for integration tests
-- Mock base classes
-- Generic mock controls for each category (Input, Structural, State, Output)
-- Common test fixtures for evaluation data, metrics, and use cases
-- Utility functions used across test modules
+- Recording mock controls for each category, subclassing the package base classes
+- Mock metrics and a mock use case, subclassing the package base classes
+- Mock model and tokenizer factories for isolating tests from Hugging Face loading
+- Common evaluation-data fixtures
+
+Mock controls record the calls the pipeline makes into them (call counts, received
+`runtime_kwargs`) while inheriting construction, validation, and lifecycle behavior from the
+real base classes. Only the model and tokenizer boundaries are replaced with `MagicMock`s.
 """
 import json
-from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.input_control.base import InputControl
+from aisteer360.algorithms.output_control.base import OutputControl
+from aisteer360.algorithms.state_control.base import StateControl
+from aisteer360.algorithms.structural_control.base import StructuralControl
+from aisteer360.evaluation.metrics.base import Metric
+from aisteer360.evaluation.use_cases.base import UseCase
 from tests.utils.load_ci_models import get_models
 
 # Real Model/Device Fixtures (for integration tests)
@@ -72,219 +82,38 @@ def model_and_tokenizer(request):
     return model, tokenizer
 
 
-# Mock Base Classes
-@dataclass
-class BaseArgs:
-    """Base class for all method's args classes."""
-
-    @classmethod
-    def validate(cls, data=None, **kwargs):
-        """Create and validate an Args instance from dict, kwargs, or existing instance."""
-        if isinstance(data, cls):
-            return data
-        if isinstance(data, Mapping):
-            kwargs = {**data, **kwargs}
-        return cls(**kwargs)
-
-
-class Metric:
-    """Base metric class for evaluation."""
-
-    def __init__(self, **extras: Any) -> None:
-        self.name: str = self.__class__.__name__
-        self.extras: dict[str, Any] = extras
-
-    def compute(self, responses: list[Any], prompts: list[str] | None = None, **kwargs) -> dict[str, Any]:
-        raise NotImplementedError
-
-    def __call__(self, *args, **kwargs):
-        return self.compute(*args, **kwargs)
-
-
-# Control Base Classes
-class InputControl:
-    """Base class for input control steering methods."""
-
-    Args: type[BaseArgs] | None = None
-    enabled: bool = True
-    supports_batching: bool = False
-
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is not None:
-            self.args = self.Args.validate(*args, **kwargs)
-            for f in self.args.__dataclass_fields__:
-                setattr(self, f, getattr(self.args, f))
-
-    def get_prompt_adapter(self, runtime_kwargs: dict | None = None) -> Callable:
-        """Return transformation function for input_ids."""
-        return lambda ids, _: ids
-
-    def steer(self, model=None, tokenizer=None, **kwargs) -> None:
-        """Optional steering/preparation."""
-        pass
-
-
-class StructuralControl:
-    """Base class for structural control steering methods."""
-
-    Args: type[BaseArgs] | None = None
-    enabled: bool = True
-    supports_batching: bool = True
-
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is not None:
-            self.args = self.Args.validate(*args, **kwargs)
-            for f in self.args.__dataclass_fields__:
-                setattr(self, f, getattr(self.args, f))
-
-    def steer(self, model, tokenizer=None, **kwargs):
-        """Required steering/preparation - returns modified model."""
-        return model
-
-
-class StateControl:
-    """Base class for state control steering methods."""
-
-    Args: type[BaseArgs] | None = None
-    enabled: bool = True
-    supports_batching: bool = False
-    _model_ref = None
-
-    def __init__(self, *args, **kwargs) -> None:
-        self.hooks: dict[str, list] = {"pre": [], "forward": [], "backward": []}
-        self.registered: list = []
-        if self.Args is not None:
-            self.args = self.Args.validate(*args, **kwargs)
-            for f in self.args.__dataclass_fields__:
-                setattr(self, f, getattr(self.args, f))
-
-    def get_hooks(self, input_ids: torch.Tensor, runtime_kwargs: dict | None, **kwargs) -> dict[str, list]:
-        """Create hook specifications for the current generation."""
-        return {"pre": [], "forward": [], "backward": []}
-
-    def steer(self, model, tokenizer=None, **kwargs) -> None:
-        """Optional steering/preparation."""
-        pass
-
-    def set_hooks(self, hooks: dict[str, list]) -> None:
-        self.hooks = hooks
-
-    def register_hooks(self, model) -> None:
-        pass
-
-    def remove_hooks(self) -> None:
-        self.registered.clear()
-
-    def reset(self) -> None:
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
-
-
-class OutputControl:
-    """Base class for output control steering methods (step-level)."""
-
-    Args: type[BaseArgs] | None = None
-    enabled: bool = True
-    supports_batching: bool = False
-    include_in_scoring: bool = True
-
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is not None:
-            self.args = self.Args.validate(*args, **kwargs)
-            for f in self.args.__dataclass_fields__:
-                setattr(self, f, getattr(self.args, f))
-
-    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs) -> list:
-        return []
-
-    def get_stopping_criteria(self, input_ids, runtime_kwargs, **kwargs) -> list:
-        return []
-
-    def steer(self, model, tokenizer=None, **kwargs) -> None:
-        """Optional steering/preparation."""
-        pass
-
-
-class DecodingDriver(OutputControl):
-    """Base class for output controls that implement the decoding procedure."""
-
-    def decode(self, input_ids, attention_mask, model, logits_processors,
-               stopping_criteria, runtime_kwargs, **gen_kwargs) -> torch.Tensor:
-        raise NotImplementedError
-
-
-class HFGenerateDriver(DecodingDriver):
-    """Default decoding driver: delegate to model.generate."""
-
-    supports_batching: bool = True
-
-    def decode(self, input_ids, attention_mask, model, logits_processors,
-               stopping_criteria, runtime_kwargs, **gen_kwargs) -> torch.Tensor:
-        extra = {}
-        if len(logits_processors):
-            extra["logits_processor"] = logits_processors
-        if len(stopping_criteria):
-            extra["stopping_criteria"] = stopping_criteria
-        return model.generate(input_ids=input_ids, attention_mask=attention_mask, **extra, **gen_kwargs)
-
-
-# Null Control Classes (identity/no-op implementations)
-class NoInputControl(InputControl):
-    """Identity input control - returns input unchanged."""
-    enabled: bool = False
-    supports_batching: bool = True
-
-
-class NoStructuralControl(StructuralControl):
-    """Identity structural control - returns model unchanged."""
-    enabled: bool = False
-
-    def steer(self, model, **__):
-        return model
-
-
-class NoStateControl(StateControl):
-    """Identity state control - no hooks registered."""
-    enabled: bool = False
-    supports_batching: bool = True
-
-
-# Generic Mock Controls
+# Mock Controls (recording subclasses of the package base classes)
 @dataclass
 class MockInputArgs(BaseArgs):
-    """Args for a generic input control."""
+    """Arguments for `MockInputControl`."""
     prefix: str = ""
     suffix: str = ""
     num_examples: int = 0
 
 
 class MockInputControl(InputControl):
-    """
-    Generic mock input control for testing.
+    """Recording input control.
 
-    Simulates prompt modification by optionally prepending/appending tokens.
+    `adapt` returns `input_ids` unchanged and records the call count and the `runtime_kwargs`
+    it received. `steer` stores the model and tokenizer references on the instance.
+
+    Attributes:
+        _adapt_call_count: Number of `adapt` invocations since construction.
+        _runtime_kwargs_received: The `runtime_kwargs` from the most recent `adapt` call.
     """
     Args = MockInputArgs
     supports_batching: bool = False
+    tokenizer = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._adapter_call_count = 0
+        self._adapt_call_count = 0
         self._runtime_kwargs_received = None
 
-    def get_prompt_adapter(self, runtime_kwargs: dict | None = None):
+    def adapt(self, input_ids, runtime_kwargs=None):
+        self._adapt_call_count += 1
         self._runtime_kwargs_received = runtime_kwargs
-
-        def adapter(input_ids, rt_kwargs):
-            self._adapter_call_count += 1
-            return input_ids
-
-        return adapter
+        return input_ids
 
     def steer(self, model=None, tokenizer=None, **kwargs):
         self.model = model
@@ -293,17 +122,20 @@ class MockInputControl(InputControl):
 
 @dataclass
 class MockStructuralArgs(BaseArgs):
-    """Args for a generic structural control."""
+    """Arguments for `MockStructuralControl`."""
     learning_rate: float = 1e-4
     num_epochs: int = 1
     output_dir: str = "./output"
 
 
 class MockStructuralControl(StructuralControl):
-    """
-    Generic mock structural control for testing.
+    """Recording structural control.
 
-    Simulates model modification (e.g., fine-tuning, adapter injection).
+    `steer` records that it was called, stores the model and tokenizer references, and returns
+    the model unchanged.
+
+    Attributes:
+        _steer_called: Whether `steer` has been invoked.
     """
     Args = MockStructuralArgs
     supports_batching: bool = True
@@ -316,23 +148,28 @@ class MockStructuralControl(StructuralControl):
         self._steer_called = True
         self.model = model
         self.tokenizer = tokenizer
-        # In real implementation, would modify model weights
         return model
 
 
 @dataclass
 class MockStateArgs(BaseArgs):
-    """Args for a generic state control."""
+    """Arguments for `MockStateControl`."""
     target_layers: list = field(default_factory=lambda: [0, 1])
     scale_factor: float = 1.0
     mode: str = "add"
 
 
 class MockStateControl(StateControl):
-    """
-    Generic mock state control for testing.
+    """Recording state control.
 
-    Simulates activation steering via hooks.
+    `get_hooks` records the call and its `runtime_kwargs`, then returns one no-op forward
+    pre-hook per entry in `target_layers`, addressed at `model.layers.<layer>`. The module
+    paths resolve on models with a Llama-style layout (and on `MagicMock` models, whose
+    `get_submodule` returns a mock).
+
+    Attributes:
+        _hooks_created: Whether `get_hooks` has been invoked.
+        _runtime_kwargs_received: The `runtime_kwargs` from the most recent `get_hooks` call.
     """
     Args = MockStateArgs
     supports_batching: bool = True
@@ -342,40 +179,46 @@ class MockStateControl(StateControl):
         self._hooks_created = False
         self._runtime_kwargs_received = None
 
+    @staticmethod
+    def _noop_pre_hook(module, args, kwargs):
+        return None
+
     def get_hooks(self, input_ids: torch.Tensor, runtime_kwargs: dict | None, **kwargs):
         self._hooks_created = True
         self._runtime_kwargs_received = runtime_kwargs
 
-        # Simulate creating hooks for target layers
         hooks = {"pre": [], "forward": [], "backward": []}
-        if hasattr(self, 'target_layers'):
-            for layer in self.target_layers:
-                hooks["pre"].append({
-                    "module": f"model.layers.{layer}",
-                    "hook_func": lambda *args, **kw: None,
-                })
+        for layer in self.target_layers:
+            hooks["pre"].append({
+                "module": f"model.layers.{layer}",
+                "hook_func": self._noop_pre_hook,
+            })
         return hooks
 
     def steer(self, model, tokenizer=None, **kwargs):
         self.model = model
         self.tokenizer = tokenizer
-        self.device = getattr(model, 'device', torch.device('cpu'))
+        self.device = getattr(model, "device", torch.device("cpu"))
 
 
 @dataclass
 class MockOutputArgs(BaseArgs):
-    """Args for a generic output control."""
+    """Arguments for `MockOutputControl`."""
     temperature: float = 1.0
     top_k: int = 50
     constraint_type: str = "none"
 
 
 class MockOutputControl(OutputControl):
-    """
-    Generic mock output control for testing (step-level).
+    """Recording step-level output control.
 
-    Records whether its `get_logits_processors` hook was invoked and the runtime kwargs it
-    received, then contributes a no-op logits processor so the default driver still produces output.
+    `get_logits_processors` records the call and the `runtime_kwargs` it received, then
+    returns a single identity processor so the decoding driver still produces output.
+
+    Attributes:
+        _processors_requested: Whether `get_logits_processors` has been invoked.
+        _runtime_kwargs_received: The `runtime_kwargs` from the most recent
+            `get_logits_processors` call.
     """
     Args = MockOutputArgs
     supports_batching: bool = False
@@ -385,14 +228,14 @@ class MockOutputControl(OutputControl):
         self._processors_requested = False
         self._runtime_kwargs_received = None
 
-    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs):
+    def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs) -> list:
         self._processors_requested = True
         self._runtime_kwargs_received = runtime_kwargs
 
-        def _noop(prefix_ids, scores):
+        def _identity(prefix_ids, scores):
             return scores
 
-        return [_noop]
+        return [_identity]
 
     def steer(self, model, tokenizer=None, **kwargs):
         self.model = model
@@ -401,7 +244,7 @@ class MockOutputControl(OutputControl):
 
 # Mock Metrics
 class MockAccuracyMetric(Metric):
-    """Simple accuracy metric for testing."""
+    """Exact-match accuracy over responses and reference answers."""
 
     def compute(
             self,
@@ -418,7 +261,7 @@ class MockAccuracyMetric(Metric):
 
 
 class MockScoreMetric(Metric):
-    """Simple score metric that returns a fixed value for testing."""
+    """Metric that returns a fixed score."""
 
     def __init__(self, fixed_score: float = 0.5, **extras):
         super().__init__(**extras)
@@ -429,7 +272,7 @@ class MockScoreMetric(Metric):
 
 
 class MockPerSampleMetric(Metric):
-    """Metric that returns per-sample scores for testing."""
+    """Metric that returns per-sample scores and their mean."""
 
     def compute(self, responses: list[str], **kwargs) -> dict[str, Any]:
         scores = [0.5 + 0.1 * i for i in range(len(responses))]
@@ -440,8 +283,17 @@ class MockPerSampleMetric(Metric):
 
 
 # Mock UseCase
-class MockUseCase:
-    """Mock UseCase for testing benchmark functionality."""
+class MockUseCase(UseCase):
+    """Recording use case.
+
+    `generate` returns one canned generation per evaluation item and records its call
+    arguments; `evaluate` applies each configured metric to the generations; `export` writes
+    the profiles to `profiles.json` under `save_dir`.
+
+    Attributes:
+        _generate_calls: One entry per `generate` invocation, holding the received arguments.
+        _evaluate_calls: One entry per `evaluate` invocation, holding the received generations.
+    """
 
     def __init__(
             self,
@@ -450,16 +302,12 @@ class MockUseCase:
             num_samples: int = -1,
             **kwargs
     ):
-        self.evaluation_data = list(evaluation_data)
-        if num_samples > 0:
-            self.evaluation_data = self.evaluation_data[:num_samples]
-        self.evaluation_metrics = evaluation_metrics
-        self._metrics_by_name = {m.name: m for m in evaluation_metrics}
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-        # Track calls for testing
+        super().__init__(
+            evaluation_data=evaluation_data,
+            evaluation_metrics=evaluation_metrics,
+            num_samples=num_samples,
+            **kwargs,
+        )
         self._generate_calls = []
         self._evaluate_calls = []
 
@@ -468,10 +316,9 @@ class MockUseCase:
             model_or_pipeline,
             tokenizer,
             gen_kwargs=None,
-            runtime_overrides=None,
+            runtime_overrides: dict | None = None,
             **kwargs
     ) -> list[dict[str, Any]]:
-        """Mock generation that returns predictable outputs."""
         self._generate_calls.append({
             "model_or_pipeline": model_or_pipeline,
             "tokenizer": tokenizer,
@@ -491,7 +338,6 @@ class MockUseCase:
         return generations
 
     def evaluate(self, generations: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        """Mock evaluation that computes metrics."""
         self._evaluate_calls.append(generations)
 
         eval_data = {
@@ -507,73 +353,19 @@ class MockUseCase:
         return scores
 
     def export(self, profiles: dict[str, Any], save_dir: str) -> None:
-        """Export profiles to JSON."""
         with open(Path(save_dir) / "profiles.json", "w") as f:
             json.dump(profiles, f, indent=4)
 
 
-# Utility Functions
-_DEFAULT_FACTORIES: dict[type, type | None] = {
-    InputControl: NoInputControl,
-    StructuralControl: NoStructuralControl,
-    StateControl: NoStateControl,
-    OutputControl: None,  # output has no phantom no-op; the pipeline owns a default driver
-}
-
-
-def merge_controls(supplied) -> dict[str, object]:
-    """Sort supplied controls by category.
-
-    Every category admits any number of controls (returned as ordered lists under
-    `"input_controls"` / `"structural_controls"` / `"state_controls"` / `"output_controls"`). The
-    output category additionally admits at most one enabled `DecodingDriver`.
-    """
-    supplied = list(supplied)
-
-    seen_ids: set[int] = set()
-    for control in supplied:
-        if id(control) in seen_ids:
-            raise ValueError(
-                f"The same {type(control).__name__} instance was supplied more than once. "
-                "To apply a method twice, construct a second instance."
-            )
-        seen_ids.add(id(control))
-
-    bucket: dict[type, list] = defaultdict(list)
-    for control in supplied:
-        for category in _DEFAULT_FACTORIES:
-            if isinstance(control, category):
-                bucket[category].append(control)
-                break
-        else:
-            raise TypeError(f"Unknown control type: {type(control)}")
-
-    drivers = [
-        c for c in bucket.get(OutputControl, [])
-        if isinstance(c, DecodingDriver) and getattr(c, "enabled", True)
-    ]
-    if len(drivers) > 1:
-        names = [type(c).__name__ for c in drivers]
-        raise ValueError(f"Multiple decoding drivers supplied: {names}.")
-
-    out: dict[str, object] = {}
-    out["state_controls"] = bucket.get(StateControl) or [NoStateControl()]
-    out["output_controls"] = list(bucket.get(OutputControl, []))
-    out["input_controls"] = bucket.get(InputControl) or [NoInputControl()]
-    out["structural_controls"] = bucket.get(StructuralControl) or [NoStructuralControl()]
-    return out
-
-
-def ensure_pad_token(tokenizer):
-    """Set pad token to eos token if not defined."""
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    return tokenizer
-
-
+# Mock Model/Tokenizer Factories
 def create_mock_model(device: str = "cpu") -> MagicMock:
-    """Create a mock model for testing."""
+    """Create a mock causal language model.
+
+    The mock exposes `device`, a config with `num_attention_heads`, `num_hidden_layers`,
+    `is_encoder_decoder`, and `vocab_size`, a `generate` that appends `max_new_tokens` random
+    token ids to the prompt, and a forward call that returns random logits of shape
+    `[batch, seq_len, vocab_size]`.
+    """
     model = MagicMock()
     model.device = torch.device(device)
     model.config = MagicMock()
@@ -591,7 +383,6 @@ def create_mock_model(device: str = "cpu") -> MagicMock:
     model.generate = MagicMock(side_effect=mock_generate)
 
     def mock_forward(*args, input_ids=None, attention_mask=None, **kwargs):
-        # Handle positional arg case
         if args and input_ids is None:
             input_ids = args[0]
         batch_size = input_ids.size(0)
@@ -609,7 +400,12 @@ def create_mock_model(device: str = "cpu") -> MagicMock:
 
 
 def create_mock_tokenizer() -> MagicMock:
-    """Create a mock tokenizer for testing."""
+    """Create a mock tokenizer.
+
+    The mock has pad and eos tokens configured, tokenizes any text batch to random ids of
+    shape `[batch, 10]` with an all-ones attention mask, and decodes to the fixed string
+    `"decoded text"`.
+    """
     tokenizer = MagicMock()
     tokenizer.pad_token_id = 0
     tokenizer.eos_token_id = 1

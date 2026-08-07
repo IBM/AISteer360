@@ -162,13 +162,13 @@ class TestSameModelScoringComposition:
 
         recorder_a = _RecordingStateControl(**recorder_kwargs)
         pipeline_a = _steered_pipeline(model, tokenizer, [recorder_a])
-        out_a = pipeline_a.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+        out_a = pipeline_a.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         recorder_b = _RecordingStateControl(**recorder_kwargs)
         pipeline_b = _steered_pipeline(model, tokenizer, [recorder_b, _SameModelScoringControl()])
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            out_b = pipeline_b.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+            out_b = pipeline_b.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         assert torch.equal(out_a, out_b)
         aux_warnings = [w for w in caught if "Auxiliary same-model passes" in str(w.message)]
@@ -184,11 +184,11 @@ class TestSameModelScoringComposition:
 
         recorder_a = _RecordingStateControl(with_condition=True)
         pipeline_a = _steered_pipeline(model, tokenizer, [recorder_a])
-        pipeline_a.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+        pipeline_a.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         recorder_b = _RecordingStateControl(with_condition=True)
         pipeline_b = _steered_pipeline(model, tokenizer, [recorder_b, _SameModelScoringControl()])
-        pipeline_b.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+        pipeline_b.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         assert recorder_a.scorer_calls == recorder_b.scorer_calls
 
@@ -212,7 +212,7 @@ class TestMultiCallDriverComposition:
             propose_mode="sample",
         )
         pipeline = _steered_pipeline(model, tokenizer, [recorder, search])
-        pipeline.generate(PROMPT_IDS, max_new_tokens=4, **GEN_KWARGS)
+        pipeline.generate(input_ids=PROMPT_IDS, max_new_tokens=4, **GEN_KWARGS)
         self._assert_prompt_columns_unsteered(recorder, PROMPT_IDS.size(1))
 
     def test_recorded_mask_hygiene_under_phased_decoding(self):
@@ -222,7 +222,7 @@ class TestMultiCallDriverComposition:
             plan=[{"generate": {"budget": 3}}, {"fixed": " cat "}, {"generate": {"budget": 3}}],
         )
         pipeline = _steered_pipeline(model, tokenizer, [recorder, phased])
-        pipeline.generate(PROMPT_IDS, **GEN_KWARGS)
+        pipeline.generate(input_ids=PROMPT_IDS, **GEN_KWARGS)
         self._assert_prompt_columns_unsteered(recorder, PROMPT_IDS.size(1))
 
 
@@ -233,7 +233,7 @@ class TestDetachedSourceComposition:
 
         recorder_a = _RecordingStateControl()
         pipeline_a = _steered_pipeline(model, tokenizer, [recorder_a])
-        out_a = pipeline_a.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+        out_a = pipeline_a.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         recorder_b = _RecordingStateControl()
         guidance = ContrastiveGuidance(
@@ -241,7 +241,7 @@ class TestDetachedSourceComposition:
             weights=[0.0],
         )
         pipeline_b = _steered_pipeline(model, tokenizer, [recorder_b, guidance])
-        out_b = pipeline_b.generate(PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
+        out_b = pipeline_b.generate(input_ids=PROMPT_IDS, max_new_tokens=6, **GEN_KWARGS)
 
         assert torch.equal(out_a, out_b)
         assert len(recorder_b.transform.masks) == len(recorder_a.transform.masks)

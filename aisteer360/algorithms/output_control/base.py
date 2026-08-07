@@ -23,14 +23,14 @@ See Also:
 - `aisteer360.algorithms.output_control._common`: Shared component library
 - `aisteer360.algorithms.core.steering_pipeline`: Integration with steering pipeline
 """
-from abc import ABC, abstractmethod
-from dataclasses import fields
+from abc import abstractmethod
 from typing import Type
 
 import torch
 from transformers import LogitsProcessorList, PreTrainedModel, StoppingCriteriaList
 
 from aisteer360.algorithms.core.base_args import BaseArgs
+from aisteer360.algorithms.core.base_control import BaseControl
 
 
 def stack_generate_kwargs(logits_processors, stopping_criteria) -> dict:
@@ -48,7 +48,7 @@ def stack_generate_kwargs(logits_processors, stopping_criteria) -> dict:
     return extra
 
 
-class OutputControl(ABC):
+class OutputControl(BaseControl):
     """Base class for output-control steering methods.
 
     An `OutputControl` participates in decoding through the composable mechanisms above.
@@ -74,26 +74,6 @@ class OutputControl(ABC):
     supports_batching: bool = False
     include_in_scoring: bool = True
     same_model_forwards: bool = False
-
-    def __init__(self, *args, **kwargs) -> None:
-        if self.Args is None:  # null / arg-free control
-            if args or kwargs:
-                raise TypeError(f"{type(self).__name__} accepts no constructor arguments.")
-            self._configure()
-            return
-        self.args: BaseArgs = self.Args.validate(*args, **kwargs)
-        for field in fields(self.args):
-            setattr(self, field.name, getattr(self.args, field.name))
-        self._configure()
-
-    def _configure(self) -> None:
-        """Post-construction hook, called after `Args` fields are mirrored onto the instance.
-
-        Driver presets override this to map their mirrored args onto the fields their generic base
-        (`SearchDriver`, `PhasedDriver`) reads, so subclasses never bypass a parent `__init__`.
-        Default no-op.
-        """
-        pass
 
     def get_logits_processors(self, input_ids, runtime_kwargs, **kwargs) -> list:
         """The control's logits processors for the current generation.
@@ -138,10 +118,6 @@ class OutputControl(ABC):
 
     def steer(self, model: PreTrainedModel, tokenizer=None, **kwargs) -> None:
         """Optional one-time preparation (e.g., load a reward model, fit a probe)."""
-        pass
-
-    def cleanup(self) -> None:
-        """Release resources allocated during steer() (e.g., reward models)."""
         pass
 
 
