@@ -59,7 +59,7 @@ class FakeEngineSession:
         return ModelFacts(
             num_layers=LAYERS, hidden_size=HIDDEN, num_attention_heads=2, head_dim=HIDDEN // 2,
             dtype="float32", model_fingerprint="0" * 16, model_type="llama",
-            model_ref=self._backend.spec.model,
+            model_ref=self._backend.spec.model, fingerprint_grade="config",
         )
 
     def close(self):

@@ -233,8 +233,8 @@ class ArtifactRecord:
         artifact_class: `"direction"`, `"calibrated"`, or `"opaque"`.
         source: Fit-source class name, or None for recipe-supplied artifacts.
         fit_digest: 12-hex-character digest of the producing fit identity, or None.
-        provenance: Producing-side fingerprints (`backend_spec_hash`, `model_fingerprint`,
-            `tokenizer_fingerprint`), each possibly None.
+        provenance: Producing-side identity (`backend_spec_hash`, `model_fingerprint`,
+            `model_ref`, `tokenizer_fingerprint`), each possibly None.
         type_meta: Type-specific reconstruction metadata (sidecar only, excluded from the
             manifest record).
     """
@@ -260,6 +260,7 @@ class ArtifactRecord:
             "provenance": {
                 "backend_spec_hash": self.provenance.get("backend_spec_hash"),
                 "model_fingerprint": self.provenance.get("model_fingerprint"),
+                "model_ref": self.provenance.get("model_ref"),
                 "tokenizer_fingerprint": self.provenance.get("tokenizer_fingerprint"),
             },
         }

@@ -95,10 +95,15 @@ class ModelFacts:
             Consumers needing one layer's geometry read `head_geometry` on a loaded model or
             `config_layer_head_dim` on a config.
         dtype: Canonical dtype string, e.g. `"bfloat16"`.
-        model_fingerprint: A 16-character hex digest identifying the model weights and config.
+        model_fingerprint: A 16-character hex digest identifying the model, of the grade given by
+            `fingerprint_grade`.
         model_type: The config's `model_type`, or None when unknown.
         model_ref: The served model reference on engine backends, the loaded model's
             `name_or_path` in process, or None when unknown.
+        fingerprint_grade: `"weights"` when `model_fingerprint` digests the loaded weights (a model
+            in process), or `"config"` when it digests the model config only (an engine backend,
+            whose weights are not readable). Identity checks compare fingerprints only at the
+            `"weights"` grade and compare `model_ref` otherwise.
     """
 
     num_layers: int
@@ -109,6 +114,7 @@ class ModelFacts:
     model_fingerprint: str
     model_type: str | None = None
     model_ref: str | None = None
+    fingerprint_grade: Literal["weights", "config"] = "weights"
 
 
 @dataclass(frozen=True, slots=True)

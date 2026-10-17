@@ -122,6 +122,7 @@ def _config_layout(model_ref: str, trust_remote_code: bool = False) -> ModelFact
         model_fingerprint=digest,
         model_type=getattr(config, "model_type", None),
         model_ref=model_ref,
+        fingerprint_grade="config",
     )
 
 

@@ -267,6 +267,7 @@ def build_spipe(pipeline: SteeringPipeline, *, freeze: bool | None = None, model
     provenance: dict[str, Any] = {}
     spec = pipeline._resolve_backend_spec(pipeline.backend)
     provenance["backend_spec_hash"] = spec.spec_hash
+    provenance["model_ref"] = ref
     model = pipeline.model
     default_model_type = None
     if model is not None:

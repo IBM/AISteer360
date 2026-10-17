@@ -836,6 +836,7 @@ def _offline_backend(llm, tmp_path):
     backend.tokenizer = wordlevel_tokenizer()
     backend._layout = ModelFacts(
         num_layers=2, hidden_size=4, num_attention_heads=2, head_dim=2, dtype="float32", model_fingerprint=None,
+        fingerprint_grade="config",
     )
     backend._plain_salt = "plain"
     backend._artifact_uploader = _ArtifactUploader(str(tmp_path))

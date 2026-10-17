@@ -209,7 +209,10 @@ class VerifiedPrecomputed:
     Wraps a concrete `SteeringVector` together with the fingerprints of the side that produced
     it. Resolution is model-free (`ModelAccess.FACTS`) and reads structural facts from the
     session layout (or the live model when one is given): the vector's `model_type` and width
-    are always checked, and the recorded model fingerprint is checked per the policy. A
+    are always checked, and the model identity is checked per the policy. On a layout with a
+    weights-grade fingerprint (a model in process) the recorded `model_fingerprint` is compared
+    with the layout's. On a config-grade layout (an engine backend, whose weights are not
+    readable) the recorded `model_ref` is compared with the served model reference instead. A
     `"calibrated"` artifact on a mismatched model raises under `policy="strict"` and warns
     under `"warn"`; a `"direction"` artifact warns under both, since transferring a direction
     across fine-tunes of one architecture is a deliberate act. `policy="off"` skips every
@@ -218,7 +221,7 @@ class VerifiedPrecomputed:
     Args:
         steering_vector: The concrete artifact.
         provenance: Producing-side fingerprints (mapping or `ArtifactProvenance`-shaped), with
-            keys `model_fingerprint`, `backend_spec_hash`, `tokenizer_fingerprint`.
+            keys `model_fingerprint`, `model_ref`, `backend_spec_hash`, `tokenizer_fingerprint`.
         artifact_class: `"direction"` or `"calibrated"`.
         policy: `"strict"`, `"warn"`, or `"off"`.
     """
@@ -285,17 +288,28 @@ class VerifiedPrecomputed:
                     hard=True,
                 )
 
-        recorded = self.provenance.get("model_fingerprint")
-        live = getattr(layout, "model_fingerprint", None)
-        if recorded and live and recorded != live:
-            self._report(
-                f"Precomputed {self.artifact_class} artifact was produced on a different "
-                f"model (fingerprint {recorded!r} vs {live!r})."
-                + ("" if self.artifact_class == "calibrated"
-                   else " Direction artifacts may transfer across fine-tunes of one "
-                        "architecture; verify the behavior."),
-                hard=(self.artifact_class == "calibrated"),
-            )
+        transfer_note = (
+            "" if self.artifact_class == "calibrated"
+            else " Direction artifacts may transfer across fine-tunes of one architecture; verify the behavior."
+        )
+        if getattr(layout, "fingerprint_grade", "weights") == "weights":
+            recorded = self.provenance.get("model_fingerprint")
+            live = getattr(layout, "model_fingerprint", None)
+            if recorded and live and recorded != live:
+                self._report(
+                    f"Precomputed {self.artifact_class} artifact was produced on a different "
+                    f"model (fingerprint {recorded!r} vs {live!r})." + transfer_note,
+                    hard=(self.artifact_class == "calibrated"),
+                )
+        else:
+            recorded = self.provenance.get("model_ref")
+            live = getattr(layout, "model_ref", None)
+            if recorded and live and recorded != live:
+                self._report(
+                    f"Precomputed {self.artifact_class} artifact was produced on model {recorded!r} "
+                    f"but this backend serves {live!r}." + transfer_note,
+                    hard=(self.artifact_class == "calibrated"),
+                )
 
     def resolve(
         self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, *, session: "SteeringSession | None" = None
@@ -312,7 +326,8 @@ class VerifiedPrecomputed:
 
         Raises:
             ValueError: Under `policy="strict"`, if the model type or width mismatches, or a
-                `"calibrated"` artifact's recorded fingerprint differs from the live model's.
+                `"calibrated"` artifact records a model fingerprint (weights-grade layout) or
+                model reference (config-grade layout) that differs from the venue's.
         """
         layout = None
         if session is not None:

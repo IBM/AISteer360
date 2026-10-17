@@ -125,6 +125,7 @@ class _FakeServeSession:
         return ModelFacts(
             num_layers=LAYERS, hidden_size=HIDDEN, num_attention_heads=2, head_dim=HIDDEN // 2,
             dtype="float32", model_fingerprint="0" * 16, model_type="llama", model_ref="tiny",
+            fingerprint_grade="config",
         )
 
     def close(self) -> None:

@@ -214,9 +214,19 @@ class ScopedSession:
 
     @property
     def in_process(self) -> bool:
-        """True when the venue session serves a live in-process model, so `layout` facts such
-        as `model_fingerprint` are weights-grade rather than config-grade. Venue-matched
-        identity checks dispatch on this."""
+        """True when the venue session serves an in-process model.
+
+        Read from the layout's `fingerprint_grade` (`"weights"` in process, `"config"` on an
+        engine backend). When the venue has no layout yet (an in-process session before any
+        model is loaded, e.g., for a structural control that loads the first model), it is True
+        for a session type that exposes `model`.
+        """
+        try:
+            layout = self.inner.layout
+        except (AttributeError, RuntimeError):
+            layout = None
+        if layout is not None and hasattr(layout, "fingerprint_grade"):
+            return layout.fingerprint_grade == "weights"
         return hasattr(type(self.inner), "model")
 
     def _require_rollouts(self) -> None:
