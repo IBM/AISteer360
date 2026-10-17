@@ -225,18 +225,10 @@ def render_guided_decoding_field(source: ConstraintSource) -> tuple[str, Any]:
 
 
 def render_constraint_sampling_args(field: str, value: Any) -> dict:
-    """Constraint kwargs for `SamplingParams`, tolerant of the structured-outputs rename.
+    """Constraint kwargs for `SamplingParams`: `structured_outputs=` with a `StructuredOutputsParams`
+    whose `field` (`json`, `regex`, `grammar`, or `choice`) is set to `value`."""
+    from vllm.sampling_params import StructuredOutputsParams
 
-    Newer vLLM removes `GuidedDecodingParams` in favor of `StructuredOutputsParams` passed as
-    `structured_outputs=`; older versions serve `guided_decoding=`. The declarative field names
-    (`json`, `regex`, `grammar`, `choice`) are shared by both surfaces.
-    """
-    try:
-        from vllm.sampling_params import StructuredOutputsParams
-    except ImportError:
-        # legacy api: compact whitespace is only enforced on the structured-outputs surface
-        from vllm.sampling_params import GuidedDecodingParams
-        return {"guided_decoding": GuidedDecodingParams(**{field: value})}
     return {"structured_outputs": StructuredOutputsParams(**{field: value})}
 
 
