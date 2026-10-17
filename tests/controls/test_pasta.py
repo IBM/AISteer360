@@ -498,6 +498,35 @@ class TestHeadProfileBatchSize:
         assert serial.head_config == batched.head_config
 
 
+class TestPerItemSeedScope:
+    """Under a seed with `seed_scope="item"`, each row's hooks receive that row's substring group."""
+
+    def test_batched_rows_match_single_prompt_calls(self):
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        pasta = PASTA(head_config={0: [0, 1], 1: [2]}, alpha=0.01, scale_position="include")
+        pipeline = SteeringPipeline(controls=[pasta], model=model, tokenizer=tokenizer)
+        pipeline.steer()
+
+        prompts = ["the cat sat on mat", "dog ran fast"]
+        groups = [["cat sat"], ["dog"]]
+        gen_kwargs = {"max_new_tokens": 4, "do_sample": False, "seed": 0, "seed_scope": "item"}
+        batched = pipeline.generate(
+            input_ids=tokenizer(prompts, padding=True, return_tensors="pt").input_ids,
+            runtime_kwargs={"substrings": groups},
+            **gen_kwargs,
+        )
+        for row, (prompt, group) in enumerate(zip(prompts, groups)):
+            single = pipeline.generate(
+                input_ids=tokenizer(prompt, return_tensors="pt").input_ids,
+                runtime_kwargs={"substrings": [group]},
+                **gen_kwargs,
+            )
+            continuation = batched[row][: single.size(1)]
+            assert continuation.tolist() == single[0].tolist()
+
+
 class TestBuildHooksMatchesGetHooks:
     def test_build_hooks_matches_get_hooks(self):
         model = tiny_llama(num_layers=2, hidden=12, heads=3)
