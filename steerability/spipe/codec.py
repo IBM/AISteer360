@@ -757,11 +757,6 @@ def _decode_artifact(ref: Mapping, ctx: DecodeContext, path: str) -> Any:
 
         return TextMemory.load(payload / "memory.json")
     if record.type == "PoolMemory":
-        if not ctx.allow_code:
-            raise SpipeCodeRefError(
-                f"{path}: PoolMemory payloads contain pickled data, which executes code when "
-                "loaded; pass allow_code=True to load() to permit it."
-            )
         from steerability.algorithms.input_control.common.memory.pool import PoolMemory
 
         return PoolMemory.load(payload / "memory.pkl")
