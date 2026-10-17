@@ -221,8 +221,9 @@ class VLLMOfflineSession(_RequestSessionBase):
 
         Raises:
             UnsupportedOperationError: If the spec declares no `hook_plugin`, the negotiated
-                capture kinds lack the requested mode or location, or the engine facts refuse
-                capture (speculative decoding, non-eager execution).
+                capture kinds lack the location or the wire mode (`"all_tokens"` for both
+                requested modes), or the engine facts refuse capture (speculative decoding,
+                non-eager execution).
             ValueError: If `prompts` is empty, a layer id is out of range, or the engine
                 returned no capture payload.
         """
@@ -233,15 +234,18 @@ class VLLMOfflineSession(_RequestSessionBase):
                 "Hidden-state capture requires the vLLM-Hook plugin; declare hook_plugin=True "
                 "on the vllm backend spec, or run capture on the huggingface backend."
             )
+        # the client's validator and assembly expect full prompt coverage and pool the last real
+        # position themselves, so every wire capture requests all_tokens
+        wire_mode = "all_tokens" if mode == "last_token" else mode
         capture_kinds = backend.capture_kinds
         required = CaptureKinds(
             kinds=frozenset({"residual"}),
             locations=frozenset({location}),
-            modes=frozenset({mode}),
+            modes=frozenset({wire_mode}),
         )
         if capture_kinds is None or not capture_kinds.contains(required):
             raise UnsupportedOperationError(
-                f"The serving backend does not advertise capture mode {mode!r} at location "
+                f"The serving backend does not advertise capture mode {wire_mode!r} at location "
                 f"{location!r}; update the server's vllm_hook_plugins or run capture on the "
                 "huggingface backend."
             )
@@ -258,9 +262,6 @@ class VLLMOfflineSession(_RequestSessionBase):
         from vllm import SamplingParams, TokensPrompt
 
         layer_ids = [int(layer) for layer in layers]
-        # the client's validator and assembly expect full prompt coverage and pool the last real
-        # position themselves, so every wire capture requests all_tokens
-        wire_mode = "all_tokens" if mode == "last_token" else mode
         capture_spec = {"layers": layer_ids, "mode": wire_mode, "location": location}
         extra_args: dict[str, Any] = {"capture": capture_spec}
         if state_entries:
