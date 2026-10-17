@@ -16,7 +16,7 @@ from steerability.algorithms.output_control.base import DecodingDriver, resolve_
 from steerability.algorithms.output_control.common.drivers.frontier import Frontier
 from steerability.algorithms.output_control.common.drivers.proposer import SegmentProposer
 from steerability.algorithms.output_control.common.scorers import SequenceScorer
-from steerability.utils.tokenization import infer_attention_mask_from_ids
+from steerability.utils.tokenization import infer_attention_mask_from_ids, to_left_pad
 
 
 def _resolve_reward_params(runtime_kwargs: Mapping[str, Any], batch_size: int = 1) -> list[dict[str, Any]]:
@@ -353,9 +353,12 @@ class SearchDriver(DecodingDriver):
             rollout_kwargs = copy.deepcopy(gen_kwargs)
             if rollout_kwargs.get("min_new_tokens") is not None and rollout_kwargs["min_new_tokens"] > proposal_len:
                 rollout_kwargs["min_new_tokens"] = proposal_len
+            # kept beams that finished early carry trailing pads; the rollout continues each row
+            # from its left-padded form, so the new tokens follow the row's last real token
             frontier_mask = infer_attention_mask_from_ids(current_ids, self.tokenizer.pad_token_id)
+            frontier_ids, frontier_mask = to_left_pad(current_ids, frontier_mask)
             beams = proposer.propose(
-                current_ids,
+                frontier_ids,
                 n=self.num_candidates,
                 segment_len=proposal_len,
                 processors=logits_processors,
@@ -365,6 +368,12 @@ class SearchDriver(DecodingDriver):
                 attention_mask=frontier_mask,
                 **rollout_kwargs,
             )
+            # rotate each beam's leading pads to its tail, restoring the prompt-first layout; the
+            # rollouts of frontier row i are rows i * n to (i + 1) * n
+            leading = (frontier_mask == 0).sum(dim=1).repeat_interleave(beams.size(0) // frontier_ids.size(0))
+            width = beams.size(1)
+            positions = torch.arange(width, device=beams.device).unsqueeze(0) + leading.to(beams.device).unsqueeze(1)
+            beams = beams.gather(1, positions % width)
             continuations = self.tokenizer.decode(
                 beams[:, input_length:], skip_special_tokens=True
             )
