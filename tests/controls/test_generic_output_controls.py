@@ -214,6 +214,24 @@ class TestResolveScorer:
         out = resolve_scorer({"kind": "reward_model", "model_id": path}, device="cpu")
         assert isinstance(out, RewardModelScorer)
 
+    def test_reward_model_scorer_truncates_to_tokenizer_max_length(self, tmp_path):
+        from steerability.algorithms.output_control.common.loading import load_sequence_classifier
+
+        model, tokenizer = load_sequence_classifier(_make_tiny_classifier(tmp_path), device="cpu")
+        tokenizer.max_length = 8
+        seen = []
+        original_forward = model.forward
+
+        def recording_forward(*args, **kwargs):
+            seen.append(kwargs["input_ids"].shape[1])
+            return original_forward(*args, **kwargs)
+
+        model.forward = recording_forward
+        scorer = RewardModelScorer(model, tokenizer)
+        scores = scorer("the cat sat", [" on the mat" * 6], {})
+        assert len(scores) == 1
+        assert seen == [8]
+
     def test_unknown_kind_raises(self):
         with pytest.raises(ValueError, match="accepted kinds"):
             resolve_scorer({"kind": "nope"}, device="cpu")
