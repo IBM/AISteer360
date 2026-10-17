@@ -89,7 +89,7 @@ class PPOTrainerMixin(TRLMixin, StructuralControl):
         train_dataset = self._prepare_dataset(self.train_dataset) if self.train_dataset is not None else None
         eval_dataset = self._prepare_dataset(self.eval_dataset) if self.eval_dataset is not None else None
 
-        config_kwargs = resolve_config_kwargs(PPOConfig, self.training_args)
+        config_kwargs = resolve_config_kwargs(PPOConfig, self._config_kwargs(self.training_args))
         training_config = PPOConfig(**config_kwargs)
 
         peft_config = self._peft_config(model)

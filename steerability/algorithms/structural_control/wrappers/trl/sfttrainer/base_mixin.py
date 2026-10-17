@@ -25,7 +25,7 @@ class SFTTrainerMixin(TRLMixin, StructuralControl):
         model, self.tokenizer = self._resolve_model_tokenizer(model, self.tokenizer)
 
         # build TRL config
-        config_kwargs = resolve_config_kwargs(SFTConfig, self.training_args)
+        config_kwargs = resolve_config_kwargs(SFTConfig, self._config_kwargs(self.training_args))
         training_config = SFTConfig(**config_kwargs)
 
         # build PEFT config

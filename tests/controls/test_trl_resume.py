@@ -115,3 +115,30 @@ def test_ppo_rejects_resume_before_trainer(mock_tokenizer, tmp_path):
     )
     with pytest.raises(ValueError, match="resume_from_checkpoint"):
         control.steer(_model(), tokenizer=mock_tokenizer)
+
+
+class _ConfigRecordingTrainer(_RecordingTrainer):
+    saved: list = []
+    configs: list = []
+
+    def __init__(self, model=None, args=None, **kwargs):
+        super().__init__(model=model, **kwargs)
+        type(self).configs.append(args)
+
+    def save_model(self, output_dir):
+        type(self).saved.append(output_dir)
+
+
+def test_unset_output_dir_trains_and_saves_in_one_transient_directory(monkeypatch, mock_tokenizer):
+    _ConfigRecordingTrainer.saved, _ConfigRecordingTrainer.configs = [], []
+    monkeypatch.setattr(sft_mixin, "SFTTrainer", _ConfigRecordingTrainer)
+    control = SFT(
+        train_dataset=Dataset.from_list([{"input_ids": [1, 2, 3], "labels": [1, 2, 3]}]),
+        load_best_model_at_end=False,
+        training_args={"use_cpu": True},
+    )
+    assert control.training_args["output_dir"] is None
+    control.steer(_model(), tokenizer=mock_tokenizer)
+    (config,) = _ConfigRecordingTrainer.configs
+    assert config.output_dir == _ConfigRecordingTrainer.saved[0] == control.export_artifact().path
+    assert "steerability-trainer-" in config.output_dir

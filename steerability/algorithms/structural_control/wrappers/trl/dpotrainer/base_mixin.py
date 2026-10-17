@@ -61,7 +61,7 @@ class DPOTrainerMixin(TRLMixin, StructuralControl):
             )
 
         # compose config kwargs (optional DPO fields); an explicit training_args entry wins
-        config_kwargs = dict(self.training_args)
+        config_kwargs = self._config_kwargs(self.training_args)
         if self.precompute_ref_log_probs is not None:
             config_kwargs.setdefault("precompute_ref_log_probs", self.precompute_ref_log_probs)
         if self.disable_dropout is not None:

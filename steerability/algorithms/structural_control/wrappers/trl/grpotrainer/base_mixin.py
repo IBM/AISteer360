@@ -45,7 +45,7 @@ class GRPOTrainerMixin(TRLMixin, StructuralControl):
         train_dataset = standardize_prompt_dataset(self.train_dataset) if self.train_dataset is not None else None
         eval_dataset = standardize_prompt_dataset(self.eval_dataset) if self.eval_dataset is not None else None
 
-        config_kwargs = resolve_config_kwargs(GRPOConfig, self.training_args)
+        config_kwargs = resolve_config_kwargs(GRPOConfig, self._config_kwargs(self.training_args))
         training_config = GRPOConfig(**config_kwargs)
 
         peft_config = self._peft_config(model)
