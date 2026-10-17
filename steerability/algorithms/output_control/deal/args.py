@@ -6,6 +6,7 @@ from steerability.algorithms.core.base_args import BaseArgs
 
 @dataclass
 class DeALArgs(BaseArgs):
+    """Arguments for `DeAL` (decoding-time alignment by reward-guided lookahead search)."""
 
     lookahead: int = field(
         default=10,
@@ -25,7 +26,8 @@ class DeALArgs(BaseArgs):
     )
     reward_func: Callable[[str, list[str], dict], list[float]] = field(
         default=None,
-        metadata={"help": ""},  # todo: write description
+        metadata={"help": "The reward used to rank beams, a callable `(prompt: str, continuations: list[str], "
+                          "params: dict) -> list[float]` returning one score per continuation; higher is better."},
     )
 
     # validation
