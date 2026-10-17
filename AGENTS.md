@@ -260,7 +260,7 @@ Behaviors that differ from bare Hugging Face usage:
 - `device` and a non-default `device_map` are mutually exclusive on the `SteeringPipeline` constructor.
 - Construction never loads the model. `steer()` acquires it from `model_name_or_path`, reuses preloaded
   `model=`/`tokenizer=` objects passed at construction, or receives it from a structural control that produces the
-  final weights itself (e.g. `mergekit`). `lazy_init` is accepted and inert.
+  final weights itself (e.g. `mergekit`).
 - A `revision` key in `hf_model_kwargs` also pins the tokenizer when it is loaded from `model_name_or_path`.
 - `pipeline.supports_batching` is `True` only when every enabled control declares batch safety and no enabled
   decoding driver with `whole_batch_rollouts = False` (the phased and search drivers) is combined with an enabled

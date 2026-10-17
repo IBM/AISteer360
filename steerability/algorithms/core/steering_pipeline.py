@@ -127,9 +127,6 @@ class SteeringPipeline:
             the tokenizer when it is loaded from `model_name_or_path`.
         trust_remote_code (bool, optional): Trust remote code when loading the tokenizer. Defaults to
             `False`. To trust remote code for the model, pass `trust_remote_code=True` via `hf_model_kwargs`.
-        lazy_init (bool, optional): Deprecated and inert: construction never loads the model;
-            acquisition happens in `steer()`, and a structural control may supply the model
-            when `model_name_or_path` is None.
         backend (BackendSpec | str, optional): The pipeline's backend. Defaults to the
             in-process Hugging Face backend described by this pipeline's own construction
             arguments. A `"huggingface"` spec that names a model must name
@@ -192,7 +189,6 @@ class SteeringPipeline:
     device: torch.device | str | None = None
     hf_model_kwargs: dict = field(default_factory=dict)
     trust_remote_code: bool = False
-    lazy_init: bool = False
     backend: BackendSpec | str | None = None
     fit: Literal["auto", "in_process"] = "auto"
     model: PreTrainedModel | None = field(default=None, repr=False)
