@@ -515,7 +515,7 @@ class TestReviewRegressions:
     """Regression pins from the adversarial review of the seam landing."""
 
     def test_two_interventions_at_the_same_lowest_layer_elect_one_opener(self):
-        from steerability.algorithms.state_control.common.model_layout import ModelLayout as ModulePaths
+        from steerability.algorithms.core.internals.model_layout import ModelLayout as ModulePaths
         from steerability.algorithms.state_control.common.runtime import build_hooks
 
         layout = ModulePaths(
