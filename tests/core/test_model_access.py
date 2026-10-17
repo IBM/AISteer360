@@ -48,7 +48,16 @@ class TestDeclarations:
         assert aux.steer_access() is ModelAccess.ROLLOUTS
 
     def test_contrastive_fit_access_follows_estimator(self):
+        from steerability.algorithms.state_control.common.estimators import (
+            MeanDifferenceEstimator,
+            SteeringPlaneEstimator,
+        )
+        from steerability.algorithms.state_control.iti.utils.estimator import ProbeMassShiftEstimator
+
         assert ContrastiveFit(data=PAIRS).access is ModelAccess.CAPTURE
+        assert ContrastiveFit(data=PAIRS, estimator=MeanDifferenceEstimator()).access is ModelAccess.CAPTURE
+        assert ContrastiveFit(data=PAIRS, estimator=SteeringPlaneEstimator()).access is ModelAccess.CAPTURE
+        assert ContrastiveFit(data=PAIRS, estimator=ProbeMassShiftEstimator()).access is ModelAccess.MODULE
 
         class _Estimator:
             def fit(self, model, tokenizer, **kwargs):

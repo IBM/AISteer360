@@ -51,15 +51,18 @@ class SteeringPlaneEstimator(BaseEstimator[SteeringVector]):
         """Fit the per-layer steering planes.
 
         Args:
-            model: Model to extract hidden states from.
+            model: Model to extract hidden states from, or None to extract through `session`.
             tokenizer: Tokenizer for encoding the contrastive pairs.
             data: The positive/negative text pairs.
             spec: Training configuration (method, accumulate, batch_size, prompt_format).
             on_progress: Optional `(completed, total)` callback forwarded to the underlying
                 mean-difference extraction.
+            session: A `SteeringSession` serving hidden-state capture when no live model is
+                available.
 
         Returns:
-            SteeringVector with a `[2, H]` orthonormal basis per usable layer.
+            SteeringVector with a `[2, H]` orthonormal basis per usable layer, recording
+            `spec.location` as `meta["location"]`.
 
         Raises:
             ValueError: If fewer than two layers have usable feature directions, or if no plane

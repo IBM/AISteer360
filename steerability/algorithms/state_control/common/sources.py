@@ -65,11 +65,12 @@ class ContrastiveFit:
 
     The five spec fields (`method`, `accumulate`, `batch_size`, `prompt_format`, `location`) drive
     the built-in estimators. `"mean_diff"` dispatches to `MeanDifferenceEstimator`, everything else
-    to `ContrastiveDirectionEstimator`, and the fitted artifact records its extraction boundary as
+    to `ContrastiveDirectionEstimator`. When a custom `estimator` is supplied, the spec fields are
+    ignored (a warning is emitted) and fitting delegates to
+    `estimator.fit(model, tokenizer, data=<coerced pairs>, session=session, **(estimator_kwargs or {}))`.
+    The built-in estimators record the extraction boundary of the fitted artifact as
     `meta["location"]`, which `Intervention.bind` checks against the consuming intervention's
-    boundary. When a custom `estimator` is supplied, the spec fields are ignored (a warning is
-    emitted), no location is recorded, and fitting delegates to
-    `estimator.fit(model, tokenizer, data=<coerced pairs>, **(estimator_kwargs or {}))`.
+    boundary.
 
     The fitted master vector is memoized in a single weakref slot keyed by model identity. The same
     model resolved repeatedly fits once, a different model refits, and alternating models (A→B→A)
@@ -106,10 +107,12 @@ class ContrastiveFit:
 
     @property
     def access(self) -> ModelAccess:
-        """`ModelAccess.CAPTURE` for the built-in estimators, whose extraction runs through
-        session capture; a custom estimator may need the live model, so it declares
-        `ModelAccess.MODULE`."""
-        return ModelAccess.MODULE if self.estimator is not None else ModelAccess.CAPTURE
+        """The `access` the custom estimator declares (`ModelAccess.MODULE` when it declares
+        none), or `ModelAccess.CAPTURE` for the built-in estimators, whose extraction runs
+        through session capture."""
+        if self.estimator is None:
+            return ModelAccess.CAPTURE
+        return getattr(self.estimator, "access", ModelAccess.MODULE)
 
     def __post_init__(self):
         if not isinstance(self.data, ContrastivePairs):
@@ -134,12 +137,9 @@ class ContrastiveFit:
     def _fit(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, session=None) -> SteeringVector:
         """Fit the master steering vector (no caching, no cloning)."""
         if self.estimator is not None:
-            try:
-                master = self.estimator.fit(
-                    model, tokenizer, data=self.data, session=session, **(self.estimator_kwargs or {})
-                )
-            except TypeError:
-                master = self.estimator.fit(model, tokenizer, data=self.data, **(self.estimator_kwargs or {}))
+            master = self.estimator.fit(
+                model, tokenizer, data=self.data, session=session, **(self.estimator_kwargs or {})
+            )
         else:
             spec = VectorTrainSpec(
                 method=self.method,
@@ -149,7 +149,6 @@ class ContrastiveFit:
                 location=self.location,
             )
             master = estimator_for(self.method).fit(model, tokenizer, data=self.data, spec=spec, session=session)
-            master.meta["location"] = self.location
 
         if self.normalize:
             master = master.normalized()

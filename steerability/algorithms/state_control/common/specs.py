@@ -310,12 +310,16 @@ class Intervention:
 
         The check validates recorded provenance only: an artifact whose metadata carries no
         `"location"` key has unknown extraction provenance and passes, with the boundary
-        requirement documented on the consuming control's args instead.
+        requirement documented on the consuming control's args instead. The check does not
+        apply at the `"norm_input"` site, which edits the inputs of each layer's normalization
+        sub-modules (the stream entering the layer and the mid-layer stream) for any `boundary`.
 
         Raises:
             ValueError: If the artifact records a `"location"` that differs from this
                 intervention's `boundary`.
         """
+        if self.resolved_site() == "norm_input":
+            return
         meta = getattr(transform, "artifact_meta", None) or {}
         location = meta.get("location")
         if location is not None and location != self.boundary:

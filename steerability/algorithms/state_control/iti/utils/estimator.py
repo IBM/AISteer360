@@ -8,7 +8,7 @@ routers). "Probe" here means only ITI's fit-time head classifier.
 """
 import logging
 import warnings
-from typing import Sequence
+from typing import ClassVar, Sequence
 
 import numpy as np
 import torch
@@ -18,6 +18,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
+from steerability.algorithms.core.execution.access import ModelAccess
 from steerability.algorithms.core.internals.data import LabeledExamples
 from steerability.algorithms.core.internals.encoding import tokenize_texts
 from steerability.algorithms.core.internals.fingerprint import artifact_provenance_meta
@@ -63,7 +64,8 @@ class ProbeMassShiftEstimator(BaseEstimator[SteeringVector]):
 
     Per-token activations are pooled inside the capture hook and never retained beyond the chunk
     that produced them, so host memory scales with the number of statements rather than their
-    length.
+    length. The fit hooks the pre-`o_proj` inputs on the module tree and therefore declares
+    `ModelAccess.MODULE`.
 
     Reference:
 
@@ -71,6 +73,8 @@ class ProbeMassShiftEstimator(BaseEstimator[SteeringVector]):
           Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, Martin Wattenberg
           [https://arxiv.org/abs/2306.03341](https://arxiv.org/abs/2306.03341)
     """
+
+    access: ClassVar[ModelAccess] = ModelAccess.MODULE
 
     def fit(
         self,

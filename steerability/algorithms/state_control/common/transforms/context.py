@@ -72,10 +72,11 @@ def _build_context(
     layer actually uses. With no behavior layer given, or when no behavior layer carries an
     attention module (a residual-stream transform on the non-attention layers of a hybrid stack),
     the head geometry falls back to the text config. The resolve closure coerces any artifact to a
-    source, resolves it against the model,
-    and moves the result onto the model's device and dtype. With `model=None`, sizes come from
-    `layout` (a structural `core.execution.ModelFacts`), the device is CPU, and the resolve
-    closure serves concrete artifacts only, since fitting a source requires a live model.
+    source, resolves it against the model and `session`, and moves the result onto the model's
+    device and dtype. With `model=None`, sizes come from `layout` (a structural
+    `core.execution.ModelFacts`) and the device is CPU. The resolve closure then serves concrete
+    artifacts and sources that fit through session capture, and a source that requires a live
+    model raises.
     """
     if model is not None:
         device = next(model.parameters()).device
@@ -106,11 +107,7 @@ def _build_context(
 
     def resolve(artifact) -> SteeringVector:
         source = _as_artifact_source(artifact)
-        try:
-            resolved = source.resolve(model, tokenizer, session=session)
-        except TypeError:
-            resolved = source.resolve(model, tokenizer)  # sources without capture support
-        return resolved.to(device, dtype)
+        return source.resolve(model, tokenizer, session=session).to(device, dtype)
 
     return TransformContext(
         layer_ids=list(layer_ids),

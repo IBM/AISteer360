@@ -59,7 +59,7 @@ class _StubSource:
         self._sv = steering_vector
         self.fits = 0
 
-    def resolve(self, model, tokenizer) -> SteeringVector:
+    def resolve(self, model, tokenizer, *, session=None) -> SteeringVector:
         self.fits += 1
         return self._sv.clone()
 

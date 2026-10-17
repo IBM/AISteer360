@@ -65,7 +65,8 @@ class MeanDifferenceEstimator(BaseEstimator[SteeringVector]):
                 available.
 
         Returns:
-            SteeringVector with one direction per layer.
+            SteeringVector with one direction per layer, recording `spec.location` as
+            `meta["location"]`.
         """
         device = next(model.parameters()).device if model is not None else torch.device("cpu")
         if model is not None:
@@ -140,7 +141,8 @@ class MeanDifferenceEstimator(BaseEstimator[SteeringVector]):
             directions[layer_id] = direction.unsqueeze(0).to(dtype=torch.float32)  # [1, H]
 
         logger.debug("Finished fitting mean difference directions")
-        meta = artifact_provenance_meta(model, tokenizer) if model is not None else session_meta
+        meta = artifact_provenance_meta(model, tokenizer) if model is not None else dict(session_meta)
+        meta["location"] = spec.location
         return SteeringVector(
             model_type=model_type,
             directions=directions,
