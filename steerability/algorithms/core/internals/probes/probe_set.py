@@ -1,7 +1,7 @@
 """Score all probes in a batch with a read-only forward pass."""
 import logging
 from dataclasses import dataclass, field
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
@@ -14,6 +14,9 @@ from steerability.algorithms.core.internals.probes.fitting import ProbeFitSpec, 
 from steerability.algorithms.core.internals.probes.probe import Probe
 from steerability.algorithms.core.internals.stats import ActivationStats, StatsSpec
 from steerability.algorithms.core.utils.auxiliary_pass import auxiliary_pass
+
+if TYPE_CHECKING:
+    from steerability.algorithms.core.execution.backend import SteeringSession
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +93,12 @@ class ProbeSetFit:
         """The probe names, available before fitting so routing rules validate at construction."""
         return tuple(self.data)
 
-    def fit(self, model: PreTrainedModel | None, tokenizer: PreTrainedTokenizerBase, session=None) -> "ProbeSet":
+    def fit(
+        self,
+        model: PreTrainedModel | None,
+        tokenizer: PreTrainedTokenizerBase,
+        session: "SteeringSession | None" = None,
+    ) -> "ProbeSet":
         """Fit the recipe on `model`, resolving a `StatsSpec` on it first.
 
         Args:

@@ -5,7 +5,7 @@ import logging
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import TYPE_CHECKING, Literal, Sequence
 
 import torch
 from safetensors.torch import load_file, save_file
@@ -21,6 +21,9 @@ from steerability.algorithms.core.internals.fingerprint import model_fingerprint
 from steerability.algorithms.core.internals.pooling import get_last_token_positions, masked_mean, select_at_positions
 from steerability.algorithms.core.utils.auxiliary_pass import auxiliary_pass
 from steerability.utils.rendering import PromptFormat, has_chat_template, render_for_model
+
+if TYPE_CHECKING:
+    from steerability.algorithms.core.execution.backend import SteeringSession
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,8 @@ class StatsSpec:
     batch_size: int = 8
 
     def estimate(
-        self, model: PreTrainedModel | None, tokenizer: PreTrainedTokenizerBase, session=None,
+        self, model: PreTrainedModel | None, tokenizer: PreTrainedTokenizerBase,
+        session: "SteeringSession | None" = None,
     ) -> "ActivationStats":
         """Estimate `ActivationStats` on `model` with this recipe's settings."""
         return ActivationStats.estimate(
@@ -123,7 +127,7 @@ class ActivationStats:
         exclude_first_n: int = 1,
         batch_size: int = 8,
         min_samples: int = 5000,
-        session=None,
+        session: "SteeringSession | None" = None,
     ) -> "ActivationStats":
         """Estimate per-layer activation statistics over `texts`.
 

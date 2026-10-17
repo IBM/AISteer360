@@ -1,6 +1,6 @@
 """Base class for estimators that learn artifacts during steer()."""
 from abc import ABC, abstractmethod
-from typing import ClassVar, Generic, TypeVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
@@ -29,7 +29,7 @@ class BaseEstimator(ABC, Generic[T]):
         self,
         model: PreTrainedModel | None,
         tokenizer: PreTrainedTokenizerBase,
-        **kwargs,
+        **kwargs: Any,
     ) -> T:
         """Fit the estimator and return the learned artifact.
 
