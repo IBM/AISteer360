@@ -150,8 +150,14 @@ class CPO(InputControl):
         return ModelAccess.MODULE
 
     def export_state(self) -> dict:
-        """The trained scorer memory under the `"memory"` key (after `steer()`)."""
-        return {"memory": self.memory} if self.memory is not None else {}
+        """The trained scorer memory under the `"memory"` key (after `steer()`).
+
+        Returns nothing when the recipe already carries the memory (`memory=`), since the recipe
+        is then its frozen form.
+        """
+        if self.args.memory is not None or self.memory is None:
+            return {}
+        return {"memory": self.memory}
 
     def frozen_form(self, state: dict) -> tuple[str, dict]:
         """A same-class frozen form: the recipe args with `memory=` set to the trained memory

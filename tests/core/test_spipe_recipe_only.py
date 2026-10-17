@@ -264,3 +264,32 @@ def test_gepa_with_a_loaded_reflection_model_does_not_save(model_and_tok):
     gepa = GEPA(reflection_lm=model, reflection_tokenizer=tokenizer, memory=TextMemory(slots={"instruction": "x"}))
     with pytest.raises(SpipeSaveError, match="_name_or_path"):
         SteeringPipeline(model_name_or_path=TINY_MODEL, controls=[gepa]).to_spipe()
+
+
+def test_recipe_with_a_memory_freezes_without_a_model(tmp_path, model_and_tok):
+    from steerability.algorithms.input_control.prewrite.control import PRewrite
+
+    model, tokenizer = model_and_tok
+    prewrite = PRewrite(memory={"slots": {"instruction": "Be formal."}})
+    assert prewrite.steer_access() is ModelAccess.FACTS
+    spipe = SteeringPipeline(model_name_or_path=TINY_MODEL, controls=[prewrite]).to_spipe(freeze=True)
+    assert spipe.is_frozen
+    assert spipe.manifest["controls"][0]["resolved"] is None
+
+    rebuilt = SPipe.load(spipe.save(tmp_path / "prewrite.spipe")).pipeline()
+    rebuilt.model, rebuilt.tokenizer = model, tokenizer
+    rebuilt.steer()
+    assert rebuilt.input_controls[0].memory["instruction"] == "Be formal."
+
+
+def test_steered_recipe_with_a_memory_exports_nothing(model_and_tok):
+    from steerability.algorithms.input_control.common.memory.text import TextMemory
+    from steerability.algorithms.input_control.gepa.control import GEPA
+
+    model, tokenizer = model_and_tok
+    gepa = GEPA(memory=TextMemory(slots={"instruction": "Be terse."}))
+    pipeline = SteeringPipeline(model=model, tokenizer=tokenizer, controls=[gepa], model_name_or_path=TINY_MODEL)
+    pipeline.steer()
+    assert gepa.memory["instruction"] == "Be terse."
+    assert gepa.export_state() == {}
+    assert pipeline.to_spipe().manifest["controls"][0]["resolved"] is None

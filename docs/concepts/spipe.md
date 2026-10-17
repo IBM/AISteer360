@@ -45,8 +45,8 @@ loads against an external store via `SPipe.load(path, artifact_store=...)`.
 A pipeline with nothing to fit can be frozen without loading the model. `to_spipe(freeze=True)` on an unsteered
 pipeline succeeds when every enabled control is recipe-frozen, i.e., its steer step declares only `facts` access,
 declares no fits, and exports no state. A prompt-only pipeline (`SystemPrompt`, `UserPrefix`, a `FewShot` with fixed
-pools) qualifies, since its recipe already is its frozen form. A control that blocks the freeze is named in the error,
-with the reason.
+pools, or a `PRewrite`, `GEPA`, or `CPO` constructed with `memory=`) qualifies, since its recipe already is its frozen
+form. A control that blocks the freeze is named in the error, with the reason.
 
 The lock section of such a bundle records no model or tokenizer fingerprint and no dtype, since no model was present
 to fingerprint. Everything else (both digests, the backend spec hash, the `fit` posture, package versions) is filled as
