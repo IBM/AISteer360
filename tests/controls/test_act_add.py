@@ -160,6 +160,34 @@ class TestExtractionBoundary:
         loaded = SteeringVector.load(path)
         assert loaded.meta["location"] == "layer_input"
 
+    def test_unequal_pair_is_right_padded_with_attended_spaces(self):
+        """The shorter prompt is padded on the right with attended pad-fallback tokens (the word-level
+        tokenizer encodes no space token), independent of the tokenizer's padding side, and the
+        tokenizer is left unchanged."""
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
+        fits = {}
+        for side in ("left", "right"):
+            tokenizer = wordlevel_tokenizer(single="$A")
+            tokenizer.padding_side = side
+            fits[side] = SinglePairEstimator().fit(
+                model, tokenizer, positive_prompt="the cat sat on", negative_prompt="the dog",
+            )
+            assert tokenizer.padding_side == side and tokenizer.pad_token_id == 2
+        for layer_id, direction in fits["left"].directions.items():
+            torch.testing.assert_close(direction, fits["right"].directions[layer_id])
+
+        tokenizer = wordlevel_tokenizer(single="$A")
+        pad = tokenizer.pad_token_id
+        enc = {
+            "input_ids": torch.tensor([[3, 4, 5, 6], [3, 8, pad, pad]]),
+            "attention_mask": torch.ones(2, 4, dtype=torch.long),
+        }
+        hidden, _ = capture_hidden(enc, model=model, location="layer_input")
+        for layer_id, direction in fits["right"].directions.items():
+            expected = (hidden[layer_id][0] - hidden[layer_id][1]).to(torch.float32)
+            torch.testing.assert_close(direction, expected)
+
     def test_single_token_pair_fits_t1(self):
         """A single-token pair on a tokenizer without a BOS token fits a `T = 1` vector."""
         torch.manual_seed(0)

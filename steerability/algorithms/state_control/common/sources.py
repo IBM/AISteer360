@@ -355,9 +355,8 @@ class SinglePairFit:
     """A fit recipe for a positional steering vector: per-token differences of one contrast pair.
 
     Produces `[T, H]` directions per layer (the ActAdd extraction), captured at the layer-input
-    boundary and recorded as `meta["location"] = "layer_input"`. Fitting requires a live model,
-    since the pair is tokenized and co-padded as one batch and remote capture serves per-prompt
-    layouts that do not preserve the co-padded positional structure. The fitted master is
+    boundary and recorded as `meta["location"] = "layer_input"`. The shorter prompt of the pair is
+    right-padded with attended space tokens. Fitting requires a live model. The fitted master is
     memoized per model; every `resolve` returns an independent clone.
 
     Attributes:
