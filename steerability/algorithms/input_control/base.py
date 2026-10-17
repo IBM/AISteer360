@@ -79,7 +79,9 @@ class InputControl(BaseControl):
             runtime_kwargs: Per-call parameters.
 
         Returns:
-            The transformed token IDs.
+            The transformed token IDs, in the padding layout `input_ids` was received in. When the
+            length changes, the pipeline infers the attention mask from the leading and trailing
+            pad runs.
         """
 
     def adapt_messages(
