@@ -1,0 +1,22 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install the toolkit with the eval extra
+        run: uv sync --extra eval
+      - name: Run the tests
+        # the tiny CI models in tests/utils/ci_models.yaml download from the Hub; tests marked
+        # `network` download other models and are deselected
+        run: uv run pytest -q tests/ -m "not network"
