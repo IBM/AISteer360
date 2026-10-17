@@ -53,7 +53,7 @@ class TestPassOpenerOffset:
         transforms = {lid: _RecordingTransform() for lid in (0, 1, 2)}
 
         input_ids = torch.arange(3, 7, dtype=torch.long).unsqueeze(0)  # prompt_len 4
-        runtime.reset(compute_prompt_lens(input_ids, None))
+        runtime.reset(compute_prompt_lens(input_ids))
 
         layer_ids = [0, 1, 2]
         opener = min(layer_ids)
@@ -89,7 +89,7 @@ class TestPassOpenerOffset:
         transform = _RecordingTransform()
 
         input_ids = torch.arange(3, 3 + prompt_len, dtype=torch.long).unsqueeze(0)
-        runtime.reset(compute_prompt_lens(input_ids, None))
+        runtime.reset(compute_prompt_lens(input_ids))
         hook = runtime.build_behavior_hook(
             layer_id=1, transform=transform, gate=None,
             token_scope="after_prompt", is_pass_opener=True)
@@ -110,7 +110,7 @@ class TestTokenScopes:
         runtime = TransformHookRuntime(hook_point="layer_output")
         transform = _RecordingTransform()
         input_ids = torch.arange(3, 3 + seq_len, dtype=torch.long).unsqueeze(0)
-        runtime.reset(compute_prompt_lens(input_ids, None))
+        runtime.reset(compute_prompt_lens(input_ids))
         hook = runtime.build_behavior_hook(
             layer_id=1, transform=transform, gate=None, token_scope=token_scope,
             is_pass_opener=True, **kw)
@@ -143,7 +143,7 @@ class TestBeamExpansion:
         runtime = TransformHookRuntime(hook_point="layer_output")
         transform = _RecordingTransform()
         input_ids = torch.arange(3, 7, dtype=torch.long).unsqueeze(0)
-        runtime.reset(compute_prompt_lens(input_ids, None))
+        runtime.reset(compute_prompt_lens(input_ids))
         hook = runtime.build_behavior_hook(
             layer_id=1, transform=transform, gate=None,
             token_scope="all", is_pass_opener=True)
@@ -198,7 +198,7 @@ class TestPreHookPath:
         runtime = TransformHookRuntime(hook_point="layer_input")
         transform = _RecordingTransform(value=3.0)
         input_ids = torch.arange(3, 7, dtype=torch.long).unsqueeze(0)
-        runtime.reset(compute_prompt_lens(input_ids, None))
+        runtime.reset(compute_prompt_lens(input_ids))
 
         captured = {}
 

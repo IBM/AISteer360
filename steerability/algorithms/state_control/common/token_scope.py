@@ -4,10 +4,7 @@ import torch
 from .specs import ScopeKind
 
 
-def compute_prompt_lens(
-    input_ids: torch.LongTensor,
-    pad_token_id: int | None = None,  # noqa: ARG001
-) -> torch.LongTensor:
+def compute_prompt_lens(input_ids: torch.LongTensor) -> torch.LongTensor:
     """Compute per-batch-item prompt lengths from input_ids.
 
     For the "after_prompt" token scope, the prompt length should represent the
@@ -18,7 +15,6 @@ def compute_prompt_lens(
 
     Args:
         input_ids: Shape [B, T] or [T].
-        pad_token_id: Unused. Kept for API compatibility.
 
     Returns:
         Tensor of shape [B] where each value is seq_len.

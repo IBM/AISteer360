@@ -357,7 +357,7 @@ class TestComputePromptLens:
     def test_no_padding(self):
         """Test prompt lens with no padding."""
         input_ids = torch.tensor([[1, 2, 3, 4, 5]])
-        lens = compute_prompt_lens(input_ids, pad_token_id=None)
+        lens = compute_prompt_lens(input_ids)
         assert lens.tolist() == [5]
 
     def test_with_padding(self):
@@ -366,14 +366,14 @@ class TestComputePromptLens:
             [0, 0, 1, 2, 3],  # 3 non-pad tokens but seq_len=5
             [0, 1, 2, 3, 4],  # 4 non-pad tokens but seq_len=5
         ])
-        lens = compute_prompt_lens(input_ids, pad_token_id=0)
+        lens = compute_prompt_lens(input_ids)
         # returns seq_len (5) for all items regardless of pad count
         assert lens.tolist() == [5, 5]
 
     def test_1d_input(self):
         """Test that 1D input is handled correctly."""
         input_ids = torch.tensor([1, 2, 3, 4])
-        lens = compute_prompt_lens(input_ids, pad_token_id=None)
+        lens = compute_prompt_lens(input_ids)
         assert lens.tolist() == [4]
 
 
