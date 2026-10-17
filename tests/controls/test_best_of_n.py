@@ -42,6 +42,12 @@ class TestBestOfNConfig:
         with pytest.raises(TypeError):
             BestOfN(n=4, scorer="not callable")
 
+    def test_generate_without_max_new_tokens_raises(self):
+        pipeline, _, tokenizer = _pipeline([BestOfN(n=2, scorer=lambda p, c, params: [0.0] * len(c))])
+        prompt = tokenizer("the cat", return_tensors="pt").input_ids
+        with pytest.raises(ValueError, match="max_new_tokens"):
+            pipeline.generate(input_ids=prompt, do_sample=True)
+
 
 class TestBestOfNBehavior:
     def test_returns_argmax_of_scored_samples(self):
