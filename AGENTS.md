@@ -301,7 +301,9 @@ pipeline = SteeringPipeline(
   in). Support verdicts never depend on the plugin's presence.
 - Activation-steering state controls execute on vLLM through the vLLM-Hook plugin (`hook_plugin: True` on the
   spec). The control's steering tuple serializes as an intervention spec, and tensor payloads travel as
-  content-addressed artifacts (`artifact_dir` option; on serve this must be a filesystem shared with the server).
+  content-addressed artifacts. The offline engine writes them into its registry (the `artifact_dir` option). On serve
+  `artifact_dir` is optional: without it each payload is uploaded to the server's `/v1/hook/artifacts/{id}` route, and
+  with it the directory must be the server's registry on a shared filesystem.
   A configuration either serializes exactly or is honestly in-process-only; there is no approximate lowering.
 - The offline backend applies a scoped engine-process environment per boot and restores it
   (`backends/vllm/environment.py`), defaulting `VLLM_USE_FLASHINFER_SAMPLER=0` (an explicit caller value wins) and
@@ -477,8 +479,8 @@ runs = runner.runs_frame(metrics={"accuracy": "choice/accuracy"})  # one row per
 ```
 
 `summarize_runs` (in `evaluation/runner.py`) aggregates the per-trial frame into one row per configuration with
-`{metric}_mean` / `{metric}_std` columns, the contract every function in `evaluation/plotting.py` consumes (`eval`
-extra).
+`{metric}_mean` / `{metric}_std` / `{metric}_sem` columns. The functions in `evaluation/plotting.py` consume the
+`_mean` and `_std` columns (`eval` extra).
 
 Every generation flows through `pipeline.generate()`. Prompts enter as `messages=` when the tokenizer has a chat
 template (so `adapt_messages` input controls fire exactly as in deployment) and as rendered `text=` otherwise, with
