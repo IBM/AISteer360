@@ -77,7 +77,10 @@ from steerability.algorithms.input_control.prompt_censor.args import PromptCenso
 class PromptCensor(InputControl):
     """Filters potentially harmful content from prompts."""
     Args = PromptCensorArgs
-    RUNTIME_KWARGS_SCHEMA = [{"name": "blocked_words"}, {"name": "replacement"}]
+    RUNTIME_KWARGS_SCHEMA = [
+        {"name": "blocked_words", "scope": "call", "help": "Words to replace in every prompt of the call."},
+        {"name": "replacement", "scope": "call", "help": "The text that replaces each blocked word."},
+    ]
 
     tokenizer: PreTrainedTokenizer | None = None
 
@@ -99,35 +102,31 @@ class PromptCensor(InputControl):
         blocked_words = (runtime_kwargs or {}).get("blocked_words", self.blocked_words)
         replacement = (runtime_kwargs or {}).get("replacement", self.replacement)
 
-        # decode to text for filtering
-        if isinstance(input_ids, torch.Tensor):
-            if input_ids.dim() == 2:  # batch
-                text = self.tokenizer.decode(input_ids[0], skip_special_tokens=False)
-            else:
-                text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
-        else:
-            text = self.tokenizer.decode(input_ids, skip_special_tokens=False)
+        # filter one row of token ids (case-insensitive), decoding without pad tokens
+        def filter_row(row_ids: list[int]) -> list[int]:
+            row_ids = [token for token in row_ids if token != self.tokenizer.pad_token_id]
+            text = self.tokenizer.decode(row_ids, skip_special_tokens=False)
+            for word in blocked_words:
+                text = re.compile(re.escape(word), re.IGNORECASE).sub(replacement, text)
+            return self.tokenizer.encode(text, add_special_tokens=False)
 
-        # apply filtering (case-insensitive)
-        for word in blocked_words:
-            pattern = re.compile(re.escape(word), re.IGNORECASE)
-            text = pattern.sub(replacement, text)
+        if not isinstance(input_ids, torch.Tensor):
+            return filter_row(list(input_ids))
+        if input_ids.dim() == 1:
+            return torch.tensor(filter_row(input_ids.tolist()), dtype=input_ids.dtype, device=input_ids.device)
 
-        # re-encode filtered text
-        filtered_ids = self.tokenizer.encode(text, add_special_tokens=False)
-
-        # return in same format as input
-        if isinstance(input_ids, torch.Tensor):
-            filtered_tensor = torch.tensor(filtered_ids, dtype=input_ids.dtype, device=input_ids.device)
-            if input_ids.dim() == 2:  # batch
-                return filtered_tensor.unsqueeze(0)
-            return filtered_tensor
-        return filtered_ids
+        # filter every row, then right-pad the rows to a common width
+        rows = [filter_row(row.tolist()) for row in input_ids]
+        width = max(len(row) for row in rows)
+        padded = [row + [self.tokenizer.pad_token_id] * (width - len(row)) for row in rows]
+        return torch.tensor(padded, dtype=input_ids.dtype, device=input_ids.device)
 ```
 
-Note that the method's `steer` attaches the tokenizer to the control. The `RUNTIME_KWARGS_SCHEMA` attribute declares
-the per-call variables the control reads from `runtime_kwargs`, and the pipeline warns at `steer()` time when two
-controls declare the same name.
+Note that the method's `steer` attaches the tokenizer to the control. The `adapt` method filters every row of a batch
+and returns a `[B, L']` tensor right-padded with the tokenizer's pad token. The pipeline then infers the attention mask
+from the pad runs, since the length changed. The `RUNTIME_KWARGS_SCHEMA` attribute declares the per-call variables the
+control reads from `runtime_kwargs` (both apply to the whole call, i.e., `"scope": "call"`), and the pipeline warns at
+`steer()` time when two controls declare the same name.
 
 Once the above files are in place, the prompt censor control can be initialized and exercised:
 
