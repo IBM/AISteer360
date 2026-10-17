@@ -270,8 +270,8 @@ and the following decoding drivers:
     - *Backends*: HF, vLLM.
 
 Every decoding driver accepts a padded batch of prompts and returns `n` candidates per prompt (the call's
-`num_return_sequences`). Among the drivers, only `PhasedDecoding` and `RoutedDecoding` declare `supports_batching`,
-which the evaluation provider reads to batch concurrent requests. The search drivers (`DeAL`, `BestOfN`, and
+`num_return_sequences`). The phased drivers declare `supports_batching`, which the evaluation provider reads to batch
+concurrent requests, and the search drivers do not. The search drivers (`DeAL`, `BestOfN`, and
 `SearchDecoding`) run one independent search per candidate on the row's unpadded prompt (with beam proposals and no
 sampling, the search runs once and is returned as every candidate). Their segments are clamped so that no
 continuation exceeds `max_new_tokens`. The phased drivers (`BudgetForcing`, `RoutedDecoding`, and `PhasedDecoding`)

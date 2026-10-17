@@ -71,7 +71,6 @@ class RoutedDecoding(PhasedDriver):
 
     Args = RoutedDecodingArgs
 
-    supports_batching: bool = True
     same_model_forwards: bool = True
 
     RUNTIME_KWARGS_SCHEMA = [
@@ -79,7 +78,7 @@ class RoutedDecoding(PhasedDriver):
             "name": "canned_responses",
             "type": "dict[str, str]",
             "scope": "call",
-            "description": "Per-call override of Respond/Prefix text, keyed by route name.",
+            "help": "Per-call override of Respond/Prefix text, keyed by route name.",
         },
     ]
 

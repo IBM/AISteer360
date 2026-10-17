@@ -196,6 +196,7 @@ class PhasedDriver(DecodingDriver):
     seeded differently from the first, since each session call derives its own seeds from the
     call-level `seed`.
 
+    `supports_batching` is True since the plans of all rows and candidates run together.
     `whole_batch_rollouts` is False because the session calls cover subsets of the batch. With
     enabled in-process state controls, the pipeline accepts one prompt row per call.
 
@@ -214,6 +215,7 @@ class PhasedDriver(DecodingDriver):
             pipeline or by a subclass's `steer()`, or None before it is attached.
     """
 
+    supports_batching: bool = True
     whole_batch_rollouts: bool = False
     tokenizer: PreTrainedTokenizerBase | None = None
 

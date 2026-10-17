@@ -100,6 +100,21 @@ class TestConfig:
         bf = BudgetForcing(max_thinking_tokens=8)
         assert bf.extract_after is None
 
+    def test_supports_batching_with_the_other_phased_drivers(self):
+        from steerability.algorithms.core.internals.probes import Probe, ProbeSet
+        from steerability.algorithms.core.utils.controls import runtime_kwargs_schema
+        from steerability.algorithms.output_control.phased_decoding.control import PhasedDecoding
+        from steerability.algorithms.output_control.routed_decoding import P, Route, RoutedDecoding, Router, respond
+
+        probes = ProbeSet({"p": Probe(
+            model_type="llama", location="layer_input", pooling="mean",
+            layer_ids=[0], weights={0: torch.zeros(4)}, bias=0.0,
+        )})
+        routed = RoutedDecoding(probes=probes, rules=Router(routes=[Route("r", when=P("p"), action=respond("x"))]))
+        drivers = [BudgetForcing(max_thinking_tokens=8), PhasedDecoding(plan=[{"generate": {"budget": 2}}]), routed]
+        assert all(driver.supports_batching is True for driver in drivers)
+        assert runtime_kwargs_schema([routed])["canned_responses"]["help"]
+
     def test_rejects_bad_args(self):
         with pytest.raises(ValueError):
             BudgetForcing(max_thinking_tokens=0)

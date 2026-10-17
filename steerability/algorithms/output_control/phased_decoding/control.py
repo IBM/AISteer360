@@ -87,8 +87,7 @@ class PhasedDecoding(PhasedDriver):
 
     Every `"generate"` phase applies the composed logits processors and stopping criteria, and a
     step-level control in the pipeline steers each generated phase. The caller's `max_new_tokens`
-    limits the tokens appended to each candidate across all phases. `supports_batching` is True since
-    the driver runs the plans of all rows and candidates together.
+    limits the tokens appended to each candidate across all phases.
 
     The following `runtime_kwargs` are accepted:
 
@@ -108,8 +107,6 @@ class PhasedDecoding(PhasedDriver):
     """
 
     Args = PhasedDecodingArgs
-
-    supports_batching: bool = True
 
     tokenizer: PreTrainedTokenizerBase | None = None
 
