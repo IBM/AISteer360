@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from steerability.algorithms.core.execution.access import ModelAccess
 from steerability.algorithms.core.execution.contracts import Capability, Requirements, needs
@@ -68,8 +69,10 @@ class CPO(InputControl):
     its system message. On token input (`adapt`), the prompt is re-templated with the survivor as
     its system message.
 
-    The proposer is `prompt_lm` with `prompt_tokenizer` when `prompt_lm` is set, and the pipeline's
-    model with the pipeline tokenizer otherwise.
+    The proposer is `prompt_lm` with `prompt_tokenizer` when `prompt_lm` is set, the model and
+    tokenizer loaded from `prompt_lm_name_or_path` at `steer()` when that is set (the loaded model
+    is kept on `prompt_lm` for the per-query search), and the pipeline's model with the pipeline
+    tokenizer otherwise. Only the reference form can be saved in a `.spipe` recipe.
 
     The query cache keys on a sha256 hash of the query text. By default the raw query is hashed, so
     whitespace, casing, and punctuation differences yield distinct cache entries. Supply
@@ -97,6 +100,7 @@ class CPO(InputControl):
     pca_prompt_dim: int = 15
     prompt_lm: Any = None
     prompt_tokenizer: Any = None
+    prompt_lm_name_or_path: str | None = None
     rounds: int = 3
     candidates_per_parent: int = 5
     retained_per_round: int = 3
@@ -115,26 +119,32 @@ class CPO(InputControl):
     _proposer: LLMMetaPromptProposer | None = None
     _encoder: TextEncoder | None = None
 
+    @property
+    def _has_auxiliary_proposer(self) -> bool:
+        """Whether the proposer is a control-owned model (`prompt_lm` or `prompt_lm_name_or_path`)."""
+        return self.prompt_lm is not None or self.prompt_lm_name_or_path is not None
+
     def requirements(self) -> Requirements:
         """Backend requirements computed from this instance's configuration, per phase.
 
-        With `prompt_lm` supplied the proposer is a control-owned auxiliary and every phase is
-        prompt-only. With `prompt_lm` unset the live pipeline model is bound as the proposer at
-        steer and consulted per query at adapt, so the generate phase requires
-        `Capability.IN_PROCESS_TORCH`."""
-        if self.prompt_lm is not None:
+        With `prompt_lm` or `prompt_lm_name_or_path` supplied the proposer is a control-owned
+        auxiliary and every phase is prompt-only. Without either, the loaded pipeline model is
+        bound as the proposer at steer and consulted per query at adapt, so the generate phase
+        requires `Capability.IN_PROCESS_TORCH`."""
+        if self._has_auxiliary_proposer:
             return Requirements()
         return Requirements(generate=needs(
             Capability.IN_PROCESS_TORCH,
-            hint="set prompt_lm to run CPO's per-query search off the pipeline model",
+            hint="set prompt_lm or prompt_lm_name_or_path to run CPO's per-query search off the pipeline model",
         ))
 
     def steer_access(self) -> ModelAccess:
-        """`ModelAccess.ROLLOUTS` with `prompt_lm` supplied (offline data generation rides the
-        session); `ModelAccess.MODULE` with `prompt_lm` unset (the live model is bound as the
-        proposer). A precomputed `memory` with `prompt_lm` supplied needs only structural
-        facts (`ModelAccess.FACTS`)."""
-        if self.prompt_lm is not None:
+        """`ModelAccess.ROLLOUTS` with an auxiliary proposer (`prompt_lm` or
+        `prompt_lm_name_or_path`), since offline data generation rides the session;
+        `ModelAccess.MODULE` without one (the loaded model is bound as the proposer). A
+        precomputed `memory` with an auxiliary proposer needs only structural facts
+        (`ModelAccess.FACTS`)."""
+        if self._has_auxiliary_proposer:
             has_memory = getattr(getattr(self, "args", None), "memory", None) is not None
             return ModelAccess.FACTS if has_memory else ModelAccess.ROLLOUTS
         return ModelAccess.MODULE
@@ -173,6 +183,11 @@ class CPO(InputControl):
     ) -> None:
         self.tokenizer = tokenizer
 
+        if self.prompt_lm is None and self.prompt_lm_name_or_path is not None:
+            self.prompt_lm = AutoModelForCausalLM.from_pretrained(self.prompt_lm_name_or_path, device_map="auto")
+            self.prompt_tokenizer = AutoTokenizer.from_pretrained(self.prompt_lm_name_or_path)
+            if self.prompt_tokenizer.pad_token_id is None and self.prompt_tokenizer.eos_token_id is not None:
+                self.prompt_tokenizer.pad_token = self.prompt_tokenizer.eos_token
         if self.prompt_lm is not None:
             proposer_lm = self.prompt_lm
             proposer_tokenizer = self.prompt_tokenizer

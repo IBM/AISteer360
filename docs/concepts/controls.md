@@ -50,7 +50,7 @@ self-consistency), automatic prompting methods, and prompt routing. The toolkit 
     - *Backends*: HF, vLLM.
 - `CPO` ([API reference](../reference/algorithms/input_control/cpo.md), [notebook](../examples/notebooks/algorithms/cpo.ipynb))
     - *Description*: causal prompt optimization ([Chen et al. 2026](https://arxiv.org/abs/2602.01711)), i.e., offline causal reward training (Double ML over PCA-reduced embeddings) plus per-query tree search. The chosen prompt is placed before the content of the leading system message (separated by a blank line), and a chat without one receives it as its system message.
-    - *Backends*: HF, vLLM (requires `prompt_lm` with its `prompt_tokenizer`). Without `prompt_lm` the pipeline's loaded model is bound as the proposer, which is HF-only.
+    - *Backends*: HF, vLLM (requires `prompt_lm` with its `prompt_tokenizer`, or `prompt_lm_name_or_path`). Without either, the pipeline's loaded model is bound as the proposer, which is HF-only.
 - `GEPA` ([API reference](../reference/algorithms/input_control/gepa.md), [notebook](../examples/notebooks/algorithms/gepa.ipynb))
     - *Description*: reflective genetic prompt evolution ([Agrawal et al. 2025](https://arxiv.org/abs/2507.19457)), single-module variant. The optimized instruction is placed before the content of the leading system message (separated by a blank line), and a chat without one receives it as its system message.
     - *Backends*: HF, vLLM.

@@ -218,3 +218,49 @@ def test_disabled_blocking_control_does_not_block_model_free_freeze():
         assert spipe.is_frozen
     finally:
         REGISTRY["input_control"].pop("marker_rollout", None)
+
+
+# auxiliary models given by reference
+def _recipe_roundtrip(control, tmp_path):
+    pipeline = SteeringPipeline(model_name_or_path=TINY_MODEL, controls=[control])
+    spipe = pipeline.to_spipe()
+    loaded = SPipe.load(spipe.save(tmp_path / "recipe.spipe"))
+    return spipe, loaded
+
+
+def test_gepa_with_a_named_reflection_model_saves_and_loads(tmp_path):
+    from steerability.algorithms.input_control.common.memory.text import TextMemory
+    from steerability.algorithms.input_control.gepa.control import GEPA
+
+    gepa = GEPA(reflection_lm_name_or_path=TINY_MODEL, memory=TextMemory(slots={"instruction": "Be terse."}))
+    spipe, loaded = _recipe_roundtrip(gepa, tmp_path)
+    assert loaded.config_id == spipe.config_id
+    (rebuilt,) = loaded.pipeline().input_controls
+    assert rebuilt.reflection_lm_name_or_path == TINY_MODEL
+    assert rebuilt.memory["instruction"] == "Be terse."
+
+
+def test_cpo_with_a_named_prompt_model_saves_and_loads(tmp_path):
+    from steerability.algorithms.input_control.cpo.control import CPO
+
+    cpo = CPO(
+        seed_prompt="be helpful",
+        offline_data=[{"query": "q", "prompt": "p", "score": 1.0}],
+        prompt_lm_name_or_path=TINY_MODEL,
+        memory=str(tmp_path / "cpo_memory"),
+    )
+    spipe, loaded = _recipe_roundtrip(cpo, tmp_path)
+    assert loaded.config_id == spipe.config_id
+    (rebuilt,) = loaded.pipeline().input_controls
+    assert rebuilt.prompt_lm_name_or_path == TINY_MODEL
+    assert rebuilt.steer_access() is ModelAccess.FACTS
+
+
+def test_gepa_with_a_loaded_reflection_model_does_not_save(model_and_tok):
+    from steerability.algorithms.input_control.common.memory.text import TextMemory
+    from steerability.algorithms.input_control.gepa.control import GEPA
+
+    model, tokenizer = model_and_tok
+    gepa = GEPA(reflection_lm=model, reflection_tokenizer=tokenizer, memory=TextMemory(slots={"instruction": "x"}))
+    with pytest.raises(SpipeSaveError, match="_name_or_path"):
+        SteeringPipeline(model_name_or_path=TINY_MODEL, controls=[gepa]).to_spipe()

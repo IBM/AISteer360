@@ -95,6 +95,17 @@ class TestGEPAArgs:
                 reflection_tokenizer=object(),
             )
 
+    def test_reflection_lm_and_its_name_are_exclusive(self):
+        with pytest.raises(ValueError, match="at most one of `reflection_lm` and `reflection_lm_name_or_path`"):
+            GEPAArgs(
+                seed_instruction="x",
+                train_set=[{"input": "a"}],
+                row_scorer=lambda out, row: 0.0,
+                reflection_lm=object(),
+                reflection_tokenizer=object(),
+                reflection_lm_name_or_path=TINY_LM,
+            )
+
     def test_invalid_budget_raises(self):
         with pytest.raises(ValueError, match="budget"):
             GEPAArgs(
@@ -218,6 +229,34 @@ class TestGEPASteer:
         assert set(gepa.memory.slots.keys()) == {"instruction"}
         assert isinstance(gepa.memory["instruction"], str)
         assert len(gepa.memory["instruction"]) > 0
+
+    def test_named_reflection_model_is_loaded_at_steer(self, tiny_lm, monkeypatch):
+        from steerability.algorithms.input_control.common.proposers.llm_meta_prompt import LLMMetaPromptProposer
+
+        model, tokenizer = tiny_lm
+        proposers = []
+        original_init = LLMMetaPromptProposer.__init__
+
+        def recording_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            proposers.append(self)
+
+        monkeypatch.setattr(LLMMetaPromptProposer, "__init__", recording_init)
+        gepa = GEPA(
+            seed_instruction="be helpful",
+            train_set=[{"input": f"q{i}"} for i in range(4)],
+            row_scorer=lambda out, row: 0.5,
+            budget=4,
+            minibatch_size=1,
+            pareto_set_size=2,
+            proposer_gen_kwargs={"max_new_tokens": 4, "do_sample": False},
+            reflection_lm_name_or_path=TINY_LM,
+            seed=0,
+        )
+        gepa.steer(model=model, tokenizer=tokenizer)
+        (proposer,) = proposers
+        assert proposer.llm is not model and proposer.llm.name_or_path == TINY_LM
+        assert proposer.tokenizer is not tokenizer and proposer.tokenizer.pad_token_id is not None
 
     def test_reflection_records_omit_gold_target(self, tiny_lm, monkeypatch):
         model, tokenizer = tiny_lm

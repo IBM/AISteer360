@@ -77,6 +77,14 @@ class CPOArgs(BaseArgs):
         metadata={"help": "Tokenizer paired with `prompt_lm`. Required when `prompt_lm` is set."},
     )
 
+    prompt_lm_name_or_path: str | None = field(
+        default=None,
+        metadata={"help": (
+            "Hub id or path of the prompt proposer LLM, loaded with its tokenizer at steer; mutually exclusive "
+            "with `prompt_lm`."
+        )},
+    )
+
     rounds: int = field(
         default=3,
         metadata={"help": "Number of search rounds (R in the paper)."},
@@ -156,8 +164,11 @@ class CPOArgs(BaseArgs):
                 raise ValueError("Either `offline_data` or `train_dataset` must be supplied.")
             if self.row_scorer is None:
                 raise ValueError("`row_scorer` is required when offline_data is generated from train_dataset.")
-            if self.prompt_lm is None:
-                raise ValueError("`prompt_lm` is required when offline_data is generated from train_dataset.")
+            if self.prompt_lm is None and self.prompt_lm_name_or_path is None:
+                raise ValueError(
+                    "`prompt_lm` or `prompt_lm_name_or_path` is required when offline_data is generated from "
+                    "train_dataset."
+                )
         if self.rounds <= 0 or self.candidates_per_parent <= 0 or self.retained_per_round <= 0:
             raise ValueError("rounds, candidates_per_parent, retained_per_round must all be positive.")
         if self.prompt_lm is not None and self.prompt_tokenizer is None:
@@ -170,3 +181,5 @@ class CPOArgs(BaseArgs):
                 "`prompt_tokenizer` was given without `prompt_lm`; the proposer is then the pipeline's model, which "
                 "uses the pipeline tokenizer."
             )
+        if self.prompt_lm is not None and self.prompt_lm_name_or_path is not None:
+            raise ValueError("Specify at most one of `prompt_lm` and `prompt_lm_name_or_path`.")

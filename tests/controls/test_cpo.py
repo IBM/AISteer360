@@ -67,6 +67,51 @@ class TestCPOArgs:
         with pytest.raises(ValueError, match="`prompt_tokenizer` was given without `prompt_lm`"):
             CPOArgs(seed_prompt="x", offline_data=offline_rows, prompt_tokenizer=object())
 
+    def test_prompt_lm_and_its_name_are_exclusive(self, offline_rows):
+        with pytest.raises(ValueError, match="at most one of `prompt_lm` and `prompt_lm_name_or_path`"):
+            CPOArgs(
+                seed_prompt="x", offline_data=offline_rows, prompt_lm=object(), prompt_tokenizer=object(),
+                prompt_lm_name_or_path=TINY_LM,
+            )
+
+    def test_named_prompt_lm_satisfies_offline_data_generation(self):
+        args = CPOArgs(
+            seed_prompt="x", train_dataset=[{"input": "a"}], row_scorer=_constant_scorer(),
+            prompt_lm_name_or_path=TINY_LM,
+        )
+        assert args.prompt_lm is None
+
+
+class TestNamedPromptLM:
+    def test_named_proposer_is_an_auxiliary(self, offline_rows):
+        from steerability.algorithms.core.execution import ModelAccess
+
+        cpo = CPO(seed_prompt="be helpful", offline_data=offline_rows, prompt_lm_name_or_path=TINY_LM)
+        assert cpo.steer_access() is ModelAccess.ROLLOUTS
+        assert cpo.requirements().generate == ()
+        frozen_like = CPO(
+            seed_prompt="be helpful", offline_data=offline_rows, prompt_lm_name_or_path=TINY_LM,
+            memory=CPOMemory(causal_scorer=_PreferNonSeedScorer("be helpful")),
+        )
+        assert frozen_like.steer_access() is ModelAccess.FACTS
+
+    def test_named_proposer_is_loaded_at_steer_and_kept(self, monkeypatch):
+        from tests.utils.tiny_models import tiny_llama, wordlevel_tokenizer
+
+        monkeypatch.setattr("steerability.algorithms.input_control.cpo.control.TextEncoder", lambda *a, **k: None)
+        cpo = CPO(
+            seed_prompt="be helpful",
+            offline_data=[{"query": "q", "prompt": "p", "score": 1.0}],
+            prompt_lm_name_or_path=TINY_LM,
+            memory=CPOMemory(causal_scorer=_PreferNonSeedScorer("be helpful")),
+        )
+        SteeringPipeline(controls=[cpo], model=tiny_llama(num_layers=2, hidden=16, heads=2),
+                         tokenizer=wordlevel_tokenizer()).steer()
+        assert cpo.prompt_lm.name_or_path == TINY_LM
+        assert cpo._proposer.llm is cpo.prompt_lm
+        assert cpo._proposer.tokenizer is cpo.prompt_tokenizer
+        assert cpo.prompt_tokenizer.pad_token_id is not None
+
 
 class _StubProposerLM:
     """A proposer LM double that appends fixed token ids to every prompt."""
@@ -450,7 +495,7 @@ class TestCPOBackendPosture:
         (failure,) = report.failures_for("generate")
         assert failure.message == (
             "CPO is unsupported at generate on backend kind 'vllm': missing IN_PROCESS_TORCH; "
-            "set prompt_lm to run CPO's per-query search off the pipeline model."
+            "set prompt_lm or prompt_lm_name_or_path to run CPO's per-query search off the pipeline model."
         )
 
     def test_aux_prompt_lm_configuration_is_supported_on_engines(self, tiny_lm):
