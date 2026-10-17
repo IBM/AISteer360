@@ -29,7 +29,7 @@ class Capability(Enum):
             since torch hooks cover every intervention a spec expresses; requirements state the
             relationship as alternatives.
         PER_STEP_LOGIT_SPECS: The backend hosts per-step logit math submitted as `ProcessorSpec`
-            payloads.
+            payloads. The atom is reserved, and no backend in the toolkit advertises it.
         HIDDEN_CAPTURE: The backend serves hidden-state capture through `SteeringSession.capture`.
         BEAM_PROPOSALS: The backend implements beam-search proposal semantics (`num_beams` with
             multiple returned sequences).
