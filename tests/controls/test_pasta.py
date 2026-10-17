@@ -498,6 +498,41 @@ class TestHeadProfileBatchSize:
         assert serial.head_config == batched.head_config
 
 
+class TestConstructorSubstrings:
+    """The constructor's `substrings` are the default spans; a runtime value overrides them."""
+
+    def _ranges(self, pasta, runtime_kwargs):
+        input_ids = pasta.tokenizer("the cat sat on mat", return_tensors="pt").input_ids
+        hooks = pasta.get_hooks(input_ids, runtime_kwargs)
+        return [ranges.tolist() for ranges in hooks["pre"][0]["hook_func"].keywords["token_ranges"]]
+
+    def _pasta(self, substrings=None):
+        pasta = PASTA(substrings=substrings, head_config={0: [0]}, alpha=2.0, scale_position="include")
+        pasta.steer(tiny_llama(num_layers=2, hidden=12, heads=3), wordlevel_tokenizer())
+        return pasta
+
+    def test_constructor_substrings_generate_without_runtime_kwargs(self):
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        pasta = PASTA(substrings=["cat sat"], head_config={0: [0]}, alpha=2.0, scale_position="include")
+        pipeline = SteeringPipeline(controls=[pasta], model=model, tokenizer=tokenizer)
+        pipeline.steer()
+        out = pipeline.generate(
+            input_ids=tokenizer("the cat sat on mat", return_tensors="pt").input_ids, max_new_tokens=3,
+        )
+        assert out.size(1) >= 1
+
+    def test_runtime_substrings_override_the_constructor(self):
+        pasta = self._pasta(["cat sat"])
+        assert self._ranges(pasta, None) == self._ranges(self._pasta(), {"substrings": ["cat sat"]})
+        assert self._ranges(pasta, {"substrings": ["mat"]}) != self._ranges(pasta, None)
+
+    def test_no_substrings_raises(self):
+        with pytest.raises(ValueError, match="at construction or inside runtime_kwargs"):
+            self._ranges(self._pasta(), None)
+
+
 class TestPerItemSeedScope:
     """Under a seed with `seed_scope="item"`, each row's hooks receive that row's substring group."""
 
