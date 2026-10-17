@@ -16,9 +16,6 @@
         show_symbol_type_toc: true
         filters:
           - "!^_"
-          - "!apotrainer"
-          - "!dpotrainer"
-          - "!sfttrainer"
           - "!.*Args$"
           - "!^registry"
           - "!^STEERING_METHOD"
