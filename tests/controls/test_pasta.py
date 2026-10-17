@@ -426,6 +426,37 @@ class TestProfiledPASTAThroughPipeline:
         assert out.size(1) >= 1
 
 
+class TestHeadProfileBatchLayout:
+    """Profiling batches are left-padded whatever the tokenizer's `padding_side`, so the shared
+    hook's spans and the per-item prompts share one coordinate system."""
+
+    def _batch(self, padding_side: str):
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        tokenizer.padding_side = padding_side
+        pasta = PASTA(head_config={0: [0]}, alpha=100.0, scale_position="include")
+        pasta.steer(model, tokenizer)
+        profile = HeadProfile(
+            rows=[
+                {"input": "the cat sat on mat", "substrings": ["cat sat"]},
+                {"input": "dog ran", "substrings": ["dog"]},
+            ],
+            scorer=contains_target, alpha=100.0, num_heads=1, layers=[0], batch_size=2,
+        )
+        (batch,) = profile._prepare_batches(pasta, tokenizer, torch.device("cpu"))
+        return batch, tokenizer.pad_token_id
+
+    def test_right_padding_tokenizer_yields_left_padded_rows_and_spans(self):
+        left, pad_token_id = self._batch("left")
+        right, _ = self._batch("right")
+        assert torch.equal(right.input_ids, left.input_ids)
+        assert torch.equal(right.attention_mask, left.attention_mask)
+        assert [ranges.tolist() for ranges in right.token_ranges] == [ranges.tolist() for ranges in left.token_ranges]
+        # the shorter row's pads lead the row
+        assert right.attention_mask[1].tolist() == [0, 0, 0, 1, 1, 1]
+        assert right.input_ids[1, :3].tolist() == [pad_token_id] * 3
+
+
 class TestHeadProfileBatchSize:
     """`batch_size` changes dispatch granularity only: the rollout accounting and the resolved
     profile are the same, and the number of `model.generate` calls scales down with the batch."""

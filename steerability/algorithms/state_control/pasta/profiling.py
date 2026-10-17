@@ -44,6 +44,7 @@ from steerability.algorithms.core.utils.generation import (
     resolve_text_prompt,
 )
 from steerability.utils.rendering import has_chat_template
+from steerability.utils.tokenization import to_left_pad
 
 if TYPE_CHECKING:
     from steerability.algorithms.core.execution.backend import SteeringSession
@@ -453,6 +454,7 @@ class HeadProfile:
                 input_controls=[], tokenizer=tokenizer, device=device,
                 runtime_kwargs={}, message_handled=message_handled, warnings_state=warnings_state,
             )
+            input_ids, attention_mask = to_left_pad(input_ids, attention_mask)
             substrings = [list(row["substrings"]) for row in chunk]
             token_ranges, input_len = control.locate_spans(input_ids, substrings)
             batches.append(_ProfileBatch(input_ids, attention_mask, token_ranges, input_len))
