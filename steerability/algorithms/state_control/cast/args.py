@@ -35,6 +35,11 @@ class CASTArgs(BaseArgs):
 
     Layer indices are checked against the model in `steer()`.
 
+    A configuration without a condition (no condition vector, data, layers, or threshold) steers
+    every prompt. A partial condition point raises `ValueError`. The condition layers and the
+    threshold are given together, and a `condition_vector` without condition layers requires
+    `condition_data` and `search.auto_find=True` for the condition point search.
+
     Attributes:
         behavior_vector: Precomputed behavior steering vector.
         behavior_data: Contrastive pairs for fitting the behavior vector. A dict is converted to
@@ -244,31 +249,29 @@ class CASTArgs(BaseArgs):
         elif self.behavior_vector is None and self.behavior_data is None:
             raise ValueError("Provide behavior_vector, behavior_data, or behavior_transform.")
 
-        # if condition vector is given, condition layers should also be given
-        # (or search.auto_find should be True)
-        if self.condition_vector is not None and self.condition_layer_ids is None and not self.search.auto_find:
+        # a partial condition point must fail rather than degrade to unconditional steering
+        if self.condition_layer_ids is not None and self.condition_vector_threshold is None:
             raise ValueError(
-                "When condition_vector is provided without condition_layer_ids, "
-                "search.auto_find must be True."
+                "condition_layer_ids given without condition_vector_threshold; provide a threshold, "
+                "or drop condition_layer_ids and search the condition point from condition_data."
             )
-
-        # a partial manual condition point must fail rather than degrade to unconditional steering
-        if not self.search.auto_find:
-            if self.condition_layer_ids is not None and self.condition_vector_threshold is None:
-                raise ValueError(
-                    "condition_layer_ids given without condition_vector_threshold; provide a "
-                    "threshold or enable search.auto_find."
-                )
-            if self.condition_vector_threshold is not None and self.condition_layer_ids is None:
-                raise ValueError(
-                    "condition_vector_threshold given without condition_layer_ids; provide "
-                    "condition layers or enable search.auto_find."
-                )
-            if self.condition_data is not None and self.condition_layer_ids is None:
-                raise ValueError(
-                    "condition_data given with search.auto_find=False and no manual condition point; "
-                    "enable search.auto_find or provide condition_layer_ids and a threshold."
-                )
+        if self.condition_vector_threshold is not None and self.condition_layer_ids is None:
+            raise ValueError(
+                "condition_vector_threshold given without condition_layer_ids; provide condition "
+                "layers, or drop the threshold and search the condition point from condition_data."
+            )
+        if self.condition_vector is not None and self.condition_layer_ids is None and (
+            not self.search.auto_find or self.condition_data is None
+        ):
+            raise ValueError(
+                "condition_vector given without condition_layer_ids; provide condition layers and a "
+                "threshold (or a condition_point), or condition_data with search.auto_find=True."
+            )
+        if not self.search.auto_find and self.condition_data is not None and self.condition_layer_ids is None:
+            raise ValueError(
+                "condition_data given with search.auto_find=False and no manual condition point; "
+                "enable search.auto_find or provide condition_layer_ids and a threshold."
+            )
 
         # token scope cross-checks
         if self.token_scope == "last_k" and (self.last_k is None or self.last_k < 1):

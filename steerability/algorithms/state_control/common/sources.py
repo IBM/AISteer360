@@ -423,8 +423,10 @@ class ConditionPointSearch:
     Occupies an `Intervention`'s gate slot. `resolve_gate` fits (or clones) the condition
     vector, resolves the condition point by grid search when `search` enables it and no manual
     layers are given, and assembles the gate: projected-cosine evidence over the condition
-    directions at the resolved layers, decided by a per-layer threshold rule. An unconditional
-    configuration (no condition vector or no resolved point) resolves to None.
+    directions at the resolved layers, decided by a per-layer threshold rule. A configuration
+    without a condition (no condition vector or data) resolves to None, and a partial one raises
+    `ValueError`. The manual `layer_ids` and `threshold` are given together, and a condition
+    without them requires `condition_data` and `search.auto_find=True` for the search.
 
     The projected-cosine readout and the per-layer threshold rule both have wire forms, so an
     intervention gated this way lowers to intervention-capable backends
@@ -437,7 +439,7 @@ class ConditionPointSearch:
         condition_fit: Fit configuration for the condition vector.
         search: Condition point search configuration.
         layer_ids: Manual condition layers; disables the search when set.
-        threshold: Manual gate threshold, required with `layer_ids`.
+        threshold: Manual gate threshold, given together with `layer_ids`.
         comparator: Gate comparator for the manual point (`"ge"` opens when score >= threshold,
             `"le"` when score <= threshold).
         comparison_mode: Runtime token aggregation for condition scoring.
@@ -468,6 +470,18 @@ class ConditionPointSearch:
             self.condition_data = as_contrastive_pairs(self.condition_data)
         if self.comparator not in ("ge", "le"):
             raise ValueError(f"comparator must be 'ge' or 'le'; got {self.comparator!r}.")
+        if (self.layer_ids is None) != (self.threshold is None):
+            raise ValueError(
+                "layer_ids and threshold must be given together; a partial condition point would "
+                "resolve to unconditional steering."
+            )
+        condition_supplied = self.condition_vector is not None or self.condition_data is not None
+        searchable = self.search.auto_find and self.condition_data is not None
+        if condition_supplied and self.layer_ids is None and not searchable:
+            raise ValueError(
+                "A condition was supplied without a condition point; give layer_ids and threshold, "
+                "or condition_data with search.auto_find=True."
+            )
 
     def resolve_gate(
         self,
@@ -487,11 +501,11 @@ class ConditionPointSearch:
             session: Optional `SteeringSession` for capture-backed fitting and calibration.
 
         Returns:
-            The gate, or None for unconditional configurations.
+            The gate, or None for a configuration without a condition.
 
         Raises:
-            ValueError: If a manual threshold is set without a condition vector, or a condition
-                layer lacks a direction.
+            ValueError: If a manual point is set without a condition vector, a condition is
+                supplied but no condition point resolves, or a condition layer lacks a direction.
         """
         from steerability.algorithms.state_control.common.gating import (
             Evidence,
@@ -541,6 +555,11 @@ class ConditionPointSearch:
         if conditional and condition_vec is None:
             raise ValueError("Conditional gating requires a condition vector.")
         if not conditional:
+            if condition_supplied:
+                raise ValueError(
+                    "A condition was supplied but no condition point resolved; give layer_ids and "
+                    "threshold together, or enable search.auto_find with condition_data."
+                )
             self.resolved_point = None
             return None
 
