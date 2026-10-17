@@ -252,3 +252,56 @@ class TestFrozenFormRoundTrip:
         rebuilt.model, rebuilt.tokenizer = model, tokenizer
         rebuilt.steer()  # loads the frozen probe via wv_path, no refit
         assert torch.allclose(frozen.probe.weights[1], sasa.probe.weights[1])
+
+
+class TestFitDeclarationAndProbeIdentity:
+    DATA = {
+        "pos": ["the cat sat", "the dog ran", "the cat ran on"],
+        "neg": ["mat on fast", "span attention", "fast mat sat"],
+    }
+
+    def _saved_probe(self, tmp_path, model):
+        sasa = SASA(beta=1.0, gen_wv_data=self.DATA)
+        SteeringPipeline(controls=[sasa], model=model, tokenizer=wordlevel_tokenizer()).steer()
+        path = tmp_path / "probe"
+        sasa.probe.save(path)
+        return str(path)
+
+    def test_steer_fits_declares_the_fitted_probe_only(self, tmp_path):
+        assert SASA(beta=1.0, gen_wv_data=self.DATA).steer_fits() == (("ProbeFitSpec", "calibrated"),)
+        path = self._saved_probe(tmp_path, tiny_llama(num_layers=2, hidden=16, heads=2, vocab=VOCAB))
+        assert SASA(beta=1.0, wv_path=path).steer_fits() == ()
+
+    def test_probe_from_another_model_raises_unless_allowed(self, tmp_path):
+        torch.manual_seed(0)
+        path = self._saved_probe(tmp_path, tiny_llama(num_layers=2, hidden=16, heads=2, vocab=VOCAB))
+        torch.manual_seed(1)
+        other = tiny_llama(num_layers=2, hidden=16, heads=2, vocab=VOCAB)
+        with pytest.raises(ValueError, match="different model"):
+            SteeringPipeline(controls=[SASA(beta=1.0, wv_path=path)], model=other,
+                             tokenizer=wordlevel_tokenizer()).steer()
+        allowed = SASA(beta=1.0, wv_path=path, allow_model_mismatch=True)
+        SteeringPipeline(controls=[allowed], model=other, tokenizer=wordlevel_tokenizer()).steer()
+        assert allowed.probe.layer_ids == [1]
+
+    def test_probe_of_another_model_type_raises(self, tmp_path):
+        from steerability.algorithms.core.internals.probes.probe import Probe
+
+        model = tiny_llama(num_layers=2, hidden=16, heads=2, vocab=VOCAB)
+        path = tmp_path / "probe"
+        Probe(
+            model_type="gpt2", location="layer_output", pooling="last",
+            layer_ids=[1], weights={1: torch.randn(16)}, bias=0.0,
+        ).save(path)
+        with pytest.raises(ValueError, match="model_type 'gpt2'"):
+            SteeringPipeline(controls=[SASA(beta=1.0, wv_path=str(path))], model=model,
+                             tokenizer=wordlevel_tokenizer()).steer()
+
+    def test_allow_model_mismatch_survives_freeze(self, tmp_path):
+        model = tiny_llama(num_layers=2, hidden=16, heads=2, vocab=VOCAB)
+        sasa = SASA(beta=1.0, gen_wv_data=self.DATA, allow_model_mismatch=True)
+        pipeline = SteeringPipeline(controls=[sasa], model=model, tokenizer=wordlevel_tokenizer(),
+                                    model_name_or_path="tiny")
+        pipeline.steer()
+        rebuilt = SPipe.load(pipeline.to_spipe().save(tmp_path / "sasa.spipe")).pipeline()
+        assert rebuilt.output_controls[0].allow_model_mismatch is True

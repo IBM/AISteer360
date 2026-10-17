@@ -873,7 +873,7 @@ class TestSASAWvPathCompatibility:
 
         model, tokenizer = self._model_and_tokenizer()
         probe = Probe(
-            model_type="test", location="layer_output", pooling="last",
+            model_type="llama", location="layer_output", pooling="last",
             layer_ids=[1], weights={1: torch.randn(16)}, bias=0.25,
         )
         save_dir = tmp_path / "probe_dir"
@@ -937,7 +937,7 @@ class TestSASAWvPathCompatibility:
         ]
         for index, (fields, match) in enumerate(cases):
             probe = Probe(
-                model_type="test", bias=0.0,
+                model_type="llama", bias=0.0,
                 weights={lid: torch.randn(16) for lid in fields["layer_ids"]}, **fields,
             )
             save_dir = tmp_path / f"probe_{index}"

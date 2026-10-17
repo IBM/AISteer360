@@ -10,6 +10,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from steerability.algorithms.core.execution.access import ModelAccess
 from steerability.algorithms.core.internals.data import ContrastivePairs, LabeledExamples
+from steerability.algorithms.core.internals.fingerprint import model_fingerprint
 from steerability.algorithms.core.internals.model_layout import resolve_model_layout
 from steerability.algorithms.core.internals.probes.fitting import ProbeFitSpec, fit_probe
 from steerability.algorithms.core.internals.probes.probe import Probe
@@ -118,6 +119,13 @@ class SASA(OutputControl):
         per-step value forwards (the generate phase is in-process)."""
         return ModelAccess.MODULE
 
+    def steer_fits(self) -> tuple[tuple[str, str], ...]:
+        """One `("ProbeFitSpec", "calibrated")` fit when the probe is fitted from `gen_wv_data`, and none
+        when a saved probe is loaded from `wv_path`."""
+        if getattr(self, "wv_path", None):
+            return ()
+        return (("ProbeFitSpec", "calibrated"),)
+
     def export_state(self) -> dict:
         """The fitted value-subspace probe under the `"probe"` key (after `steer()`)."""
         return {"probe": self.probe} if self.probe is not None else {}
@@ -125,7 +133,7 @@ class SASA(OutputControl):
     def frozen_form(self, state: dict) -> tuple[str, dict]:
         """A same-class frozen form: `wv_path` points at the exported probe directory and the
         fit-only `gen_wv_*` fields are dropped. The decode-time settings (`candidate_policy`,
-        `top_p`, `top_k`, `max_candidates`) are carried forward."""
+        `top_p`, `top_k`, `max_candidates`) and `allow_model_mismatch` are carried forward."""
         from steerability.spipe.codec import AsPath
 
         return "output_control/sasa", {
@@ -136,6 +144,7 @@ class SASA(OutputControl):
             "top_p": self.top_p,
             "top_k": self.top_k,
             "max_candidates": self.max_candidates,
+            "allow_model_mismatch": self.allow_model_mismatch,
         }
 
     def fit_identity(self):
@@ -165,6 +174,11 @@ class SASA(OutputControl):
         calibration). The probe's recorded space is validated against the boundary the margins are
         evaluated at.
 
+        A loaded probe whose recorded `model_fingerprint` differs from the model's raises
+        `ValueError`, and so does a recorded `model_type` that differs from the model's. A probe
+        that records neither (a `.probe` file or a legacy checkpoint) passes, and
+        `allow_model_mismatch=True` disables both checks.
+
         Args:
             model (PreTrainedModel): The base language model to be steered.
             tokenizer (PreTrainedTokenizerBase | None): Tokenizer for the base model.
@@ -173,9 +187,10 @@ class SASA(OutputControl):
             PreTrainedModel: The input model (unchanged).
 
         Raises:
-            ValueError: If neither `wv_path` nor `gen_wv_data` is set, or a loaded probe's
-                `location`, `pooling`, or layer ids do not match last-token features at the raw
-                output boundary of the final decoder layer.
+            ValueError: If neither `wv_path` nor `gen_wv_data` is set, a loaded probe records a
+                different model (without `allow_model_mismatch`), or a loaded probe's `location`,
+                `pooling`, or layer ids do not match last-token features at the raw output
+                boundary of the final decoder layer.
         """
         self.model = model
         tokenizer = tokenizer or getattr(model, "tokenizer", None)
@@ -195,6 +210,8 @@ class SASA(OutputControl):
                 self.probe = Probe.load(self.wv_path)
             else:
                 self.probe = load_single_file_probe(self.wv_path, layer_id=final_layer)
+            if not self.allow_model_mismatch:
+                self._check_probe_model(model)
         else:
             if self.gen_wv_data is None:
                 raise ValueError("SASA.steer() requires either gen_wv_data (to fit a probe) or wv_path (to load one).")
@@ -218,6 +235,22 @@ class SASA(OutputControl):
             )
         _validate_probe_space(self.probe, final_layer)
         return model
+
+    def _check_probe_model(self, model: PreTrainedModel) -> None:
+        """Raise when the loaded probe records a model fingerprint or model type other than the model's."""
+        live_fingerprint = model_fingerprint(model)
+        recorded_fingerprint = self.probe.meta.get("model_fingerprint")
+        if recorded_fingerprint not in (None, live_fingerprint):
+            raise ValueError(
+                f"SASA probe was fitted on a different model (fingerprint {recorded_fingerprint!r} vs "
+                f"{live_fingerprint!r}); refit the probe on this model, or set allow_model_mismatch=True."
+            )
+        live_model_type = getattr(model.config, "model_type", "unknown")
+        if self.probe.model_type not in ("unknown", live_model_type):
+            raise ValueError(
+                f"SASA probe was fitted on model_type {self.probe.model_type!r} but the pipeline's model is "
+                f"{live_model_type!r}; refit the probe on this model, or set allow_model_mismatch=True."
+            )
 
     def _resolve_fit_data(self) -> LabeledExamples | ContrastivePairs:
         """Normalize `gen_wv_data` into a fit-data container and truncate each class to `gen_wv_length`.
