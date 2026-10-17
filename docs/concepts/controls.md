@@ -261,7 +261,7 @@ and the following decoding drivers:
     - *Backends*: HF, vLLM.
 - `RoutedDecoding` ([API reference](../reference/algorithms/output_control/routed_decoding.md), [notebook](../examples/notebooks/recipes/routed_decoding/routed_decoding.ipynb))
     - *Description*: a decoding driver that routes each row to a response plan via a `Router` over a [`ProbeSet`](probes.md)'s readings, and executes the matched plan (canned response, disclaimer prefix, or plain generation). It sits beside `PhasedDecoding` and `SearchDecoding`.
-    - *Backends*: HF, offline vLLM (the probe pass needs hidden-state capture, which serve does not return).
+    - *Backends*: HF, offline vLLM with the hook plugin (the probe pass needs hidden-state capture, which serve does not return).
 - `SearchDecoding` ([API reference](../reference/algorithms/output_control/search_decoding.md), [notebook](../examples/notebooks/algorithms/generics/search_decoding.ipynb))
     - *Description*: the config-first generic over the segment shape (propose → score → keep → iterate, with best-of-N defaults). Best-of-N, self-consistency, blockwise controlled decoding, and DeAL are assignments of its config.
     - *Backends*: HF, vLLM with `propose_mode="sample"` (beam proposals are HF-only).
