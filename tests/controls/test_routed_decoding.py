@@ -5,12 +5,16 @@ with large-magnitude biases force deterministic routing (a huge positive bias al
 huge negative one never does); the mixed-batch test derives per-row separating biases from a
 probe run. Empty probe `meta` keeps the fingerprint checks dormant except where a test arms them.
 """
+import warnings
+
 import pytest
 import torch
 
+from steerability.algorithms.core.execution.access import ModelAccess
 from steerability.algorithms.core.internals.data import ContrastivePairs
 from steerability.algorithms.core.internals.fingerprint import model_fingerprint
 from steerability.algorithms.core.internals.probes import Probe, ProbeFitSpec, ProbeSet, ProbeSetFit
+from steerability.algorithms.core.internals.stats import StatsSpec
 from steerability.algorithms.core.steering_pipeline import SteeringPipeline
 from steerability.algorithms.core.utils.auxiliary_pass import current_auxiliary_pass
 from steerability.algorithms.output_control.common.drivers.phased import Fixed
@@ -343,6 +347,25 @@ class TestValidation:
         pipeline, router, model, _ = _make_pipeline(recipe, rules)
         assert isinstance(router.probes, ProbeSet)
         assert router.probes.names == ("topic",)
+        assert router.probes.probes["topic"].meta["model_fingerprint"] == model_fingerprint(model)
+        pipeline.generate(input_ids=torch.tensor([[3, 4, 5]]), max_new_tokens=1)
+        assert router.latest_routes[0] in ("r", "default")
+
+    def test_deferred_recipe_with_stats_spec_fits_through_session_capture(self):
+        recipe = ProbeSetFit(
+            data=self.DATA,
+            spec=ProbeFitSpec(method="lda", candidate_layers=[1]),
+            stats=StatsSpec(texts=["the cat sat on mat", "dog ran fast", "the dog sat", "cat ran"]),
+        )
+        rules = Router(
+            routes=[Route("r", when=P("topic"), action=respond("the mat"))],
+            default_action=generate(),
+        )
+        assert RoutedDecoding(probes=recipe, rules=rules).steer_access() is ModelAccess.CAPTURE
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)  # the low-sample stats warning
+            pipeline, router, model, _ = _make_pipeline(recipe, rules)
+        assert isinstance(router.probes, ProbeSet)
         assert router.probes.probes["topic"].meta["model_fingerprint"] == model_fingerprint(model)
         pipeline.generate(input_ids=torch.tensor([[3, 4, 5]]), max_new_tokens=1)
         assert router.latest_routes[0] in ("r", "default")

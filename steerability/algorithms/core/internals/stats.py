@@ -17,7 +17,7 @@ from steerability.algorithms.core.internals.capture import (
     layerwise_tokenwise_hidden,
 )
 from steerability.algorithms.core.internals.encoding import tokenize_texts
-from steerability.algorithms.core.internals.fingerprint import model_fingerprint
+from steerability.algorithms.core.internals.fingerprint import model_fingerprint, session_artifact_identity
 from steerability.algorithms.core.internals.pooling import get_last_token_positions, masked_mean, select_at_positions
 from steerability.algorithms.core.utils.auxiliary_pass import auxiliary_pass
 from steerability.utils.rendering import PromptFormat, has_chat_template, render_for_model
@@ -93,7 +93,8 @@ class ActivationStats:
 
     Attributes:
         model_type: HuggingFace `model_type` of the model the statistics were estimated on.
-        model_fingerprint: Identity digest of that model, recorded at estimate time.
+        model_fingerprint: Identity digest of that model, recorded at estimate time, or None when
+            the statistics were captured through a session whose layout records no fingerprint.
         location: Residual-stream boundary the statistics were measured at.
         count: Number of pooled samples accumulated.
         mean: Per-layer mean, `[H]` float32.
@@ -102,7 +103,7 @@ class ActivationStats:
     """
 
     model_type: str
-    model_fingerprint: str
+    model_fingerprint: str | None
     location: str
     count: int
     mean: dict[int, torch.Tensor]
@@ -112,7 +113,7 @@ class ActivationStats:
     @classmethod
     def estimate(
         cls,
-        model: PreTrainedModel,
+        model: PreTrainedModel | None,
         tokenizer: PreTrainedTokenizerBase,
         texts: Sequence[str],
         *,
@@ -136,7 +137,7 @@ class ActivationStats:
         deployed).
 
         Args:
-            model: Model to capture activations from.
+            model: Model to capture activations from, or None to capture through `session`.
             tokenizer: Tokenizer for encoding `texts`.
             texts: Texts whose activations define the ambient distribution.
             layer_ids: Layers to estimate (0-based). None selects all decoder layers.
@@ -147,9 +148,12 @@ class ActivationStats:
                 `pooling="tokens"`; ignored for `"mean"` and `"last"`.
             batch_size: Batch size for the capture forward passes.
             min_samples: Pooled-sample count below which a low-sample warning is emitted.
+            session: A `SteeringSession` serving hidden-state capture when `model` is None. The
+                model type and fingerprint are then read from the session layout.
 
         Returns:
-            An `ActivationStats` with float32 CPU tensors and the model's fingerprint recorded.
+            An `ActivationStats` with float32 CPU tensors and the model's fingerprint recorded
+            (None when `model` is None and the session layout records no fingerprint).
 
         Raises:
             ValueError: If `texts` is empty, `pooling` is unsupported, `exclude_first_n` is
@@ -168,9 +172,14 @@ class ActivationStats:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1.")
 
-        device = next(model.parameters()).device
-        model_type = getattr(model.config, "model_type", "unknown")
-        fingerprint = model_fingerprint(model)
+        if model is not None:
+            device = next(model.parameters()).device
+            model_type = getattr(model.config, "model_type", "unknown")
+            fingerprint = model_fingerprint(model)
+        else:
+            device = torch.device("cpu")
+            model_type, session_meta = session_artifact_identity(session)
+            fingerprint = session_meta.get("model_fingerprint")
 
         target_layers: list[int] | None = None
         count = 0

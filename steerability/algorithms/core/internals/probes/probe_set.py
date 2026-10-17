@@ -94,8 +94,10 @@ class ProbeSetFit:
         """Fit the recipe on `model`, resolving a `StatsSpec` on it first.
 
         Args:
-            model: Model the probes are fitted on.
+            model: Model the probes are fitted on, or None to capture through `session`.
             tokenizer: Tokenizer for rendering and encoding the pairs.
+            session: A `SteeringSession` serving hidden-state capture when `model` is None, used
+                by both the `StatsSpec` estimate and the probe fits.
 
         Returns:
             The fitted `ProbeSet`.

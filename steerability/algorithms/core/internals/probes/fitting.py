@@ -346,7 +346,8 @@ def fit_probe(
             and `"fisher"` directions.
         calibration_data: Optional data the operating point is calibrated on.
         allow_model_mismatch: When True, a `stats` artifact estimated on a different model is
-            accepted instead of raising.
+            accepted instead of raising. A `stats` artifact that records no model fingerprint is
+            never treated as a mismatch.
         batch_size: Chunk size for feature extraction.
         max_length: Tokenization truncation bound for feature extraction. None truncates to the
             tokenizer's model maximum length.
@@ -378,6 +379,7 @@ def fit_probe(
     if (
         stats is not None
         and fingerprint is not None
+        and stats.model_fingerprint is not None
         and stats.model_fingerprint != fingerprint
         and not allow_model_mismatch
     ):
