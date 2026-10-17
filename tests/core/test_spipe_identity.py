@@ -79,3 +79,25 @@ def test_fit_digest_sensitive_to_data_edit(frozen_caa_dir):
     report = loaded.verify()
     assert not report.ok
     assert any("digest" in message for message in report.errors)
+
+
+def test_recorded_revision_is_applied_on_load(tmp_path):
+    pipeline = SteeringPipeline(
+        model_name_or_path=TINY_MODEL, controls=make_controls(), hf_model_kwargs={"revision": "abc"},
+    )
+    saved = pipeline.to_spipe(freeze=False).save(tmp_path / "pinned.spipe")
+    loaded = SPipe.load(saved)
+    assert loaded.manifest["model"]["revision"] == "abc"
+
+    assert loaded.pipeline().hf_model_kwargs["revision"] == "abc"
+    explicit = loaded.pipeline(hf_model_kwargs={"revision": "def", "torch_dtype": "float32"})
+    assert explicit.hf_model_kwargs == {"revision": "def", "torch_dtype": "float32"}
+    merged = loaded.pipeline(hf_model_kwargs={"torch_dtype": "float32"})
+    assert merged.hf_model_kwargs == {"torch_dtype": "float32", "revision": "abc"}
+
+
+def test_unpinned_bundle_adds_no_revision(tmp_path):
+    saved = SteeringPipeline(model_name_or_path=TINY_MODEL, controls=make_controls()).to_spipe(freeze=False).save(
+        tmp_path / "unpinned.spipe"
+    )
+    assert "revision" not in SPipe.load(saved).pipeline().hf_model_kwargs

@@ -38,7 +38,9 @@ response = pipeline.generate(...)
 
 `to_spipe(freeze=False)` forces a recipe-only bundle from a steered pipeline, and `spipe.thaw()` turns a frozen bundle
 back into its recipe. `save(..., artifacts="thin")` writes the manifest without the artifact payloads. A thin bundle
-loads against an external store via `SPipe.load(path, artifact_store=...)`.
+loads against an external store via `SPipe.load(path, artifact_store=...)`. A model revision pinned through
+`hf_model_kwargs["revision"]` is recorded in the manifest, and `spipe.pipeline()` loads that revision unless the
+caller's `hf_model_kwargs` sets one.
 
 ### Freezing without a model
 

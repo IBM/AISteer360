@@ -413,7 +413,8 @@ manifest only, with artifact ids resolved at load through `artifact_store=`. `SP
 
 `spipe.pipeline()` reconstructs a `SteeringPipeline`. Frozen entries instantiate from their resolution, so `steer()` is
 cheap and model-free; `prefer="recipe"` forces re-fits instead. Backend, device, dtype, and `hf_model_kwargs` stay the
-caller's. `verify()` is the model-free report and `thaw()` drops the resolution. `allow_code=True` at load permits
+caller's, except that a model revision recorded at save time fills `hf_model_kwargs["revision"]` when the caller sets
+none. `verify()` is the model-free report and `thaw()` drops the resolution. `allow_code=True` at load permits
 `$ref` callables, `$dc` dataclasses outside `codec.DECODABLE_DATACLASSES` (the toolkit dataclasses whose construction
 only validates), and tree artifacts whose payload contains pickle-bearing files (pickle-backed memories, adapter or
 checkpoint trees with pickled weights). Toolkit enums always decode, and `$dc` constructs only dataclasses and enums.

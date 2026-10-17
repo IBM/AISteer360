@@ -824,9 +824,10 @@ class SPipe:
         section. With `prefer="recipe"`, every entry is instantiated from its recipe args, and
         `steer()` runs the fits again. The spipe provides the model reference and the controls.
         The backend and the model loading options (e.g., `device_map` and `hf_model_kwargs`)
-        come from the arguments of this call. Under `prefer="frozen"`, the staleness check runs
-        for the entries that have not been checked, unless the spipe was loaded with
-        `allow_stale=True`.
+        come from the arguments of this call. A model revision recorded in the manifest is
+        added to `hf_model_kwargs` as `revision` unless the call's `hf_model_kwargs` sets one.
+        Under `prefer="frozen"`, the staleness check runs for the entries that have not been
+        checked, unless the spipe was loaded with `allow_stale=True`.
 
         Args:
             backend: The backend, forwarded to the `SteeringPipeline` constructor.
@@ -864,6 +865,12 @@ class SPipe:
         ]
 
         from steerability.algorithms.core.steering_pipeline import SteeringPipeline
+
+        revision = self._manifest["model"].get("revision")
+        if revision is not None:
+            hf_model_kwargs = dict(pipeline_kwargs.get("hf_model_kwargs") or {})
+            hf_model_kwargs.setdefault("revision", revision)
+            pipeline_kwargs["hf_model_kwargs"] = hf_model_kwargs
 
         return SteeringPipeline(
             model_name_or_path=self._manifest["model"]["ref"],
