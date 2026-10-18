@@ -72,7 +72,7 @@ class TestSensitivity:
 
     @pytest.mark.parametrize("projection", ["q_proj", "v_proj"])
     def test_first_layer_attention_projection_edit_changes_digest(self, saved_model_dir, projection):
-        """Layer 0 holds the sampled instance of each attention projection kind."""
+        """Layer 0 contains the sampled instance of each attention projection kind."""
         model = LlamaForCausalLM.from_pretrained(saved_model_dir)
         before = model_fingerprint(model)
         weight = getattr(model.model.layers[0].self_attn, projection).weight
@@ -81,8 +81,8 @@ class TestSensitivity:
         assert model_fingerprint(model) != before
 
     def test_edit_outside_the_sampled_layer_of_a_kind_is_not_detected(self, saved_model_dir):
-        """The sample covers the first layer of each parameter kind, so an edit confined to a
-        later layer leaves the digest unchanged."""
+        """The sample covers the first layer of each parameter kind. An edit confined to a later
+        layer leaves the digest unchanged."""
         model = LlamaForCausalLM.from_pretrained(saved_model_dir)
         before = model_fingerprint(model)
         with torch.no_grad():

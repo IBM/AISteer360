@@ -161,9 +161,8 @@ class TestExtractionBoundary:
         assert loaded.meta["location"] == "layer_input"
 
     def test_unequal_pair_is_right_padded_with_attended_spaces(self):
-        """The shorter prompt is padded on the right with attended pad-fallback tokens (the word-level
-        tokenizer encodes no space token), independent of the tokenizer's padding side, and the
-        tokenizer is left unchanged."""
+        """The shorter prompt is right-padded with attended pad tokens (the word-level tokenizer
+        encodes no space token) for either tokenizer padding side. The tokenizer is not modified."""
         torch.manual_seed(0)
         model = tiny_llama(num_layers=LAYERS, hidden=HIDDEN, heads=HEADS)
         fits = {}

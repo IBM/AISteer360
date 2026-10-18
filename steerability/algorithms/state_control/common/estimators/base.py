@@ -14,7 +14,7 @@ class BaseEstimator(ABC, Generic[T]):
 
     The type parameter T is the artifact type (e.g., SteeringVector). The class attribute `access`
     declares the model access a fit needs. The default `ModelAccess.CAPTURE` covers estimators
-    that extract hidden states through `capture_hidden`, which runs on the live model or through a
+    that extract hidden states through `capture_hidden`, which runs on the loaded model or through a
     capture-capable session. An estimator that reads the module tree declares
     `ModelAccess.MODULE`.
 

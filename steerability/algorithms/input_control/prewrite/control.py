@@ -90,7 +90,7 @@ class PRewrite(InputControl):
     def export_state(self) -> dict:
         """The optimized instruction memory under the `"memory"` key (after `steer()`).
 
-        Returns nothing when the recipe already carries the memory (`memory=`), since the recipe
+        Returns nothing when the recipe already contains the memory (`memory=`), since the recipe
         is then its frozen form.
         """
         if self.args.memory is not None or self.memory is None:

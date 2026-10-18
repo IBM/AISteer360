@@ -162,7 +162,7 @@ class TRLMixin:
             pass
 
     def _resolved_output_dir(self) -> str:
-        """The configured output directory (`training_args["output_dir"]`, else `output_dir`).
+        """Return the configured output directory (`training_args["output_dir"]`, else `output_dir`).
 
         Without a configured directory, a temporary directory is created on the first call and
         returned on every later call of the same control.
@@ -175,7 +175,7 @@ class TRLMixin:
         return self._transient_output_dir
 
     def _config_kwargs(self, config_kwargs: dict[str, Any]) -> dict[str, Any]:
-        """A copy of `config_kwargs` whose `output_dir` is the resolved output directory."""
+        """Return a copy of `config_kwargs` whose `output_dir` is the resolved output directory."""
         return {**config_kwargs, "output_dir": self._resolved_output_dir()}
 
     def artifact_capability(self) -> Capability | None:

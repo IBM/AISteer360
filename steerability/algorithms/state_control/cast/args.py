@@ -37,8 +37,8 @@ class CASTArgs(BaseArgs):
 
     A configuration without a condition (no condition vector, data, layers, or threshold) steers
     every prompt. A partial condition point raises `ValueError`. The condition layers and the
-    threshold are given together, and a `condition_vector` without condition layers requires
-    `condition_data` and `search.auto_find=True` for the condition point search.
+    threshold must be given together. A `condition_vector` without condition layers requires
+    `condition_data` and `search.auto_find=True`, since the condition point is then searched.
 
     Attributes:
         behavior_vector: Precomputed behavior steering vector.

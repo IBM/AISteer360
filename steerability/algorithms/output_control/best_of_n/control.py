@@ -19,9 +19,9 @@ class BestOfN(SearchDriver):
     BestOfN is a decoding driver: a thin preset of the generic `SearchDriver`, mapping its args
     onto `(scorer, num_candidates=n, keep_k=1, max_iterations=1, propose_mode="sample")`. The
     segment is the call's `max_new_tokens`, which each `generate()` call must set (`decode()` raises
-    `ValueError` otherwise). Each of the `n` samples is a full rollout, so the composed
-    logits/stopping stacks steer every sample (a step-level control such as RAD applies to every
-    candidate). Pairing the scorer with `MajorityVoteScorer` recovers self-consistency (Wang et
+    `ValueError` otherwise). The composed logits processors and stopping criteria steer every
+    sample, since each of the `n` samples is a full rollout (a step-level control such as RAD
+    applies to every candidate). Pairing the scorer with `MajorityVoteScorer` recovers self-consistency (Wang et
     al., 2022); pairing it with `SampleSequenceScorer` gives scorer-guided reranking. The
     `reward_params` runtime override is honored and is per row (one mapping merged into the
     scorer's params).

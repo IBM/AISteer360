@@ -371,7 +371,7 @@ class SinglePairFit:
 
     Produces `[T, H]` directions per layer (the ActAdd extraction), captured at the layer-input
     boundary and recorded as `meta["location"] = "layer_input"`. The shorter prompt of the pair is
-    right-padded with attended space tokens. Fitting requires a live model. The fitted master is
+    right-padded with attended space tokens. Fitting requires a loaded model. The fitted master is
     memoized per model; every `resolve` returns an independent clone.
 
     Attributes:
@@ -437,9 +437,10 @@ class ConditionPointSearch:
     vector, resolves the condition point by grid search when `search` enables it and no manual
     layers are given, and assembles the gate: projected-cosine evidence over the condition
     directions at the resolved layers, decided by a per-layer threshold rule. A configuration
-    without a condition (no condition vector or data) resolves to None, and a partial one raises
-    `ValueError`. The manual `layer_ids` and `threshold` are given together, and a condition
-    without them requires `condition_data` and `search.auto_find=True` for the search.
+    without a condition (no condition vector or data) resolves to None, and a partial
+    configuration raises `ValueError`. The manual `layer_ids` and `threshold` must be given
+    together. A condition without them requires `condition_data` and `search.auto_find=True`,
+    since the condition point is then searched.
 
     The projected-cosine readout and the per-layer threshold rule both have wire forms, so an
     intervention gated this way lowers to intervention-capable backends

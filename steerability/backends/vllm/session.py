@@ -234,8 +234,8 @@ class VLLMOfflineSession(_RequestSessionBase):
                 "Hidden-state capture requires the vLLM-Hook plugin; declare hook_plugin=True "
                 "on the vllm backend spec, or run capture on the huggingface backend."
             )
-        # the client's validator and assembly expect full prompt coverage and pool the last real
-        # position themselves, so every wire capture requests all_tokens
+        # every wire capture requests all_tokens, since the client's validator and assembly expect
+        # full prompt coverage and pool the last real position themselves
         wire_mode = "all_tokens" if mode == "last_token" else mode
         capture_kinds = backend.capture_kinds
         required = CaptureKinds(

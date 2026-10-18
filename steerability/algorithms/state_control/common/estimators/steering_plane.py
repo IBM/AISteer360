@@ -60,8 +60,7 @@ class SteeringPlaneEstimator(BaseEstimator[SteeringVector]):
             spec: Training configuration (method, accumulate, batch_size, prompt_format).
             on_progress: Optional `(completed, total)` callback forwarded to the underlying
                 mean-difference extraction.
-            session: A `SteeringSession` serving hidden-state capture when no live model is
-                available.
+            session: A `SteeringSession` serving hidden-state capture when `model` is None.
 
         Returns:
             SteeringVector with a `[2, H]` orthonormal basis per usable layer, recording

@@ -26,9 +26,9 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
     preserving the full positional structure of the contrast.
 
     The prompts are tokenized without special tokens, and the shorter prompt is right-padded
-    with attended space tokens (the tokenizer's pad token when `" "` encodes to no token), so
-    row `t` of the result is the difference at content token `t` of the pair. The tokenizer is
-    not modified. The result is a `[T, H]` direction matrix per layer, where `T` is the token
+    with attended space tokens (the tokenizer's pad token when `" "` encodes to no token). Row
+    `t` of the result is the difference at content token `t` of the pair. The tokenizer is not
+    modified. The result is a `[T, H]` direction matrix per layer, where `T` is the token
     length of the longer prompt, and the artifact records `meta["location"] = "layer_input"`.
     """
 

@@ -104,7 +104,7 @@ class GEPA(InputControl):
     def export_state(self) -> dict:
         """The optimized instruction memory under the `"memory"` key (after `steer()`).
 
-        Returns nothing when the recipe already carries the memory (`memory=`), since the recipe
+        Returns nothing when the recipe already contains the memory (`memory=`), since the recipe
         is then its frozen form.
         """
         if self.args.memory is not None or self.memory is None:
@@ -242,7 +242,7 @@ class GEPA(InputControl):
         self._formatter = SystemPromptFormatter(mode="prepend")
 
     def _resolve_reflection(self, task_lm, tokenizer):
-        """The reflection LLM and its tokenizer.
+        """Return the reflection LLM and its tokenizer.
 
         A loaded `reflection_lm` is used with `reflection_tokenizer`. A
         `reflection_lm_name_or_path` is loaded with `AutoModelForCausalLM` (`device_map="auto"`)

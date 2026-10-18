@@ -216,10 +216,10 @@ class ScopedSession:
     def in_process(self) -> bool:
         """True when the venue session serves an in-process model.
 
-        Read from the layout's `fingerprint_grade` (`"weights"` in process, `"config"` on an
-        engine backend). When the venue has no layout yet (an in-process session before any
-        model is loaded, e.g., for a structural control that loads the first model), it is True
-        for a session type that exposes `model`.
+        The value is read from the layout's `fingerprint_grade` (`"weights"` in process,
+        `"config"` on an engine backend). Before any model is loaded (e.g., for a structural
+        control that loads the first model), the venue has no layout, and the value is True for a
+        session type that exposes `model`.
         """
         try:
             layout = self.inner.layout

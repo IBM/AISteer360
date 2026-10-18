@@ -133,7 +133,7 @@ class SASA(OutputControl):
     def frozen_form(self, state: dict) -> tuple[str, dict]:
         """A same-class frozen form: `wv_path` points at the exported probe directory and the
         fit-only `gen_wv_*` fields are dropped. The decode-time settings (`candidate_policy`,
-        `top_p`, `top_k`, `max_candidates`) and `allow_model_mismatch` are carried forward."""
+        `top_p`, `top_k`, `max_candidates`) and `allow_model_mismatch` are kept."""
         from steerability.spipe.codec import AsPath
 
         return "output_control/sasa", {
@@ -237,7 +237,7 @@ class SASA(OutputControl):
         return model
 
     def _check_probe_model(self, model: PreTrainedModel) -> None:
-        """Raise when the loaded probe records a model fingerprint or model type other than the model's."""
+        """Raise `ValueError` when the loaded probe records another model's fingerprint or model type."""
         live_fingerprint = model_fingerprint(model)
         recorded_fingerprint = self.probe.meta.get("model_fingerprint")
         if recorded_fingerprint not in (None, live_fingerprint):

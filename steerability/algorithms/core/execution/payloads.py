@@ -101,9 +101,9 @@ class ModelFacts:
         model_ref: The served model reference on engine backends, the loaded model's
             `name_or_path` in process, or None when unknown.
         fingerprint_grade: `"weights"` when `model_fingerprint` digests the loaded weights (a model
-            in process), or `"config"` when it digests the model config only (an engine backend,
-            whose weights are not readable). Identity checks compare fingerprints only at the
-            `"weights"` grade and compare `model_ref` otherwise.
+            in process), or `"config"` when it digests only the model config (an engine backend).
+            Identity checks compare fingerprints at the `"weights"` grade and `model_ref` at the
+            `"config"` grade.
     """
 
     num_layers: int

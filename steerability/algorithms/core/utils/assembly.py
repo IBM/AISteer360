@@ -128,7 +128,7 @@ def per_item_state_entries(
 
     Each row's clones receive the `runtime_kwargs` of that row. A kwarg that an enabled state
     control declares with `scope: "row"` and whose value is a list or tuple of batch length is
-    replaced by a one-element list holding the row's value. Other values pass through unchanged.
+    replaced by a one-element list that contains the row's value. Other values pass through unchanged.
 
     Args:
         state_controls: The pipeline's state controls, in list order.

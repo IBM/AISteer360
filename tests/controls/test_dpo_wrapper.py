@@ -68,7 +68,7 @@ def test_chat_prompt_dpo_trains_and_freezes_to_load_lora(tmp_path, loss_kwargs):
     trained = control.steer(model, tokenizer=tokenizer)
     assert trained is not None
 
-    # the configured dataset stays as given, so the fit identity is unchanged by steer()
+    # steer() leaves the configured dataset and the fit identity unchanged
     assert control.train_dataset is dataset
     assert control.fit_identity() == fit_identity
 

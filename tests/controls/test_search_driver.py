@@ -1,7 +1,7 @@
 """`SearchDriver` frontier layout: a kept beam that stopped early continues from its last real token.
 
 A scripted session stands in for the model. In the first iteration one proposal stops one token
-short of the segment (a stop that the frontier does not classify as finished), so its row is
+short of the segment (a stop that the frontier does not classify as finished), and its row is
 right-padded among the kept beams. The second iteration continues every kept beam, and the scorer
 prefers the continuation of the padded beam. Hub-free on a tiny Llama with a WordLevel tokenizer
 whose pad id (2) differs from its eos id (1).

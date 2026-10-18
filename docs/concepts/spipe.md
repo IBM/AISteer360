@@ -78,8 +78,8 @@ frozen steering artifacts are checked against the model they are being installed
 - `"warn"`: every mismatch is a warning.
 - `"off"`: no checks.
 
-On an engine backend the model weights are not readable, so the check compares the recorded model reference with the
-served model reference instead of the weight fingerprints.
+On an engine backend the check compares the recorded model reference with the served model reference instead of the
+weight fingerprints, since the model weights are not readable there.
 
 ## Trust and `allow_code`
 

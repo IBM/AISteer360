@@ -427,8 +427,8 @@ class TestProfiledPASTAThroughPipeline:
 
 
 class TestHeadProfileBatchLayout:
-    """Profiling batches are left-padded whatever the tokenizer's `padding_side`, so the shared
-    hook's spans and the per-item prompts share one coordinate system."""
+    """Profiling batches are left-padded for any tokenizer `padding_side`, which places the shared
+    hook's spans and the per-item prompts in one coordinate system."""
 
     def _batch(self, padding_side: str):
         model = tiny_llama(num_layers=2, hidden=12, heads=3)

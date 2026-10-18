@@ -13,11 +13,12 @@ if TYPE_CHECKING:
 
 
 def config_digest_dict(config: PretrainedConfig) -> dict:
-    """The config fields that identify a model, i.e., the config's diff dict without `transformers_version`.
+    """Return the config fields that identify a model.
 
-    The diff dict keeps the fields that differ from the defaults (nested sub-configs included)
-    and omits `_name_or_path`. Removing `transformers_version` keeps a digest over these fields
-    stable across `transformers` upgrades.
+    The fields are the config's diff dict without `transformers_version`. The diff dict keeps the
+    fields that differ from the defaults (nested sub-configs included) and omits `_name_or_path`.
+    Without `transformers_version`, a digest over these fields is the same under any `transformers`
+    version.
 
     Args:
         config: The model config.
@@ -31,8 +32,11 @@ def config_digest_dict(config: PretrainedConfig) -> dict:
 
 
 def _parameter_kind(name: str) -> str:
-    """The parameter name with its numeric path components replaced by `*`, e.g.,
-    `model.layers.3.self_attn.q_proj.weight` becomes `model.layers.*.self_attn.q_proj.weight`."""
+    """Return the parameter name with its numeric path components replaced by `*`.
+
+    For example, `model.layers.3.self_attn.q_proj.weight` becomes
+    `model.layers.*.self_attn.q_proj.weight`.
+    """
     return ".".join("*" if part.isdigit() else part for part in name.split("."))
 
 
@@ -43,16 +47,15 @@ def model_fingerprint(model: PreTrainedModel) -> str:
     keys, (b) `str(model.dtype)`, and (c) for the first parameter of each parameter kind in
     `named_parameters()` order, the parameter name plus its first 64 elements flattened and cast
     to float32 bytes, truncated to 16 hex characters. A parameter's kind is its name with the
-    numeric path components replaced by `*`, so every projection of a decoder layer
-    (`model.layers.*.self_attn.q_proj.weight`, `model.layers.*.mlp.up_proj.weight`, ...) is sampled
-    once, in the first layer that contains it.
+    numeric path components replaced by `*`. Every projection of a decoder layer
+    (`model.layers.*.self_attn.q_proj.weight`, `model.layers.*.mlp.up_proj.weight`, ...) is
+    therefore sampled once, in the first layer that contains it.
 
     The digest has the following properties:
 
     - The same checkpoint at the same dtype yields equal digests in any process or device
         placement, since parameter values are deterministic under `from_pretrained`. The
-        config's `transformers_version` is excluded, so the version that wrote or loaded the
-        config does not enter the digest.
+        config's `transformers_version` is excluded from the digest.
     - A weight edit that touches a sampled slice (SFT, DPO, merging, a LoRA merge) changes the
         digest; so does attaching unmerged adapters, since parameter names change. An edit that
         leaves the sampled slices unchanged is not detected, e.g., an adapter merged into a subset

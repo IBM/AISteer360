@@ -75,8 +75,8 @@ def _build_context(
     source, resolves it against the model and `session`, and moves the result onto the model's
     device and dtype. With `model=None`, sizes come from `layout` (a structural
     `core.execution.ModelFacts`) and the device is CPU. The resolve closure then serves concrete
-    artifacts and sources that fit through session capture, and a source that requires a live
-    model raises.
+    artifacts and sources that fit through session capture, and a source that requires a loaded
+    model raises an error.
     """
     if model is not None:
         device = next(model.parameters()).device

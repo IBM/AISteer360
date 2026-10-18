@@ -121,16 +121,16 @@ class CPO(InputControl):
 
     @property
     def _has_auxiliary_proposer(self) -> bool:
-        """Whether the proposer is a control-owned model (`prompt_lm` or `prompt_lm_name_or_path`)."""
+        """True when the proposer is a control-owned model (`prompt_lm` or `prompt_lm_name_or_path`)."""
         return self.prompt_lm is not None or self.prompt_lm_name_or_path is not None
 
     def requirements(self) -> Requirements:
         """Backend requirements computed from this instance's configuration, per phase.
 
         With `prompt_lm` or `prompt_lm_name_or_path` supplied the proposer is a control-owned
-        auxiliary and every phase is prompt-only. Without either, the loaded pipeline model is
-        bound as the proposer at steer and consulted per query at adapt, so the generate phase
-        requires `Capability.IN_PROCESS_TORCH`."""
+        auxiliary and every phase is prompt-only. Without either, the generate phase requires
+        `Capability.IN_PROCESS_TORCH`, since the loaded pipeline model is bound as the proposer at
+        steer and consulted per query at adapt."""
         if self._has_auxiliary_proposer:
             return Requirements()
         return Requirements(generate=needs(
@@ -140,7 +140,7 @@ class CPO(InputControl):
 
     def steer_access(self) -> ModelAccess:
         """`ModelAccess.ROLLOUTS` with an auxiliary proposer (`prompt_lm` or
-        `prompt_lm_name_or_path`), since offline data generation rides the session;
+        `prompt_lm_name_or_path`), since offline data generation runs through the session;
         `ModelAccess.MODULE` without one (the loaded model is bound as the proposer). A
         precomputed `memory` with an auxiliary proposer needs only structural facts
         (`ModelAccess.FACTS`)."""
@@ -152,7 +152,7 @@ class CPO(InputControl):
     def export_state(self) -> dict:
         """The trained scorer memory under the `"memory"` key (after `steer()`).
 
-        Returns nothing when the recipe already carries the memory (`memory=`), since the recipe
+        Returns nothing when the recipe already contains the memory (`memory=`), since the recipe
         is then its frozen form.
         """
         if self.args.memory is not None or self.memory is None:

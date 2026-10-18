@@ -353,8 +353,8 @@ class SearchDriver(DecodingDriver):
             rollout_kwargs = copy.deepcopy(gen_kwargs)
             if rollout_kwargs.get("min_new_tokens") is not None and rollout_kwargs["min_new_tokens"] > proposal_len:
                 rollout_kwargs["min_new_tokens"] = proposal_len
-            # kept beams that finished early carry trailing pads; the rollout continues each row
-            # from its left-padded form, so the new tokens follow the row's last real token
+            # kept beams that finished early end in trailing pads; each row continues from its
+            # left-padded form, which places the new tokens after the row's last real token
             frontier_mask = infer_attention_mask_from_ids(current_ids, self.tokenizer.pad_token_id)
             frontier_ids, frontier_mask = to_left_pad(current_ids, frontier_mask)
             beams = proposer.propose(

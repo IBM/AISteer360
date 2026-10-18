@@ -97,8 +97,8 @@ def _config_layout(model_ref: str, trust_remote_code: bool = False) -> ModelFact
 
     A loaded config lacking a structural fact (`hidden_size`, `num_hidden_layers`) raises
     `AttributeError`. The fingerprint hashes the config fields that `model_fingerprint` hashes
-    (`config_digest_dict`, i.e., the diff dict without `transformers_version`), so it identifies
-    the architecture and configuration rather than the weights.
+    (`config_digest_dict`, i.e., the diff dict without `transformers_version`). It identifies the
+    architecture and configuration rather than the weights.
     """
     from transformers import AutoConfig
 
