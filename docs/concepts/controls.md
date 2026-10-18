@@ -271,10 +271,11 @@ and the following decoding drivers:
 
 Every decoding driver accepts a padded batch of prompts and returns `n` candidates per prompt (the call's
 `num_return_sequences`). The phased drivers declare `supports_batching`, which the evaluation provider reads to batch
-concurrent requests, and the search drivers do not. The search drivers (`DeAL`, `BestOfN`, and
-`SearchDecoding`) run one independent search per candidate on the row's unpadded prompt (with beam proposals and no
-sampling, the search runs once and is returned as every candidate). Their segments are clamped so that no
-continuation exceeds `max_new_tokens`. The phased drivers (`BudgetForcing`, `RoutedDecoding`, and `PhasedDecoding`)
+concurrent requests. The search drivers (`DeAL`, `BestOfN`, and `SearchDecoding`) do not declare it. They run one
+independent search per candidate on the row's unpadded prompt (with beam proposals and no sampling, the search runs
+once and is returned as every candidate). Each search returns the highest-scoring sequence among those it stopped
+extending (finished, or kept in the last iteration). Their segments are clamped so that no continuation exceeds
+`max_new_tokens`. The phased drivers (`BudgetForcing`, `RoutedDecoding`, and `PhasedDecoding`)
 apply the call's `max_new_tokens` as one ceiling per candidate across all phases, with fixed text (including routed
 prefixes and canned responses) counted against it and appended whole. A candidate that reaches the ceiling skips the
 rest of its plan (finish reason `"length"`). Since each candidate of a phased driver generates as its own sequence,

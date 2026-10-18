@@ -78,7 +78,9 @@ class SearchDriver(DecodingDriver):
        finished leave the frontier, and the unfinished ones form the next frontier.
 
     The search stops after `max_iterations` iterations, when every kept sequence is finished, or when
-    the token budget is used up. It returns the highest-scoring sequence seen in any iteration.
+    the token budget is used up. It returns the highest-scoring sequence among those it stopped
+    extending, i.e., the finished kept sequences of every iteration and the kept sequences of the
+    last iteration. On equal scores the finished sequence found first is returned.
 
     The caller's `max_new_tokens` is the token budget of each search, and no returned continuation is
     longer than it. Each rollout generates at most `segment_len` tokens, and at most the budget minus
@@ -320,9 +322,10 @@ class SearchDriver(DecodingDriver):
             gen_kwargs: The caller's generation keyword arguments. Each rollout receives a deep copy.
 
         Returns:
-            The highest-scoring sequence seen in any iteration (the prompt followed by its
-            continuation) as a 1-D tensor. When no score exceeds `-inf`, the top kept sequence of the
-            last iteration is returned, and when no iteration runs, the prompt alone is returned.
+            The highest-scoring sequence among the finished kept sequences of every iteration and
+            the kept sequences of the last iteration (the prompt followed by its continuation), as
+            a 1-D tensor. On equal scores the finished sequence found first is returned. When no
+            iteration runs, the prompt alone is returned.
 
         Raises:
             RuntimeError: If the scorer returns a number of scores that differs from the number of
@@ -353,9 +356,11 @@ class SearchDriver(DecodingDriver):
             rollout_kwargs = copy.deepcopy(gen_kwargs)
             if rollout_kwargs.get("min_new_tokens") is not None and rollout_kwargs["min_new_tokens"] > proposal_len:
                 rollout_kwargs["min_new_tokens"] = proposal_len
-            # kept beams that finished early end in trailing pads; each row continues from its
-            # left-padded form, which places the new tokens after the row's last real token
+            # kept beams that stopped early end in the trailing pads of their rollout, which are inferred
+            # over the continuation columns only; each row continues from its left-padded form, which
+            # places the new tokens after the row's last real token
             frontier_mask = infer_attention_mask_from_ids(current_ids, self.tokenizer.pad_token_id)
+            frontier_mask[:, :input_length] = 1  # the prompt contains no padding
             frontier_ids, frontier_mask = to_left_pad(current_ids, frontier_mask)
             beams = proposer.propose(
                 frontier_ids,
@@ -391,6 +396,9 @@ class SearchDriver(DecodingDriver):
                 break
             current_ids = step.kept_ids[unfinished]
 
-        if frontier.best_ids is not None:
+        if kept is None:
+            return prompt_ids[0]
+        # the kept sequences of the last iteration are also candidates; a finished sequence wins a tie
+        if frontier.best_ids is not None and frontier.best_score >= kept.kept_scores[0]:
             return frontier.best_ids
-        return kept.kept_ids[0] if kept is not None else prompt_ids[0]
+        return kept.kept_ids[0]

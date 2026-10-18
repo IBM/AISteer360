@@ -62,9 +62,9 @@ class TestDriverPath:
         )[0]
         assert search_out.generated_tokens is not None
         returned = int((search_out.output_ids != tokenizer.pad_token_id).sum().item())
-        # the count meters every rollout (4 candidates over up to 2 iterations), far more than the
-        # single continuation the driver returns
-        assert search_out.generated_tokens >= 4 * returned
+        # the count meters every rollout (4 candidates over up to 2 iterations), several times the single
+        # continuation the driver returns; the bound allows for sampled pad ids, which are not metered
+        assert search_out.generated_tokens >= 3 * returned
 
     def test_driverless_path_leaves_generated_tokens_none(self):
         pipeline, _, tokenizer = _pipeline([])

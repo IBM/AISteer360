@@ -348,7 +348,8 @@ pipeline = SteeringPipeline(
   phased drivers raise `ValueError` for `num_beams > 1` with `n > 1`. The search drivers (`deal`, `best_of_n`,
   `search_decoding`) run `n` independent searches per row, with the preset's own candidate count as the proposals per
   iteration from each kept beam. They clamp segments so that no continuation exceeds `max_new_tokens`, and beam
-  proposals without sampling run one search and return it as every candidate.
+  proposals without sampling run one search and return it as every candidate. Each search returns the highest-scoring
+  sequence among those it stopped extending (finished, or kept in the last iteration).
 - In-process state hooks restart their pass count at every `model.generate` call the Hugging Face session issues,
   which places each call's prefill at position 0. Hook points that receive no position ids (e.g., `iti` on `o_proj`)
   therefore steer every phase and candidate of a driver.

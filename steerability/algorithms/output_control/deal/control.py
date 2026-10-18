@@ -21,7 +21,9 @@ class DeAL(SearchDriver):
 
     The search stops after `max_iterations` iterations, when every kept sequence is finished (it ends
     in an eos token or reaches `max_new_tokens`), or when no token budget is left. DeAL returns the
-    highest-scoring sequence seen in any iteration.
+    highest-scoring sequence among those it stopped extending, i.e., the finished kept sequences of
+    every iteration and the kept sequences of the last iteration. On equal scores the finished
+    sequence found first is returned.
 
     The `reward_func` argument accepts a callable `(prompt, continuations, params) -> list[float]`
     that returns one score per continuation, with higher scores preferred. Each continuation is the
