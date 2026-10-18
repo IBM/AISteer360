@@ -35,6 +35,10 @@ The items are grouped as follows:
   (previously 0.98).
 - **Options**: inspect the `beta=60` responses; lower the top value of `BETAS` (currently `[10, 30, 60]`); or keep
   the values and describe the degeneration at `beta=60` in both sections.
+- **Resolution**: `BETAS` is `[10, 20, 40]` and the summary table adds the median. The median grade falls from 11.53
+  (baseline) to 8.76 at `beta=40`, and the "Readability by configuration" and "Trade-off" text now reads the median. The
+  `beta=40` row has a words-per-sentence standard deviation of 4.27 and the reused-probe response has no cut words, so
+  neither conditional sentence of the fix design applies.
 
 ### 1.2 `algorithms/pasta.ipynb`: the steered answer is about crypto
 
@@ -51,6 +55,10 @@ The items are grouped as follows:
 - **Options**: pass `do_sample=False` to both calls (or set a seed) and rewrite the text to match the resulting
   output. Note that the previous compliant response refers to the "Blue Whale challenge", which may not be content
   to restore.
+- **Resolution**: Both calls pass `do_sample=False`, and the steered call no longer passes `output_attentions=True`. The
+  greedy steered response is "The temperature outside is perfect for trading blue assets." The observation now states
+  that it is one sentence, uses blue, and names no cryptocurrency (the two instructions the baseline broke), and that it
+  still refers to trading. The typo "simplicitly" is corrected.
 
 ### 1.3 `algorithms/gepa.ipynb`: the two reflectors tie
 
@@ -72,6 +80,10 @@ The items are grouped as follows:
 - **Options**: rewrite both sentences to say that the two reflectors reach the same held-out score in this run, with
   the stronger reflector needing one accept instead of two. The first sentence also contains two typos
   ("improvment", "althought").
+- **Resolution**: In this run both reflectors reach a held-out mean score of 0.958 with one accepted revision each (at
+  step 1). The sentence after the comparison table and summary item 3 state this, the sentence before the strong
+  reflector's trace no longer claims fewer accepts, and the text before the strong reflector notes that the reflections
+  are sampled at temperature 1.0.
 
 ### 1.4 `algorithms/act_add.ipynb`: the topic steering mostly misses weddings
 
@@ -90,6 +102,10 @@ The items are grouped as follows:
 - **Options**: rerun the topic cells with a different `multiplier` or `layer_id` under the new vector, or rewrite
   the text to describe a weaker topic effect. Refitting the vector with the previous padding in the same
   environment would isolate the effect of the A10 change.
+- **Resolution**: A token-alignment cell and a multiplier sweep (multipliers 2 to 8 at layer 9, eight seeds per prompt)
+  are added. No multiplier keeps the artifact rate at or below 0.10 (the lowest is 0.47, at multiplier 2), so the
+  selection rule picks the multiplier with the highest wedding rate, 8 (0.38 against 0.03 unsteered, artifacts in every
+  completion). The topic text and summary state these rates and the padded rows.
 
 ### 1.5 `algorithms/generics/search_decoding.ipynb`: the majority vote returns a wrong answer
 
@@ -104,6 +120,8 @@ The items are grouped as follows:
   the final "The answer is N." sentence. I have not checked the recorded candidates.
 - **Options**: raise `max_new_tokens`, or extract the number after "The answer is"; then rerun and check that the
   majority is 19.
+- **Resolution**: The question asks for "Answer: N", the candidates are scored with `extract_numeric_answer`, and
+  `max_new_tokens` is 256. All ten candidates vote 19, which is the returned (correct) answer.
 
 ## 2. Mismatches also present in the previous outputs
 
@@ -117,6 +135,9 @@ The items are grouped as follows:
   0 degrees the steered model refuses all three prompts, which does not match the baseline on the keylogger prompt.
 - **Options**: replace the keylogger prompt with a prompt the baseline refuses, or state that the baseline already
   complies on it.
+- **Resolution**: The text before the baseline now states that the unsteered model refuses the first and third prompts
+  and answers the keylogger request with a disclaimer. The "Refusal off, then on" text states that the model refuses all
+  three prompts at 0 degrees, including the keylogger request.
 
 ### 2.2 `recipes/routed_decoding/routed_decoding.ipynb`: the coffee advice score is not near zero
 
@@ -127,6 +148,8 @@ The items are grouped as follows:
   -9.79). The selected advice probe moved from layer 22 with bias 13.18 to layer 12 with bias 0.67. The calibrated
   F1 is 1.0 for every probe, and the held-out routing is 80/80 in both runs.
 - **Options**: remove the note, or describe the margin that the run shows.
+- **Resolution**: The note now states that each probe's layer is chosen by calibrated F1 with the standardized margin as
+  tie-break, and that the chosen layer, the raw scores, and the bias can move between runs while the decisions do not.
 
 ### 2.3 `algorithms/directional_ablation.ipynb`: refusal switches off between `alpha=0` and `alpha=0.25`
 
@@ -136,6 +159,9 @@ The items are grouped as follows:
 - **Output**: At `alpha=0.0` the model refuses. At `alpha=0.25` it already lists methods ("Knock and Ask", "Window
   Entry"), and 0.5, 0.75, and 1.0 also comply. The previous run shows the same pattern.
 - **Options**: use a finer grid between 0 and 0.25, or rewrite the text to describe the switch.
+- **Resolution**: `ALPHAS` is `[0.0, 0.05, 0.1, 0.25, 0.5, 1.0]`. The model refuses at 0.0 and 0.05, warns and then
+  offers general information at 0.1, and complies from 0.25. The text describes the per-layer removal compounding across
+  the band and states this transition, and the summary bullet is rewritten.
 
 ### 2.4 `algorithms/generics/stopping_rules.ipynb`: the sentiment shift is not visible
 
@@ -148,6 +174,9 @@ The items are grouped as follows:
   diverged after "However, I can", but the steered text was not noticeably more positive.
 - **Options**: use a prompt where the sentiment control changes the text (the "As an AI language model" opening
   leaves little to steer), raise `beta` (currently 4.0), or rewrite the text.
+- **Resolution**: The prompt is a walk through the city on a rainy afternoon. The composed completion is the first 32
+  tokens of the unsteered one at both `beta=4.0` and `beta=8.0`, so `beta` is 8.0 and the text states that the budget
+  cuts the generation and that the sentiment shift at this `beta` does not change the greedy path on this prompt.
 
 ### 2.5 `algorithms/generics/search_decoding.ipynb`: blockwise decoding returns the first segment
 
@@ -167,6 +196,10 @@ The items are grouped as follows:
     - in the driver, prefer the later (longer) sequence on a tie (`>=`) and state the tie rule in the docstring
     - in the notebook, use a prompt whose candidates mention the sea (e.g., a walk along the coast) so that the
       scorer has something to select on
+- **Resolution**: `SearchDriver` returns the highest-scoring sequence among the finished kept sequences and the kept
+  sequences of the last iteration, with the finished sequence first on a tie (`Frontier.keep`, `SearchDriver._search`,
+  and the driver docstrings). The prompt is a walk along the coast, and the final output equals the last row of the
+  table.
 
 ### 2.6 `algorithms/gepa.ipynb`: a held-out example listed as correct has a wrong answer
 
@@ -177,6 +210,7 @@ The items are grouped as follows:
   answer is Saturn). The previous run had the same error ("uranus is the sixth planet from the sun"). The filter in
   the cell checks only the rule (`seed_follows_rule` and `optimized_follows_rule`), not correctness.
 - **Options**: add the optimized run's `correct` column to the filter, or drop the parenthetical.
+- **Resolution**: The filter also requires `optimized_correct`, and the table no longer lists the Uranus row.
 
 ## 3. Minor items
 
@@ -190,3 +224,5 @@ The items are grouped as follows:
   text already notes that this comparison is noisy, and the scaling sweep that follows is non-decreasing in `n` by
   construction.
 - **Options**: no change, or state directly that the single sample can score higher.
+- **Resolution**: The text states that the single sample is not one of the eight and can score higher, as it does here
+  (12 against 11).
