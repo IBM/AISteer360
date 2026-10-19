@@ -9,7 +9,7 @@ import torch
 
 from steerability.algorithms.state_control.common.lowering import artifact_id_for
 from steerability.spipe.errors import SpipeFormatError, SpipeIntegrityError, SpipeSaveError
-from steerability.spipe.store import ArtifactStore, pickle_bearing_files, tree_id_for
+from steerability.spipe.store import ArtifactStore, pickle_bearing_files, tensors_payload, tree_id_for
 
 
 @pytest.fixture
@@ -40,6 +40,38 @@ def test_tensor_write_idempotent(store):
     second = store.put_tensors({"value": torch.ones(4)}, dict(RECORD_FIELDS))
     assert first.id == second.id
     assert store.ids() == [first.id]
+
+
+def test_payload_without_a_sidecar_is_rewritten(store):
+    tensors = {"value": torch.arange(4.0)}
+    expected_id, data = tensors_payload(tensors)
+    directory = store.root / expected_id.replace(":", "-", 1)
+    directory.mkdir(parents=True)
+    # an interrupted write: a truncated payload and a partially written marker
+    (directory / "artifact.safetensors").write_bytes(data[: len(data) // 2])
+    (directory / "artifact.json.tmp").write_text('{"id": ')
+    assert not store.has(expected_id)
+
+    record = store.put_tensors(tensors, dict(RECORD_FIELDS))
+    assert record.id == expected_id
+    assert store.has(expected_id)
+    store.verify(expected_id)
+    assert torch.equal(store.load_tensors(expected_id)["value"], tensors["value"])
+    assert sorted(path.name for path in directory.iterdir()) == ["artifact.json", "artifact.safetensors"]
+
+
+def test_tree_without_a_sidecar_is_rewritten(tmp_path, store):
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "a.txt").write_text("alpha")
+    artifact_id = tree_id_for(source)
+    payload = store.root / artifact_id.replace(":", "-", 1) / "payload"
+    payload.mkdir(parents=True)
+    (payload / "partial.txt").write_text("partial")
+
+    record = store.put_tree(source, {**RECORD_FIELDS, "type": "CheckpointArtifact"})
+    assert store.has(record.id)
+    assert sorted(path.name for path in store.payload_path(record.id).iterdir()) == ["a.txt"]
 
 
 def test_tree_id_stability_and_order_independence(tmp_path, store):

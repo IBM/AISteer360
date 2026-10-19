@@ -25,10 +25,11 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
     layer-input boundary, i.e. the residual stream a layer pre-hook observes,
     preserving the full positional structure of the contrast.
 
-    The prompts are tokenized without special tokens, so row `t` of the result
-    corresponds to content token `t` of the (co-padded) pair. The result is a
-    `[T, H]` direction matrix per layer, where `T` is the token length of the
-    longer prompt, and the artifact records `meta["location"] = "layer_input"`.
+    The prompts are tokenized without special tokens, and the shorter prompt is right-padded
+    with attended space tokens (the tokenizer's pad token when `" "` encodes to no token). Row
+    `t` of the result is the difference at content token `t` of the pair. The tokenizer is not
+    modified. The result is a `[T, H]` direction matrix per layer, where `T` is the token
+    length of the longer prompt, and the artifact records `meta["location"] = "layer_input"`.
     """
 
     def fit(
@@ -67,24 +68,17 @@ class SinglePairEstimator(BaseEstimator[SteeringVector]):
 
         logger.debug("Tokenizing prompt pair: positive=%r, negative=%r", positive_prompt, negative_prompt)
 
-        # co-pad the shorter prompt with a space token; pad tokens like EOS produce
-        # different activations
-        space_ids = tokenizer.encode(" ", add_special_tokens=False)
-        original_pad_token_id = tokenizer.pad_token_id
-        if space_ids:
-            tokenizer.pad_token_id = space_ids[0]
-        try:
-            enc = tokenizer(
-                [positive_prompt, negative_prompt],
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                add_special_tokens=False,
-            )
-        finally:
-            tokenizer.pad_token_id = original_pad_token_id
-
-        enc = {k: v.to(device) for k, v in enc.items()}
+        # right-pad the shorter prompt with attended space tokens so the two prompts align
+        # position by position; pad tokens such as eos produce different activations
+        positive_ids = tokenizer.encode(positive_prompt, add_special_tokens=False, truncation=True)
+        negative_ids = tokenizer.encode(negative_prompt, add_special_tokens=False, truncation=True)
+        space = (tokenizer.encode(" ", add_special_tokens=False) or [tokenizer.pad_token_id])[:1]
+        width = max(len(positive_ids), len(negative_ids))
+        rows = [ids + space * (width - len(ids)) for ids in (positive_ids, negative_ids)]
+        enc = {
+            "input_ids": torch.tensor(rows, dtype=torch.long, device=device),
+            "attention_mask": torch.ones(2, width, dtype=torch.long, device=device),
+        }
 
         logger.debug("Running forward pass to extract hidden states")
 

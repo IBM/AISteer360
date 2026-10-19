@@ -105,6 +105,35 @@ class TestStreamingAccumulation:
         assert stats.model_type == model.config.model_type
         assert stats.location == "layer_input"
 
+    def test_session_capture_without_a_model_records_the_layout_identity(self, model, tokenizer):
+        from steerability.algorithms.core.execution import BackendSpec
+        from steerability.backends.huggingface import HFBackend
+
+        backend = HFBackend.adopt(BackendSpec(kind="huggingface"), lambda: model, lambda: tokenizer)
+        with backend.open_session() as session:
+            from_session = ActivationStats.estimate(None, tokenizer, TEXTS, min_samples=1, session=session)
+            layout = session.layout
+        assert from_session.model_fingerprint == layout.model_fingerprint == model_fingerprint(model)
+        assert from_session.model_type == layout.model_type
+        direct = ActivationStats.estimate(model, tokenizer, TEXTS, min_samples=1)
+        assert from_session.count == direct.count
+        for lid in direct.mean:
+            torch.testing.assert_close(from_session.mean[lid], direct.mean[lid], rtol=1e-4, atol=1e-6)
+
+    def test_unfingerprinted_stats_are_not_a_model_mismatch(self, model, tokenizer):
+        from steerability.algorithms.core.internals.data import ContrastivePairs
+        from steerability.algorithms.core.internals.probes import ProbeFitSpec, fit_probe
+
+        stats = ActivationStats.estimate(model, tokenizer, TEXTS, min_samples=1)
+        stats.model_fingerprint = None
+        probe = fit_probe(
+            model, tokenizer,
+            data=ContrastivePairs(positives=["the cat sat", "the cat ran"], negatives=["dog ran fast", "the dog"]),
+            spec=ProbeFitSpec(method="lda", candidate_layers=[1]),
+            stats=stats,
+        )
+        assert probe.layer_ids == [1]
+
 
 class TestExcludeFirstN:
     def test_drops_exactly_first_n_real_positions_left_padded(self, model, tokenizer):

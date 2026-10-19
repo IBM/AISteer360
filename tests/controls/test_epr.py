@@ -80,7 +80,7 @@ class TestEPRPoolOwnership:
 
         encoder = _HashEncoder()
         monkeypatch.setattr(epr_selector.lm_labeling, "label_pairs", lambda **kwargs: [])
-        monkeypatch.setattr(epr_selector.train_encoder, "train", lambda **kwargs: encoder)
+        monkeypatch.setattr(epr_selector.train_encoder, "train_encoder", lambda **kwargs: encoder)
         pool = [{"input": f"q{i}", "output": f"a{i}"} for i in range(4)]
         snapshot = copy.deepcopy(pool)
         epr = EPRSelector(scoring_lm=None, scoring_tokenizer=None, candidate_set_size=2)

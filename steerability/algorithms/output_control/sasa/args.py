@@ -60,6 +60,11 @@ class SASAArgs(BaseArgs):
                           "None leaves the policy's candidate set unclamped, which under 'surviving' can be the "
                           "whole vocabulary."}
     )
+    allow_model_mismatch: bool = field(
+        default=False,
+        metadata={"help": "When True, a probe loaded from `wv_path` whose recorded model fingerprint differs from "
+                          "the pipeline's model is accepted at `steer()` time instead of raising."},
+    )
 
     # validation
     def __post_init__(self):

@@ -13,7 +13,9 @@ class SearchDecoding(SearchDriver):
     `SearchDecoding` extends each prompt one segment at a time. Each iteration proposes
     `num_candidates` continuations of up to `segment_len` tokens from each kept sequence, scores them
     with the scorer, and keeps the `keep_k` highest-scoring sequences. The search runs for at most
-    `max_iterations` iterations and returns the highest-scoring sequence seen in any iteration.
+    `max_iterations` iterations and returns the highest-scoring sequence among those it stopped
+    extending, i.e., the finished kept sequences of every iteration and the kept sequences of the
+    last iteration. On equal scores the finished sequence found first is returned.
 
     The `scorer` argument accepts a `SequenceScorer`, i.e., a callable
     `(prompt, continuations, params) -> list[float]` such as a function, a `MajorityVoteScorer`, or a

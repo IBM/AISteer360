@@ -836,6 +836,7 @@ def _offline_backend(llm, tmp_path):
     backend.tokenizer = wordlevel_tokenizer()
     backend._layout = ModelFacts(
         num_layers=2, hidden_size=4, num_attention_heads=2, head_dim=2, dtype="float32", model_fingerprint=None,
+        fingerprint_grade="config",
     )
     backend._plain_salt = "plain"
     backend._artifact_uploader = _ArtifactUploader(str(tmp_path))
@@ -860,6 +861,18 @@ class TestOfflineSteeredCapture:
         assert "intervention_spec" not in llm.extra_args[0]
         assert llm.extra_args[1]["intervention_spec"] == spec.to_wire()
         assert llm.extra_args[1]["capture"] == llm.extra_args[0]["capture"]
+
+    def test_last_token_capture_needs_only_the_all_tokens_wire_mode(self, tmp_path):
+        pytest.importorskip("vllm")
+        pytest.importorskip("vllm_hook_plugins")
+        llm = _FakeCaptureLLM()
+        backend = _offline_backend(llm, tmp_path)
+        backend._discovery["capture_kinds"] = {**backend._discovery["capture_kinds"], "modes": ["all_tokens"]}
+        assert backend.capture_kinds.modes == frozenset({"all_tokens"})
+        with backend.open_session() as session:
+            result = session.capture([PreparedPrompt.from_token_ids([0, 3, 4])], [0], "last_token")
+        assert result.hidden[0].shape == (1, 4)
+        assert llm.extra_args[0]["capture"]["mode"] == "all_tokens"
 
     def test_steered_session_forwards_its_entries(self):
         from steerability.algorithms.core.execution.backend import SteeredSession

@@ -15,11 +15,12 @@ methods from the literature map onto one of them:
 - one that stops on a substring, token, or budget is a [`StoppingRules`](../../concepts/controls.md#generic-controls) config
 
 If so, implement the method as a config, not a class. When a config earns a name through use, promote it with a small preset
-subclass over the generic that maps its named args onto the generic's fields (the pattern the named methods already
-follow, with `BestOfN` over `SearchDecoding`'s shape and `BudgetForcing` over `PhasedDecoding`'s):
+subclass that maps its named args onto the fields of the driver base the generic is built on. The named methods follow
+this pattern, e.g., `BestOfN` subclasses `SearchDriver` (the base of `SearchDecoding`) and `BudgetForcing` subclasses
+`PhasedDriver` (the base of `PhasedDecoding`):
 
 ```python
-class BestOfN(SearchDecoding):
+class BestOfN(SearchDriver):
     """Sample n continuations, return the scorer's argmax (rejection sampling)."""
     Args = BestOfNArgs          # fields: n, scorer
 

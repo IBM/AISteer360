@@ -85,12 +85,13 @@ class PlanState:
                 - `"until_token"`: the last generated token is one of the phase's
                   `until_token_ids`.
                 - `"until"`: the phase's decoded continuation contains the phase's `until` text.
+                - `"eos"`: the phase ended on an eos token or a stop rule of the caller or of the
+                  pipeline. This is checked before the token-limit causes below, and it is also
+                  the cause of any other end.
                 - `"budget"`: the phase generated `budget` tokens, and `budget` was smaller than
                   the tokens that remained under the caller's `max_new_tokens`.
                 - `"length"`: the phase generated the tokens that remained under the caller's
                   `max_new_tokens`.
-                - `"eos"`: any other end, e.g., an eos token or a stop rule of the caller or of
-                  the pipeline.
         appended: Number of tokens the plan has appended to the sequence, counted against
             `max_new_tokens`.
         text: The decoded stream after the prompt, with special tokens kept.
@@ -196,6 +197,7 @@ class PhasedDriver(DecodingDriver):
     seeded differently from the first, since each session call derives its own seeds from the
     call-level `seed`.
 
+    `supports_batching` is True since the plans of all rows and candidates run together.
     `whole_batch_rollouts` is False because the session calls cover subsets of the batch. With
     enabled in-process state controls, the pipeline accepts one prompt row per call.
 
@@ -214,6 +216,7 @@ class PhasedDriver(DecodingDriver):
             pipeline or by a subclass's `steer()`, or None before it is attached.
     """
 
+    supports_batching: bool = True
     whole_batch_rollouts: bool = False
     tokenizer: PreTrainedTokenizerBase | None = None
 

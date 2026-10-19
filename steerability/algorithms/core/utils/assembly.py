@@ -26,6 +26,7 @@ from steerability.algorithms.core.execution.payloads import (
     StateControlEntry,
     remap_prompt_relative_scopes,
 )
+from steerability.algorithms.core.utils.controls import runtime_kwargs_schema
 from steerability.algorithms.output_control.base import DecodingDriver, OutputControl
 from steerability.algorithms.state_control.base import StateControl
 from steerability.utils.tokenization import strip_leading_pads
@@ -125,6 +126,10 @@ def per_item_state_entries(
     controls (the control that drives it and the controls that follow it) is then copied once
     per row, and every clone for that row reads the same copy.
 
+    Each row's clones receive the `runtime_kwargs` of that row. A kwarg that an enabled state
+    control declares with `scope: "row"` and whose value is a list or tuple of batch length is
+    replaced by a one-element list that contains the row's value. Other values pass through unchanged.
+
     Args:
         state_controls: The pipeline's state controls, in list order.
         input_ids: Adapted prompt ids of shape `[batch, seq_len]`.
@@ -137,9 +142,23 @@ def per_item_state_entries(
         One tuple of `HookEntry` per row, each in controls-list order. Disabled controls
         contribute no entry.
     """
+    schema = runtime_kwargs_schema(state_controls)
+    batch_size = input_ids.size(0)
+
+    def row_kwargs(index: int) -> dict | None:
+        if not runtime_kwargs:
+            return runtime_kwargs
+        sliced = dict(runtime_kwargs)
+        for name, entry in schema.items():
+            value = runtime_kwargs.get(name)
+            if entry["scope"] == "row" and isinstance(value, (list, tuple)) and len(value) == batch_size:
+                sliced[name] = [value[index]]
+        return sliced
+
     rows: list[tuple[HookEntry, ...]] = []
-    for index in range(input_ids.size(0)):
+    for index in range(batch_size):
         row_ids, row_mask = strip_leading_pads(input_ids[index:index + 1], attention_mask[index:index + 1])
+        kwargs_for_row = row_kwargs(index)
         entries: list[HookEntry] = []
         memo: dict = {}
         for state_control in state_controls:
@@ -148,7 +167,7 @@ def per_item_state_entries(
             clone = state_control.clone_for_call(memo=memo)
             hooks = clone.get_hooks(
                 row_ids,
-                runtime_kwargs,
+                kwargs_for_row,
                 attention_mask=row_mask,
                 model=model,
                 **gen_kwargs,

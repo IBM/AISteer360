@@ -38,15 +38,17 @@ response = pipeline.generate(...)
 
 `to_spipe(freeze=False)` forces a recipe-only bundle from a steered pipeline, and `spipe.thaw()` turns a frozen bundle
 back into its recipe. `save(..., artifacts="thin")` writes the manifest without the artifact payloads. A thin bundle
-loads against an external store via `SPipe.load(path, artifact_store=...)`.
+loads against an external store via `SPipe.load(path, artifact_store=...)`. A model revision pinned through
+`hf_model_kwargs["revision"]` is recorded in the manifest, and `spipe.pipeline()` loads that revision unless the
+caller's `hf_model_kwargs` sets one.
 
 ### Freezing without a model
 
 A pipeline with nothing to fit can be frozen without loading the model. `to_spipe(freeze=True)` on an unsteered
 pipeline succeeds when every enabled control is recipe-frozen, i.e., its steer step declares only `facts` access,
 declares no fits, and exports no state. A prompt-only pipeline (`SystemPrompt`, `UserPrefix`, a `FewShot` with fixed
-pools) qualifies, since its recipe already is its frozen form. A control that blocks the freeze is named in the error,
-with the reason.
+pools, or a `PRewrite`, `GEPA`, or `CPO` constructed with `memory=`) qualifies, since its recipe already is its frozen
+form. A control that blocks the freeze is named in the error, with the reason.
 
 The lock section of such a bundle records no model or tokenizer fingerprint and no dtype, since no model was present
 to fingerprint. Everything else (both digests, the backend spec hash, the `fit` posture, package versions) is filled as
@@ -75,6 +77,9 @@ frozen steering artifacts are checked against the model they are being installed
   architecture is a warning, since a direction can be transferred across fine-tunes deliberately.
 - `"warn"`: every mismatch is a warning.
 - `"off"`: no checks.
+
+On an engine backend the check compares the recorded model reference with the served model reference instead of the
+weight fingerprints, since the model weights are not readable there.
 
 ## Trust and `allow_code`
 

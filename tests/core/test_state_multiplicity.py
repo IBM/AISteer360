@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from steerability.algorithms.core.steering_pipeline import SteeringPipeline
-from steerability.algorithms.core.utils.assembly import collect_state_entries
+from steerability.algorithms.core.utils.assembly import collect_state_entries, per_item_state_entries
 from steerability.algorithms.core.utils.controls import merge_controls
 from steerability.algorithms.input_control.base import InputControl
 from steerability.algorithms.state_control.base import HookControl
@@ -101,6 +101,26 @@ class _BadModuleControl(HookControl):
             "forward": [{"module": "model.layers.does_not_exist", "hook_func": _hook}],
             "backward": [],
         }
+
+
+class _KwargsRecordingControl(HookControl):
+    """Records the `runtime_kwargs` each `get_hooks` call receives; declares one row-scoped and
+    one call-scoped runtime kwarg."""
+
+    Args = None
+    supports_batching = True
+    RUNTIME_KWARGS_SCHEMA = [
+        {"name": "per_row", "scope": "row"},
+        {"name": "per_call", "scope": "call"},
+    ]
+
+    def __init__(self, recorder: list):
+        super().__init__()
+        self._recorder = recorder
+
+    def get_hooks(self, input_ids, runtime_kwargs, **kwargs):
+        self._recorder.append(runtime_kwargs)
+        return {"pre": [], "forward": [], "backward": []}
 
 
 def _pipeline(controls, model=None):
@@ -210,6 +230,30 @@ class TestRegistrationUnwind:
 
 
 # supports_batching
+class TestPerItemRuntimeKwargs:
+    def _row_kwargs(self, runtime_kwargs, batch_size=2):
+        recorder: list = []
+        input_ids = torch.ones(batch_size, 3, dtype=torch.long)
+        per_item_state_entries(
+            [_KwargsRecordingControl(recorder)], input_ids, torch.ones_like(input_ids), runtime_kwargs,
+        )
+        return recorder
+
+    def test_row_scoped_sequence_of_batch_length_is_sliced_per_row(self):
+        received = self._row_kwargs({"per_row": [["a"], ["b"]], "per_call": [1, 2], "other": [3, 4]})
+        assert received == [
+            {"per_row": [["a"]], "per_call": [1, 2], "other": [3, 4]},
+            {"per_row": [["b"]], "per_call": [1, 2], "other": [3, 4]},
+        ]
+
+    def test_broadcast_and_mismatched_values_pass_through(self):
+        assert self._row_kwargs({"per_row": "shared"}) == [{"per_row": "shared"}] * 2
+        assert self._row_kwargs({"per_row": [1, 2, 3]}) == [{"per_row": [1, 2, 3]}] * 2
+
+    def test_absent_runtime_kwargs_pass_through(self):
+        assert self._row_kwargs(None) == [None, None]
+
+
 class TestSupportsBatching:
     def test_and_across_state_controls(self):
         class _NonBatch(_ConstantAddControl):

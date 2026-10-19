@@ -336,3 +336,22 @@ def test_norm_input_site_targets_llama_residual_norms():
     angular = AngularSteering(steering_vector=steering_vector, target_degree=90.0)
     suffixes = _norm_suffixes(angular, model, num_layers=4)
     assert suffixes == {"input_layernorm", "post_attention_layernorm"}
+
+
+@pytest.mark.parametrize("intervention_point", ["norms", "layer_output"])
+def test_fitted_plane_records_location_and_steers_at_capture_access(intervention_point):
+    """The fitted plane records the train spec's extraction location, and the steer step declares
+    capture access, since the plane estimator fits through session capture."""
+    from steerability.algorithms.core.execution.access import ModelAccess
+
+    data = {
+        "positives": ["the cat sat on the mat", "the dog ran fast", "the cat ran"],
+        "negatives": ["the mat", "the dog sat", "on the mat"],
+    }
+    angular = AngularSteering(data=data, target_degree=90.0, intervention_point=intervention_point)
+    assert angular.steer_access() is ModelAccess.CAPTURE
+
+    torch.manual_seed(0)
+    pipeline = SteeringPipeline(controls=[angular], model=tiny_llama(), tokenizer=wordlevel_tokenizer())
+    pipeline.steer()
+    assert angular._steering_vector.meta["location"] == angular.train_spec.location

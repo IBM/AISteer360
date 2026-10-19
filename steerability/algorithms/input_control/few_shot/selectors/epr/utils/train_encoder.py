@@ -163,22 +163,3 @@ def train_encoder(
 
     encoder.model.eval()
     return encoder
-
-
-# convenience name aligning with the design doc: `train_encoder.train(...)`.
-def train(
-    labeled,
-    items,
-    base_encoder: str = "bert-base-uncased",
-    epochs: int = 3,
-    batch_size: int = 8,
-    **kwargs,
-) -> EPREncoder:
-    return train_encoder(
-        items=items,
-        labeled=labeled,
-        base_encoder=base_encoder,
-        epochs=epochs,
-        batch_size=batch_size,
-        **kwargs,
-    )

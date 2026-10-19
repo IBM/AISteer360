@@ -88,8 +88,14 @@ class PRewrite(InputControl):
         return ModelAccess.ROLLOUTS
 
     def export_state(self) -> dict:
-        """The optimized instruction memory under the `"memory"` key (after `steer()`)."""
-        return {"memory": self.memory} if self.memory is not None else {}
+        """The optimized instruction memory under the `"memory"` key (after `steer()`).
+
+        Returns nothing when the recipe already contains the memory (`memory=`), since the recipe
+        is then its frozen form.
+        """
+        if self.args.memory is not None or self.memory is None:
+            return {}
+        return {"memory": self.memory}
 
     def frozen_form(self, state: dict) -> tuple[str, dict]:
         """A same-class frozen form: the recipe args with `memory=` set to the optimized

@@ -1,4 +1,5 @@
 import difflib
+import tempfile
 from dataclasses import fields
 from typing import Any
 
@@ -74,6 +75,7 @@ class TRLMixin:
     tokenizer: PreTrainedTokenizerBase | None = None
     device = None
     _resolved_base_ref: str | None = None
+    _transient_output_dir: str | None = None
 
     def _resolve_model_tokenizer(
         self,
@@ -152,16 +154,29 @@ class TRLMixin:
         return model
 
     def _maybe_save_trained_artifacts(self, trainer) -> None:
-        output_dir = self.training_args.get("output_dir") or self.output_dir
-        if output_dir:
-            trainer.save_model(output_dir)
-            try:
-                self.tokenizer.save_pretrained(output_dir)
-            except Exception:
-                pass
+        output_dir = self._resolved_output_dir()
+        trainer.save_model(output_dir)
+        try:
+            self.tokenizer.save_pretrained(output_dir)
+        except Exception:
+            pass
 
-    def _resolved_output_dir(self) -> str | None:
-        return self.training_args.get("output_dir") or self.output_dir
+    def _resolved_output_dir(self) -> str:
+        """Return the configured output directory (`training_args["output_dir"]`, else `output_dir`).
+
+        Without a configured directory, a temporary directory is created on the first call and
+        returned on every later call of the same control.
+        """
+        configured = self.training_args.get("output_dir") or self.output_dir
+        if configured:
+            return str(configured)
+        if self._transient_output_dir is None:
+            self._transient_output_dir = tempfile.mkdtemp(prefix="steerability-trainer-")
+        return self._transient_output_dir
+
+    def _config_kwargs(self, config_kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Return a copy of `config_kwargs` whose `output_dir` is the resolved output directory."""
+        return {**config_kwargs, "output_dir": self._resolved_output_dir()}
 
     def artifact_capability(self) -> Capability | None:
         """The serve capability implied by this training configuration.
@@ -169,17 +184,18 @@ class TRLMixin:
         Training runs only when `train_dataset` is set, so a configuration without one produces
         no artifact. A LoRA run without merge-back saves an adapter to the output directory
         (`Capability.SERVE_LORA`); a full fine-tune saves a checkpoint there
-        (`Capability.SERVE_CHECKPOINT`); a merged LoRA run yields a checkpoint only when
-        `merged_output_dir` is set.
+        (`Capability.SERVE_CHECKPOINT`). The output directory is the configured one or a
+        temporary directory. A merged LoRA run yields a checkpoint only when `merged_output_dir`
+        is set.
         """
         if getattr(self, "train_dataset", None) is None:
             return None
         is_lora = bool(self.use_peft) and self.peft_type == PeftType.LORA
         if is_lora and not self.merge_lora_after_train:
-            return Capability.SERVE_LORA if self._resolved_output_dir() else None
+            return Capability.SERVE_LORA
         if is_lora and self.merge_lora_after_train:
             return Capability.SERVE_CHECKPOINT if self.merged_output_dir else None
-        return Capability.SERVE_CHECKPOINT if self._resolved_output_dir() else None
+        return Capability.SERVE_CHECKPOINT
 
     def export_artifact(self) -> Artifact | None:
         """The on-disk product of this configuration's `steer()`, matching
@@ -209,8 +225,8 @@ class TRLMixin:
         artifact = self.export_artifact()
         if artifact is None:
             raise NotFreezableError(
-                f"{type(self).__name__} trains but writes no on-disk product; set output_dir "
-                "(or merged_output_dir for a merged LoRA run) to make the result freezable."
+                f"{type(self).__name__} merges its LoRA adapter after training but writes no on-disk "
+                "product; set merged_output_dir to make the result freezable."
             )
         return {"artifact": artifact}
 

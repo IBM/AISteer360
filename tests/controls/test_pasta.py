@@ -387,6 +387,7 @@ class TestHeadProfileResultRoundTrip:
         result.save(path)
         loaded = HeadProfileResult.load(path)
 
+        assert path.read_text().endswith("}\n")
         assert loaded.head_config == result.head_config
         assert loaded.selected == result.selected
         assert torch.equal(loaded.lift.isnan(), result.lift.isnan())
@@ -424,6 +425,37 @@ class TestProfiledPASTAThroughPipeline:
             max_new_tokens=4,
         )
         assert out.size(1) >= 1
+
+
+class TestHeadProfileBatchLayout:
+    """Profiling batches are left-padded for any tokenizer `padding_side`, which places the shared
+    hook's spans and the per-item prompts in one coordinate system."""
+
+    def _batch(self, padding_side: str):
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        tokenizer.padding_side = padding_side
+        pasta = PASTA(head_config={0: [0]}, alpha=100.0, scale_position="include")
+        pasta.steer(model, tokenizer)
+        profile = HeadProfile(
+            rows=[
+                {"input": "the cat sat on mat", "substrings": ["cat sat"]},
+                {"input": "dog ran", "substrings": ["dog"]},
+            ],
+            scorer=contains_target, alpha=100.0, num_heads=1, layers=[0], batch_size=2,
+        )
+        (batch,) = profile._prepare_batches(pasta, tokenizer, torch.device("cpu"))
+        return batch, tokenizer.pad_token_id
+
+    def test_right_padding_tokenizer_yields_left_padded_rows_and_spans(self):
+        left, pad_token_id = self._batch("left")
+        right, _ = self._batch("right")
+        assert torch.equal(right.input_ids, left.input_ids)
+        assert torch.equal(right.attention_mask, left.attention_mask)
+        assert [ranges.tolist() for ranges in right.token_ranges] == [ranges.tolist() for ranges in left.token_ranges]
+        # the shorter row's pads lead the row
+        assert right.attention_mask[1].tolist() == [0, 0, 0, 1, 1, 1]
+        assert right.input_ids[1, :3].tolist() == [pad_token_id] * 3
 
 
 class TestHeadProfileBatchSize:
@@ -465,6 +497,70 @@ class TestHeadProfileBatchSize:
         torch.testing.assert_close(serial.lift, batched.lift, equal_nan=True)
         assert serial.selected == batched.selected
         assert serial.head_config == batched.head_config
+
+
+class TestConstructorSubstrings:
+    """The constructor's `substrings` are the default spans; a runtime value overrides them."""
+
+    def _ranges(self, pasta, runtime_kwargs):
+        input_ids = pasta.tokenizer("the cat sat on mat", return_tensors="pt").input_ids
+        hooks = pasta.get_hooks(input_ids, runtime_kwargs)
+        return [ranges.tolist() for ranges in hooks["pre"][0]["hook_func"].keywords["token_ranges"]]
+
+    def _pasta(self, substrings=None):
+        pasta = PASTA(substrings=substrings, head_config={0: [0]}, alpha=2.0, scale_position="include")
+        pasta.steer(tiny_llama(num_layers=2, hidden=12, heads=3), wordlevel_tokenizer())
+        return pasta
+
+    def test_constructor_substrings_generate_without_runtime_kwargs(self):
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        pasta = PASTA(substrings=["cat sat"], head_config={0: [0]}, alpha=2.0, scale_position="include")
+        pipeline = SteeringPipeline(controls=[pasta], model=model, tokenizer=tokenizer)
+        pipeline.steer()
+        out = pipeline.generate(
+            input_ids=tokenizer("the cat sat on mat", return_tensors="pt").input_ids, max_new_tokens=3,
+        )
+        assert out.size(1) >= 1
+
+    def test_runtime_substrings_override_the_constructor(self):
+        pasta = self._pasta(["cat sat"])
+        assert self._ranges(pasta, None) == self._ranges(self._pasta(), {"substrings": ["cat sat"]})
+        assert self._ranges(pasta, {"substrings": ["mat"]}) != self._ranges(pasta, None)
+
+    def test_no_substrings_raises(self):
+        with pytest.raises(ValueError, match="at construction or inside runtime_kwargs"):
+            self._ranges(self._pasta(), None)
+
+
+class TestPerItemSeedScope:
+    """Under a seed with `seed_scope="item"`, each row's hooks receive that row's substring group."""
+
+    def test_batched_rows_match_single_prompt_calls(self):
+        torch.manual_seed(0)
+        model = tiny_llama(num_layers=2, hidden=12, heads=3)
+        tokenizer = wordlevel_tokenizer()
+        pasta = PASTA(head_config={0: [0, 1], 1: [2]}, alpha=0.01, scale_position="include")
+        pipeline = SteeringPipeline(controls=[pasta], model=model, tokenizer=tokenizer)
+        pipeline.steer()
+
+        prompts = ["the cat sat on mat", "dog ran fast"]
+        groups = [["cat sat"], ["dog"]]
+        gen_kwargs = {"max_new_tokens": 4, "do_sample": False, "seed": 0, "seed_scope": "item"}
+        batched = pipeline.generate(
+            input_ids=tokenizer(prompts, padding=True, return_tensors="pt").input_ids,
+            runtime_kwargs={"substrings": groups},
+            **gen_kwargs,
+        )
+        for row, (prompt, group) in enumerate(zip(prompts, groups)):
+            single = pipeline.generate(
+                input_ids=tokenizer(prompt, return_tensors="pt").input_ids,
+                runtime_kwargs={"substrings": [group]},
+                **gen_kwargs,
+            )
+            continuation = batched[row][: single.size(1)]
+            assert continuation.tolist() == single[0].tolist()
 
 
 class TestBuildHooksMatchesGetHooks:

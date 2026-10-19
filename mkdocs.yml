@@ -37,7 +37,6 @@ theme:
     - content.tabs.link
     - content.code.annotate
     - content.code.copy
-    - announce.dismiss
     - navigation.footer
     - navigation.tabs
     - navigation.indexes
@@ -50,12 +49,6 @@ theme:
     - navigation.tracking
     - search.suggest
     - toc.follow
-
-extra:
-  announcement:
-    type: info          # info | warning | success | danger
-    text: |
-      **Aug 2025:** Initial release of **Steerability**!
 
 markdown_extensions:
   - pymdownx.tabbed:

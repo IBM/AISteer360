@@ -24,7 +24,6 @@ nav:
     - Probes: concepts/probes.md
     - Steering pipelines: concepts/steering_pipelines.md
     - Sharing pipelines (.spipe): concepts/spipe.md
-#    - Use cases & benchmarking: concepts/benchmarks.md
   - Tutorials:
     - Tutorials: tutorials/index.md
     - Add a steering method: "tutorials/add_new_steering_method.md"
@@ -76,10 +75,6 @@ nav:
       - Commonsense MCQA: "examples/notebooks/studies/commonsense_mcqa/commonsense_mcqa.ipynb"
       - Instruction following: "examples/notebooks/studies/instruction_following/instruction_following.ipynb"
       - Routing versus prompting: "examples/notebooks/studies/routing_vs_prompting.ipynb"
-#  - Developer notes:
-#      - Developer notes: dev_notes/index.md
-#      - "dev_notes/steering_lifecycle.md"
-#      - "dev_notes/benchmark_lifecycle.md"
   - API Reference:
     - Overview: reference/index.md
     - Algorithms:

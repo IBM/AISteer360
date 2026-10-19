@@ -78,12 +78,13 @@ class PASTA(HookControl):
         {
             "name": "substrings",
             "type": "list[str]",
-            "required": True,
+            "required": False,
             "scope": "row",
             "help": (
-                "Substrings whose attention should be steered. Required at inference time. A `str` "
-                "broadcasts to every row; a `list[list[str]]` of batch length carries one group per "
-                "row; a flat `list[str]` is accepted only at batch size 1, as that row's group."
+                "Substrings whose attention should be steered, overriding the constructor's "
+                "`substrings` for the call. A `str` broadcasts to every row; a `list[list[str]]` of "
+                "batch length contains one group per row; a flat `list[str]` is accepted only at batch "
+                "size 1, as that row's group."
             ),
         },
     ]
@@ -232,26 +233,31 @@ class PASTA(HookControl):
         Identifies token ranges corresponding to target substrings and prepares hooks that will modify attention weights
         during the forward pass, at the configured head map and the control's `alpha`.
 
+        The spans come from `runtime_kwargs["substrings"]` when present and from the constructor's
+        `substrings` otherwise. Both take the same forms:
+
+        - str: one substring, broadcast to every batch item
+        - list[list[str]]: one substring group per batch item, of batch length
+        - list[str]: accepted only at batch size 1, as that row's group
+
         Args:
             input_ids (torch.Tensor): Input token IDs of shape [batch_size, seq_len].
-            runtime_kwargs (dict | None): Must contain "substrings" key with target text spans:
-
-                - str: one substring, broadcast to every batch item
-                - list[list[str]]: one substring group per batch item, of batch length
-                - list[str]: accepted only at batch size 1, as that row's group
+            runtime_kwargs (dict | None): Per-call parameters, optionally with a `"substrings"`
+                entry that overrides the constructor's `substrings`.
 
         Returns:
             dict[str, list]: Hook specifications with "pre", "forward", "backward" keys. Only "pre" hooks are populated for attention modification.
 
         Raises:
-            ValueError: If "substrings" is missing from runtime_kwargs, a flat list of strings is
-                passed at batch size > 1, a group is a `str` or contains a non-`str` element, or
-                the number of groups does not match the batch size.
+            ValueError: If neither `runtime_kwargs` nor the constructor gives `substrings`, a flat
+                list of strings is passed at batch size > 1, a group is a `str` or contains a
+                non-`str` element, or the number of groups does not match the batch size.
         """
-        if not runtime_kwargs or "substrings" not in runtime_kwargs:
-            raise ValueError("PASTA requires 'substrings' inside runtime_kwargs")
+        substrings = (runtime_kwargs or {}).get("substrings", self.substrings)
+        if substrings is None:
+            raise ValueError("PASTA requires 'substrings' at construction or inside runtime_kwargs.")
 
-        token_ranges, input_len = self.locate_spans(input_ids, runtime_kwargs["substrings"])
+        token_ranges, input_len = self.locate_spans(input_ids, substrings)
         return self.build_hooks_for(token_ranges, input_len, self._head_map, self.alpha)
 
     def locate_spans(self, input_ids: torch.Tensor, substrings) -> tuple[list[torch.Tensor], int]:

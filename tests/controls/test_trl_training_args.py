@@ -179,3 +179,35 @@ class TestResumeFromCheckpoint:
         plain = SFT(train_dataset=dataset).fit_identity()
         resumed = SFT(train_dataset=dataset, resume_from_checkpoint="ckpt").fit_identity()
         assert plain == resumed
+
+
+class TestOutputDirectory:
+    def test_unset_output_dir_leaves_identity_stable(self):
+        dataset = Dataset.from_list([{"input_ids": [1, 2, 3], "labels": [1, 2, 3]}])
+        first = SFT(train_dataset=dataset)
+        second = SFT(train_dataset=dataset)
+        assert first.output_dir is None
+        assert first.training_args["output_dir"] is None
+        assert "output_dir" not in resolve_config_kwargs(SFTConfig, first.training_args)
+        assert config_digest(config_descriptor_from_controls([first])) == config_digest(
+            config_descriptor_from_controls([second])
+        )
+
+    def test_training_args_output_dir_fills_the_field(self, tmp_path):
+        args = SFTArgs(training_args={"output_dir": str(tmp_path)})
+        assert args.output_dir == str(tmp_path)
+
+    def test_transient_directory_is_created_once_per_control(self):
+        from steerability.algorithms.core.execution.contracts import Capability
+
+        control = SFT(train_dataset=Dataset.from_list([{"input_ids": [1, 2, 3], "labels": [1, 2, 3]}]), use_peft=True)
+        assert control.artifact_capability() is Capability.SERVE_LORA
+        transient = control._resolved_output_dir()
+        assert transient == control._resolved_output_dir()
+        assert control.export_artifact().path == transient
+        assert control._config_kwargs(control.training_args)["output_dir"] == transient
+
+    def test_configured_output_dir_wins(self, tmp_path):
+        control = SFT(train_dataset=None, output_dir=str(tmp_path))
+        assert control._resolved_output_dir() == str(tmp_path)
+        assert control._config_kwargs(control.training_args)["output_dir"] == str(tmp_path)

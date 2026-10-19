@@ -32,6 +32,21 @@ models cached, deselect them with:
 pytest -m 'not network' tests/
 ```
 
+## Gated and seed-dependent tests
+
+Some tests run only when an environment variable is set, and some skip when the randomly initialized tiny model does
+not separate the classes they need for the fixed seed:
+
+| Test | Behavior |
+| --- | --- |
+| `tests/core/test_staged_steer.py` (TRL staged-steer smoke test) | Runs with `RUN_TRL_SMOKE=1`; trains a tiny SFT LoRA. |
+| `tests/controls/test_grpo_wrapper.py` (GRPO smoke test) | Runs with `RUN_GRPO_SMOKE=1`; runs one GRPO step on a tiny model. |
+| `tests/core/test_environment.py` | Fails when `STEERABILITY_REQUIRE_PLUGINS=1` (or `STEERABILITY_REQUIRE_MERGEKIT=1`) is set and `vllm_hook_plugins` (or `mergekit`) is not importable; skips otherwise. |
+| `tests/controls/test_position_tracking_goldens.py` | `STEERABILITY_CAPTURE_GOLDENS=1` (with `-s`) prints the generated sequences to paste into `GOLDENS`. |
+| `tests/controls/test_cast_conditional.py` (`test_rows_gated_independently`, `test_row_zero_closed_row_one_open`, `test_gate_open_ablates_gate_closed_untouched`) | Skips when the condition scores are not separable for the seed. |
+| `tests/controls/test_routed_decoding.py` (`test_three_routes_in_one_call`) | Skips when the probe scores are not separable for the seed. |
+| `tests/controls/test_probe_condition.py` (`test_adapter_decisions_match_probe_set_read`) | Skips when the probe scores are not separable for the seed. |
+
 ## Adding your own control test
 
 To add your own test for a steering method, please follow the pattern in the existing test files. Specifically:

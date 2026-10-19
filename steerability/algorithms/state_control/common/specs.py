@@ -310,12 +310,16 @@ class Intervention:
 
         The check validates recorded provenance only: an artifact whose metadata carries no
         `"location"` key has unknown extraction provenance and passes, with the boundary
-        requirement documented on the consuming control's args instead.
+        requirement documented on the consuming control's args instead. The check does not
+        apply at the `"norm_input"` site, which edits the inputs of each layer's normalization
+        sub-modules (the stream entering the layer and the mid-layer stream) for any `boundary`.
 
         Raises:
             ValueError: If the artifact records a `"location"` that differs from this
                 intervention's `boundary`.
         """
+        if self.resolved_site() == "norm_input":
+            return
         meta = getattr(transform, "artifact_meta", None) or {}
         location = meta.get("location")
         if location is not None and location != self.boundary:
@@ -327,7 +331,12 @@ class Intervention:
             )
 
     def _validate_readout(self, readout, layout) -> None:
-        """Check a readout's declared boundary and model identity against this intervention."""
+        """Check a readout's declared boundary and model identity against this intervention.
+
+        The recorded `model_fingerprint` is compared only with a weights-grade layout fingerprint
+        (a model in process). A config-grade layout (an engine backend) skips the comparison,
+        since its fingerprint digests the model config rather than the weights.
+        """
         readout_location = getattr(readout, "location", None)
         if readout_location is not None and readout_location != self.boundary:
             raise ValueError(
@@ -337,7 +346,8 @@ class Intervention:
                 f"location='{self.boundary}'."
             )
         readout_fingerprint = getattr(readout, "model_fingerprint", None)
-        if readout_fingerprint is not None and layout is not None:
+        weights_grade = getattr(layout, "fingerprint_grade", "weights") == "weights"
+        if readout_fingerprint is not None and layout is not None and weights_grade:
             live_fingerprint = getattr(layout, "model_fingerprint", None)
             if live_fingerprint is not None and readout_fingerprint != live_fingerprint:
                 raise ValueError(

@@ -8,6 +8,10 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 class RewardModelScorer:
     """Score each continuation with an HF sequence classifier over `prompt + continuation`.
 
+    The scored texts are truncated to the tokenizer's `max_length` attribute when it has one (the
+    sequence-classifier loader sets it from the model's limit), and to the tokenizer's
+    `model_max_length` otherwise.
+
     Args:
         model: The reward model (HF sequence classifier, in eval mode).
         tokenizer: Tokenizer for the reward model.
@@ -35,7 +39,11 @@ class RewardModelScorer:
         for start in range(0, len(texts), self.batch_size):
             batch = texts[start:start + self.batch_size]
             inputs = self.tokenizer(
-                batch, return_tensors="pt", padding=True, truncation=True
+                batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=getattr(self.tokenizer, "max_length", None),
             ).to(self._device)
             logits = self.model(**inputs).logits
             scores.extend(logits[:, self.score_index].detach().cpu().tolist())

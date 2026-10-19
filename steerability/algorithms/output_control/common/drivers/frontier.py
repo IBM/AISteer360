@@ -32,6 +32,10 @@ class Frontier:
     stripped length reaches `max_new_tokens`. A beam cut by a caller-supplied stopping
     criterion classifies as unfinished.
 
+    `best_ids` and `best_score` track the highest-scoring finished beam seen so far. Unfinished
+    beams are not candidates, since the search continues them. On equal scores the earlier
+    finished beam is kept.
+
     Args:
         keep_k: Number of beams to retain each iteration.
         eos_token_id: Finished-beam token id(s), as an int, a list of ints, or None (disables
@@ -52,7 +56,7 @@ class Frontier:
         self.best_score = float("-inf")
 
     def keep(self, beams: torch.Tensor, scores: list[float]) -> FrontierStep:
-        """Select the top-k beams, update best-so-far, and compute finished flags.
+        """Select the top-k beams, compute finished flags, and update the finished best-so-far.
 
         Args:
             beams: Candidate beam sequences `[N, T]`, right-padded to a common length.
@@ -75,9 +79,10 @@ class Frontier:
         )
         finished_flags = [reason is not None for reason in reasons]
 
-        best_local = int(torch.argmax(torch.tensor(kept_scores)))
-        if kept_scores[best_local] > self.best_score:
-            self.best_score = kept_scores[best_local]
-            self.best_ids = kept[best_local]
+        for index, finished in enumerate(finished_flags):
+            # since kept beams are in descending score order, the first finished beam at a score wins a tie
+            if finished and kept_scores[index] > self.best_score:
+                self.best_score = kept_scores[index]
+                self.best_ids = kept[index]
 
         return FrontierStep(kept_ids=kept, kept_scores=kept_scores, finished_flags=finished_flags)

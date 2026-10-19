@@ -4,44 +4,44 @@ This distribution contains code licensed under multiple open source licenses.
 
 1. Toolkit Code
    Name: steerability — Steerability Toolkit
-   Version: 0.5.0
+   Version: 0.5.6
    Copyright © 2026 IBM Research
    Licensed under the Apache License, Version 2.0
    https://www.apache.org/licenses/LICENSE-2.0
 
 2. Third-Party Component: MergeKit
-   Version: 0.1.4 (pinned >=0.1.4,<0.2.0)
+   Version: 0.1.4 (pinned to commit a6e402884ba9bc30da7f23e8304a35f19485de95)
    License: GNU Lesser General Public License v3.0 (LGPL-3.0-only)
    License text: https://www.gnu.org/licenses/lgpl-3.0.html
-   Source: https://pypi.org/project/mergekit/0.1.4/
+   Source: https://github.com/arcee-ai/mergekit/tree/a6e402884ba9bc30da7f23e8304a35f19485de95
 
    MergeKit is distributed as an independent Python package dependency and is not
    modified or redistributed by this project. Earlier v0.1 releases were distributed
    under the Business Source License (BSL), which could not be redistributed under
-   Apache 2.0 terms; MergeKit has since returned to the LGPL-3.0 license, so this
-   project now depends on a current LGPL-licensed release (>= 0.1.4).
+   Apache 2.0 terms. MergeKit is licensed under LGPL-3.0, and this project depends on
+   an LGPL-licensed commit of version 0.1.4.
 
 3. Third-Party Component: TRL (Hugging Face)
-   Version: 1.10.0 (pinned >=1.0.0,<2.0.0)
+   Version: 1.12.0 (pinned >=1.0.0,<2.0.0)
    License: Apache License, Version 2.0
    License text: https://www.apache.org/licenses/LICENSE-2.0
    Source: https://github.com/huggingface/trl
 
 4. Third-Party Component: Inspect AI (UK AI Security Institute)
-   Version: 0.3.260 (pinned >=0.3.260,<0.4.0)
+   Version: 0.3.263 (pinned >=0.3.262,<0.4.0)
    License: MIT License
    License text: https://opensource.org/licenses/MIT
    Source: https://github.com/UKGovernmentBEIS/inspect_ai
 
 5. Third-Party Component: Inspect Evals (UK AI Security Institute)
-   Version: 0.18.0 (pinned >=0.18.0,<1.0.0)
+   Version: 0.19.0 (pinned >=0.18.0,<1.0.0)
    License: MIT License
    License text: https://opensource.org/licenses/MIT
    Source: https://github.com/UKGovernmentBEIS/inspect_evals
 
 License Summary:
 - The steerability toolkit code is licensed under Apache 2.0.
-- MergeKit (>= 0.1.4) is licensed under LGPL-3.0-only and included as an unmodified dependency.
+- MergeKit (0.1.4, a pinned commit) is licensed under LGPL-3.0-only and included as an unmodified dependency.
 - TRL (>= 1.0.0) is licensed under Apache 2.0 and included as an unmodified dependency.
-- Inspect AI (>= 0.3.260) and Inspect Evals (>= 0.18.0) are licensed under MIT and included as
+- Inspect AI (>= 0.3.262) and Inspect Evals (>= 0.18.0) are licensed under MIT and included as
   unmodified optional dependencies.

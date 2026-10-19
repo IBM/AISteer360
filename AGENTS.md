@@ -260,7 +260,7 @@ Behaviors that differ from bare Hugging Face usage:
 - `device` and a non-default `device_map` are mutually exclusive on the `SteeringPipeline` constructor.
 - Construction never loads the model. `steer()` acquires it from `model_name_or_path`, reuses preloaded
   `model=`/`tokenizer=` objects passed at construction, or receives it from a structural control that produces the
-  final weights itself (e.g. `mergekit`). `lazy_init` is accepted and inert.
+  final weights itself (e.g. `mergekit`).
 - A `revision` key in `hf_model_kwargs` also pins the tokenizer when it is loaded from `model_name_or_path`.
 - `pipeline.supports_batching` is `True` only when every enabled control declares batch safety and no enabled
   decoding driver with `whole_batch_rollouts = False` (the phased and search drivers) is combined with an enabled
@@ -301,7 +301,9 @@ pipeline = SteeringPipeline(
   in). Support verdicts never depend on the plugin's presence.
 - Activation-steering state controls execute on vLLM through the vLLM-Hook plugin (`hook_plugin: True` on the
   spec). The control's steering tuple serializes as an intervention spec, and tensor payloads travel as
-  content-addressed artifacts (`artifact_dir` option; on serve this must be a filesystem shared with the server).
+  content-addressed artifacts. The offline engine writes them into its registry (the `artifact_dir` option). On serve
+  `artifact_dir` is optional: without it each payload is uploaded to the server's `/v1/hook/artifacts/{id}` route, and
+  with it the directory must be the server's registry on a shared filesystem.
   A configuration either serializes exactly or is honestly in-process-only; there is no approximate lowering.
 - The offline backend applies a scoped engine-process environment per boot and restores it
   (`backends/vllm/environment.py`), defaulting `VLLM_USE_FLASHINFER_SAMPLER=0` (an explicit caller value wins) and
@@ -346,7 +348,8 @@ pipeline = SteeringPipeline(
   phased drivers raise `ValueError` for `num_beams > 1` with `n > 1`. The search drivers (`deal`, `best_of_n`,
   `search_decoding`) run `n` independent searches per row, with the preset's own candidate count as the proposals per
   iteration from each kept beam. They clamp segments so that no continuation exceeds `max_new_tokens`, and beam
-  proposals without sampling run one search and return it as every candidate.
+  proposals without sampling run one search and return it as every candidate. Each search returns the highest-scoring
+  sequence among those it stopped extending (finished, or kept in the last iteration).
 - In-process state hooks restart their pass count at every `model.generate` call the Hugging Face session issues,
   which places each call's prefill at position 0. Hook points that receive no position ids (e.g., `iti` on `o_proj`)
   therefore steer every phase and candidate of a driver.
@@ -413,7 +416,8 @@ manifest only, with artifact ids resolved at load through `artifact_store=`. `SP
 
 `spipe.pipeline()` reconstructs a `SteeringPipeline`. Frozen entries instantiate from their resolution, so `steer()` is
 cheap and model-free; `prefer="recipe"` forces re-fits instead. Backend, device, dtype, and `hf_model_kwargs` stay the
-caller's. `verify()` is the model-free report and `thaw()` drops the resolution. `allow_code=True` at load permits
+caller's, except that a model revision recorded at save time fills `hf_model_kwargs["revision"]` when the caller sets
+none. `verify()` is the model-free report and `thaw()` drops the resolution. `allow_code=True` at load permits
 `$ref` callables, `$dc` dataclasses outside `codec.DECODABLE_DATACLASSES` (the toolkit dataclasses whose construction
 only validates), and tree artifacts whose payload contains pickle-bearing files (pickle-backed memories, adapter or
 checkpoint trees with pickled weights). Toolkit enums always decode, and `$dc` constructs only dataclasses and enums.
@@ -476,8 +480,8 @@ runs = runner.runs_frame(metrics={"accuracy": "choice/accuracy"})  # one row per
 ```
 
 `summarize_runs` (in `evaluation/runner.py`) aggregates the per-trial frame into one row per configuration with
-`{metric}_mean` / `{metric}_std` columns, the contract every function in `evaluation/plotting.py` consumes (`eval`
-extra).
+`{metric}_mean` / `{metric}_std` / `{metric}_sem` columns. The functions in `evaluation/plotting.py` consume the
+`_mean` and `_std` columns (`eval` extra).
 
 Every generation flows through `pipeline.generate()`. Prompts enter as `messages=` when the tokenizer has a chat
 template (so `adapt_messages` input controls fire exactly as in deployment) and as rendered `text=` otherwise, with

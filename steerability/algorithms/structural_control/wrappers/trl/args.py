@@ -1,4 +1,3 @@
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,10 @@ class TRLArgs(BaseArgs):
     model layout, so a multimodal wrapper's vision and audio towers are not adapted. A string is a
     PEFT full-match regex over module names and is passed through unchanged, which is how modules
     outside the decoder stack are targeted.
+
+    `output_dir` (or a `training_args["output_dir"]` entry) is where the trained model or adapter
+    is saved. When neither is set, `steer()` saves to a temporary directory created on the first
+    `steer()` of the control.
     """
 
     # when the pipeline has no base model of its own, the structural control can load these.
@@ -72,12 +75,8 @@ class TRLArgs(BaseArgs):
 
     def __post_init__(self) -> None:
 
-        # default transient artifacts to a system temp directory so nothing lands relative to the caller's cwd
-        self.output_dir = (
-            self.output_dir
-            or self.training_args.get("output_dir")
-            or tempfile.mkdtemp(prefix="steerability-trainer-")
-        )
+        # an unset output directory stays None here; the trainer resolves a transient one at steer time
+        self.output_dir = self.output_dir or self.training_args.get("output_dir")
 
         # compose training args
         base_training_args = {

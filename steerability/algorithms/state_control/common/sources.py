@@ -65,11 +65,12 @@ class ContrastiveFit:
 
     The five spec fields (`method`, `accumulate`, `batch_size`, `prompt_format`, `location`) drive
     the built-in estimators. `"mean_diff"` dispatches to `MeanDifferenceEstimator`, everything else
-    to `ContrastiveDirectionEstimator`, and the fitted artifact records its extraction boundary as
+    to `ContrastiveDirectionEstimator`. When a custom `estimator` is supplied, the spec fields are
+    ignored (a warning is emitted) and fitting delegates to
+    `estimator.fit(model, tokenizer, data=<coerced pairs>, session=session, **(estimator_kwargs or {}))`.
+    The built-in estimators record the extraction boundary of the fitted artifact as
     `meta["location"]`, which `Intervention.bind` checks against the consuming intervention's
-    boundary. When a custom `estimator` is supplied, the spec fields are ignored (a warning is
-    emitted), no location is recorded, and fitting delegates to
-    `estimator.fit(model, tokenizer, data=<coerced pairs>, **(estimator_kwargs or {}))`.
+    boundary.
 
     The fitted master vector is memoized in a single weakref slot keyed by model identity. The same
     model resolved repeatedly fits once, a different model refits, and alternating models (A→B→A)
@@ -106,10 +107,12 @@ class ContrastiveFit:
 
     @property
     def access(self) -> ModelAccess:
-        """`ModelAccess.CAPTURE` for the built-in estimators, whose extraction runs through
-        session capture; a custom estimator may need the live model, so it declares
-        `ModelAccess.MODULE`."""
-        return ModelAccess.MODULE if self.estimator is not None else ModelAccess.CAPTURE
+        """The `access` the custom estimator declares (`ModelAccess.MODULE` when it declares
+        none), or `ModelAccess.CAPTURE` for the built-in estimators, whose extraction runs
+        through session capture."""
+        if self.estimator is None:
+            return ModelAccess.CAPTURE
+        return getattr(self.estimator, "access", ModelAccess.MODULE)
 
     def __post_init__(self):
         if not isinstance(self.data, ContrastivePairs):
@@ -134,12 +137,9 @@ class ContrastiveFit:
     def _fit(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, session=None) -> SteeringVector:
         """Fit the master steering vector (no caching, no cloning)."""
         if self.estimator is not None:
-            try:
-                master = self.estimator.fit(
-                    model, tokenizer, data=self.data, session=session, **(self.estimator_kwargs or {})
-                )
-            except TypeError:
-                master = self.estimator.fit(model, tokenizer, data=self.data, **(self.estimator_kwargs or {}))
+            master = self.estimator.fit(
+                model, tokenizer, data=self.data, session=session, **(self.estimator_kwargs or {})
+            )
         else:
             spec = VectorTrainSpec(
                 method=self.method,
@@ -149,7 +149,6 @@ class ContrastiveFit:
                 location=self.location,
             )
             master = estimator_for(self.method).fit(model, tokenizer, data=self.data, spec=spec, session=session)
-            master.meta["location"] = self.location
 
         if self.normalize:
             master = master.normalized()
@@ -210,7 +209,10 @@ class VerifiedPrecomputed:
     Wraps a concrete `SteeringVector` together with the fingerprints of the side that produced
     it. Resolution is model-free (`ModelAccess.FACTS`) and reads structural facts from the
     session layout (or the live model when one is given): the vector's `model_type` and width
-    are always checked, and the recorded model fingerprint is checked per the policy. A
+    are always checked, and the model identity is checked per the policy. On a layout with a
+    weights-grade fingerprint (a model in process) the recorded `model_fingerprint` is compared
+    with the layout's. On a config-grade layout (an engine backend, whose weights are not
+    readable) the recorded `model_ref` is compared with the served model reference instead. A
     `"calibrated"` artifact on a mismatched model raises under `policy="strict"` and warns
     under `"warn"`; a `"direction"` artifact warns under both, since transferring a direction
     across fine-tunes of one architecture is a deliberate act. `policy="off"` skips every
@@ -219,7 +221,7 @@ class VerifiedPrecomputed:
     Args:
         steering_vector: The concrete artifact.
         provenance: Producing-side fingerprints (mapping or `ArtifactProvenance`-shaped), with
-            keys `model_fingerprint`, `backend_spec_hash`, `tokenizer_fingerprint`.
+            keys `model_fingerprint`, `model_ref`, `backend_spec_hash`, `tokenizer_fingerprint`.
         artifact_class: `"direction"` or `"calibrated"`.
         policy: `"strict"`, `"warn"`, or `"off"`.
     """
@@ -286,17 +288,28 @@ class VerifiedPrecomputed:
                     hard=True,
                 )
 
-        recorded = self.provenance.get("model_fingerprint")
-        live = getattr(layout, "model_fingerprint", None)
-        if recorded and live and recorded != live:
-            self._report(
-                f"Precomputed {self.artifact_class} artifact was produced on a different "
-                f"model (fingerprint {recorded!r} vs {live!r})."
-                + ("" if self.artifact_class == "calibrated"
-                   else " Direction artifacts may transfer across fine-tunes of one "
-                        "architecture; verify the behavior."),
-                hard=(self.artifact_class == "calibrated"),
-            )
+        transfer_note = (
+            "" if self.artifact_class == "calibrated"
+            else " Direction artifacts may transfer across fine-tunes of one architecture; verify the behavior."
+        )
+        if getattr(layout, "fingerprint_grade", "weights") == "weights":
+            recorded = self.provenance.get("model_fingerprint")
+            live = getattr(layout, "model_fingerprint", None)
+            if recorded and live and recorded != live:
+                self._report(
+                    f"Precomputed {self.artifact_class} artifact was produced on a different "
+                    f"model (fingerprint {recorded!r} vs {live!r})." + transfer_note,
+                    hard=(self.artifact_class == "calibrated"),
+                )
+        else:
+            recorded = self.provenance.get("model_ref")
+            live = getattr(layout, "model_ref", None)
+            if recorded and live and recorded != live:
+                self._report(
+                    f"Precomputed {self.artifact_class} artifact was produced on model {recorded!r} "
+                    f"but this backend serves {live!r}." + transfer_note,
+                    hard=(self.artifact_class == "calibrated"),
+                )
 
     def resolve(
         self, model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, *, session: "SteeringSession | None" = None
@@ -313,7 +326,8 @@ class VerifiedPrecomputed:
 
         Raises:
             ValueError: Under `policy="strict"`, if the model type or width mismatches, or a
-                `"calibrated"` artifact's recorded fingerprint differs from the live model's.
+                `"calibrated"` artifact records a model fingerprint (weights-grade layout) or
+                model reference (config-grade layout) that differs from the venue's.
         """
         layout = None
         if session is not None:
@@ -356,9 +370,8 @@ class SinglePairFit:
     """A fit recipe for a positional steering vector: per-token differences of one contrast pair.
 
     Produces `[T, H]` directions per layer (the ActAdd extraction), captured at the layer-input
-    boundary and recorded as `meta["location"] = "layer_input"`. Fitting requires a live model,
-    since the pair is tokenized and co-padded as one batch and remote capture serves per-prompt
-    layouts that do not preserve the co-padded positional structure. The fitted master is
+    boundary and recorded as `meta["location"] = "layer_input"`. The shorter prompt of the pair is
+    right-padded with attended space tokens. Fitting requires a loaded model. The fitted master is
     memoized per model; every `resolve` returns an independent clone.
 
     Attributes:
@@ -423,8 +436,11 @@ class ConditionPointSearch:
     Occupies an `Intervention`'s gate slot. `resolve_gate` fits (or clones) the condition
     vector, resolves the condition point by grid search when `search` enables it and no manual
     layers are given, and assembles the gate: projected-cosine evidence over the condition
-    directions at the resolved layers, decided by a per-layer threshold rule. An unconditional
-    configuration (no condition vector or no resolved point) resolves to None.
+    directions at the resolved layers, decided by a per-layer threshold rule. A configuration
+    without a condition (no condition vector or data) resolves to None, and a partial
+    configuration raises `ValueError`. The manual `layer_ids` and `threshold` must be given
+    together. A condition without them requires `condition_data` and `search.auto_find=True`,
+    since the condition point is then searched.
 
     The projected-cosine readout and the per-layer threshold rule both have wire forms, so an
     intervention gated this way lowers to intervention-capable backends
@@ -437,7 +453,7 @@ class ConditionPointSearch:
         condition_fit: Fit configuration for the condition vector.
         search: Condition point search configuration.
         layer_ids: Manual condition layers; disables the search when set.
-        threshold: Manual gate threshold, required with `layer_ids`.
+        threshold: Manual gate threshold, given together with `layer_ids`.
         comparator: Gate comparator for the manual point (`"ge"` opens when score >= threshold,
             `"le"` when score <= threshold).
         comparison_mode: Runtime token aggregation for condition scoring.
@@ -468,6 +484,18 @@ class ConditionPointSearch:
             self.condition_data = as_contrastive_pairs(self.condition_data)
         if self.comparator not in ("ge", "le"):
             raise ValueError(f"comparator must be 'ge' or 'le'; got {self.comparator!r}.")
+        if (self.layer_ids is None) != (self.threshold is None):
+            raise ValueError(
+                "layer_ids and threshold must be given together; a partial condition point would "
+                "resolve to unconditional steering."
+            )
+        condition_supplied = self.condition_vector is not None or self.condition_data is not None
+        searchable = self.search.auto_find and self.condition_data is not None
+        if condition_supplied and self.layer_ids is None and not searchable:
+            raise ValueError(
+                "A condition was supplied without a condition point; give layer_ids and threshold, "
+                "or condition_data with search.auto_find=True."
+            )
 
     def resolve_gate(
         self,
@@ -487,11 +515,11 @@ class ConditionPointSearch:
             session: Optional `SteeringSession` for capture-backed fitting and calibration.
 
         Returns:
-            The gate, or None for unconditional configurations.
+            The gate, or None for a configuration without a condition.
 
         Raises:
-            ValueError: If a manual threshold is set without a condition vector, or a condition
-                layer lacks a direction.
+            ValueError: If a manual point is set without a condition vector, a condition is
+                supplied but no condition point resolves, or a condition layer lacks a direction.
         """
         from steerability.algorithms.state_control.common.gating import (
             Evidence,
@@ -541,6 +569,11 @@ class ConditionPointSearch:
         if conditional and condition_vec is None:
             raise ValueError("Conditional gating requires a condition vector.")
         if not conditional:
+            if condition_supplied:
+                raise ValueError(
+                    "A condition was supplied but no condition point resolved; give layer_ids and "
+                    "threshold together, or enable search.auto_find with condition_data."
+                )
             self.resolved_point = None
             return None
 

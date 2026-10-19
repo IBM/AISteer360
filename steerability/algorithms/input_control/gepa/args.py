@@ -32,6 +32,9 @@ class GEPAArgs(BaseArgs):
         reflection_lm: LLM used for the reflective proposer. Defaults to the task model.
         reflection_tokenizer: Tokenizer paired with `reflection_lm`. Defaults to the task
             tokenizer. Must be supplied iff `reflection_lm` is supplied.
+        reflection_lm_name_or_path: Hub id or local path of the reflection LLM, loaded with its
+            tokenizer at `steer()` without remote code. Mutually exclusive with `reflection_lm`
+            (pass a loaded model as `reflection_lm` for a model that requires remote code).
         budget: Maximum number of rollouts (sum of internal batch sizes) consumed by the
             search.
         minibatch_size: Size of D_feedback minibatch sampled per genetic step.
@@ -87,6 +90,14 @@ class GEPAArgs(BaseArgs):
     reflection_tokenizer: Any = field(
         default=None,
         metadata={"help": "Tokenizer paired with `reflection_lm`. Defaults to the task tokenizer."},
+    )
+
+    reflection_lm_name_or_path: str | None = field(
+        default=None,
+        metadata={"help": (
+            "Hub id or path of the reflection model, loaded at steer; mutually exclusive with "
+            "`reflection_lm`."
+        )},
     )
 
     budget: int = field(
@@ -160,6 +171,8 @@ class GEPAArgs(BaseArgs):
             raise ValueError(
                 "`reflection_lm` and `reflection_tokenizer` must both be provided or both be None."
             )
+        if self.reflection_lm is not None and self.reflection_lm_name_or_path is not None:
+            raise ValueError("Specify at most one of `reflection_lm` and `reflection_lm_name_or_path`.")
 
         if self.budget <= 0:
             raise ValueError("budget must be positive.")

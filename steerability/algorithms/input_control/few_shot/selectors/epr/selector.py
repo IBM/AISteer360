@@ -149,7 +149,7 @@ class EPRSelector(DenseRetrievalSelector):
             output_field=self.output_field,
             max_anchors=self.max_anchors,
         )
-        self.encoder = train_encoder.train(
+        self.encoder = train_encoder.train_encoder(
             labeled=labeled,
             items=items,
             base_encoder=self.base_encoder_name,

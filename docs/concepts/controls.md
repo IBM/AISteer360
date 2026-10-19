@@ -50,7 +50,7 @@ self-consistency), automatic prompting methods, and prompt routing. The toolkit 
     - *Backends*: HF, vLLM.
 - `CPO` ([API reference](../reference/algorithms/input_control/cpo.md), [notebook](../examples/notebooks/algorithms/cpo.ipynb))
     - *Description*: causal prompt optimization ([Chen et al. 2026](https://arxiv.org/abs/2602.01711)), i.e., offline causal reward training (Double ML over PCA-reduced embeddings) plus per-query tree search. The chosen prompt is placed before the content of the leading system message (separated by a blank line), and a chat without one receives it as its system message.
-    - *Backends*: HF, vLLM (requires `prompt_lm` with its `prompt_tokenizer`). Without `prompt_lm` the pipeline's loaded model is bound as the proposer, which is HF-only.
+    - *Backends*: HF, vLLM (requires `prompt_lm` with its `prompt_tokenizer`, or `prompt_lm_name_or_path`). Without either, the pipeline's loaded model is bound as the proposer, which is HF-only.
 - `GEPA` ([API reference](../reference/algorithms/input_control/gepa.md), [notebook](../examples/notebooks/algorithms/gepa.ipynb))
     - *Description*: reflective genetic prompt evolution ([Agrawal et al. 2025](https://arxiv.org/abs/2507.19457)), single-module variant. The optimized instruction is placed before the content of the leading system message (separated by a blank line), and a chat without one receives it as its system message.
     - *Backends*: HF, vLLM.
@@ -106,7 +106,7 @@ around existing libraries. The toolkit implements:
     - *Backends*: HF, vLLM (the merged checkpoint is served).
 - `TRL` ([API reference](../reference/algorithms/structural_control/trl_wrapper.md), [notebook](../examples/notebooks/algorithms/wrappers/trl.ipynb))
     - *Description*: weight-level training via Hugging Face TRL[@vonwerra2022trl], exposing SFT, DPO, APO, PPO, and GRPO trainers, with optional LoRA/PEFT and a post-training merge. The `ppo` control is registered only when the installed TRL provides `trl.experimental.ppo` (discovery otherwise skips it with a logged hint). Since `training_args` is forwarded verbatim to the installed TRL config, a key the config does not declare raises an error at control construction. A `target_modules` list of module-name suffixes is scoped at steer time to the decoder stack of the resolved model layout, so a multimodal wrapper's vision and audio towers are not adapted; a regex targets other modules.
-    - *Backends*: HF, vLLM (serves the steer-time artifact, a checkpoint or LoRA adapter, and requires a configured output directory).
+    - *Backends*: HF, vLLM (serves the steer-time artifact, a checkpoint or LoRA adapter; a merged LoRA run needs `merged_output_dir`).
 
 
 ## State control
@@ -227,7 +227,7 @@ The toolkit implements the following step-level controls:
     - *Description*: reward-augmented decoding[@deng-raffel-2023-reward], scoring the top-`k` candidate tokens with an `AutoModelForSequenceClassification` reward model and shifting their logits by `beta * reward`. When the reward model is decoder-only and shares the base model's vocabulary it caches the reward-model prefix activations across steps (the paper's efficient path), and otherwise scores each step statelessly. A `value_trace` list passed via `runtime_kwargs` records the per-step candidate scores and rewards for inspection.
     - *Backends*: HF (model-backed per-step logit math is in-process only).
 - `SASA` ([API reference](../reference/algorithms/output_control/sasa.md), [notebook](../examples/notebooks/algorithms/sasa.ipynb))
-    - *Description*: self-disciplined autoregressive sampling[@ko2025large], fitting a linear subspace in the model's own final-layer space from labeled examples (unpaired classes or paired prompt/response data) and shifting the candidate-token logits by the softmax-normalized margin to that subspace at each step. The candidate set follows a policy (`surviving`, `top_p`, or `top_k`); the attribute is whatever the labels define.
+    - *Description*: self-disciplined autoregressive sampling[@ko2025large], fitting a linear subspace in the model's own final-layer space from labeled examples (unpaired classes or paired prompt/response data) and shifting the candidate-token logits by the softmax-normalized margin to that subspace at each step. The candidate set follows a policy (`surviving`, `top_p`, or `top_k`); the attribute is whatever the labels define. A probe loaded from `wv_path` that records a different model raises an error at `steer()` unless `allow_model_mismatch=True`.
     - *Backends*: HF (model-backed per-step logit math is in-process only).
 - `DExperts` ([API reference](../reference/algorithms/output_control/dexperts.md), [notebook](../examples/notebooks/algorithms/dexperts.ipynb))
     - *Description*: decoding-time experts[@liu2021dexperts], re-weighting the base distribution by the log-prob difference between a small expert and anti-expert. Proxy-tuning is the same control with a tuned/untuned small-model pair.
@@ -261,7 +261,7 @@ and the following decoding drivers:
     - *Backends*: HF, vLLM.
 - `RoutedDecoding` ([API reference](../reference/algorithms/output_control/routed_decoding.md), [notebook](../examples/notebooks/recipes/routed_decoding/routed_decoding.ipynb))
     - *Description*: a decoding driver that routes each row to a response plan via a `Router` over a [`ProbeSet`](probes.md)'s readings, and executes the matched plan (canned response, disclaimer prefix, or plain generation). It sits beside `PhasedDecoding` and `SearchDecoding`.
-    - *Backends*: HF, offline vLLM (the probe pass needs hidden-state capture, which serve does not return).
+    - *Backends*: HF, offline vLLM with the hook plugin (the probe pass needs hidden-state capture, which serve does not return).
 - `SearchDecoding` ([API reference](../reference/algorithms/output_control/search_decoding.md), [notebook](../examples/notebooks/algorithms/generics/search_decoding.ipynb))
     - *Description*: the config-first generic over the segment shape (propose → score → keep → iterate, with best-of-N defaults). Best-of-N, self-consistency, blockwise controlled decoding, and DeAL are assignments of its config.
     - *Backends*: HF, vLLM with `propose_mode="sample"` (beam proposals are HF-only).
@@ -270,11 +270,12 @@ and the following decoding drivers:
     - *Backends*: HF, vLLM.
 
 Every decoding driver accepts a padded batch of prompts and returns `n` candidates per prompt (the call's
-`num_return_sequences`). Among the drivers, only `PhasedDecoding` and `RoutedDecoding` declare `supports_batching`,
-which the evaluation provider reads to batch concurrent requests. The search drivers (`DeAL`, `BestOfN`, and
-`SearchDecoding`) run one independent search per candidate on the row's unpadded prompt (with beam proposals and no
-sampling, the search runs once and is returned as every candidate). Their segments are clamped so that no
-continuation exceeds `max_new_tokens`. The phased drivers (`BudgetForcing`, `RoutedDecoding`, and `PhasedDecoding`)
+`num_return_sequences`). The phased drivers declare `supports_batching`, which the evaluation provider reads to batch
+concurrent requests. The search drivers (`DeAL`, `BestOfN`, and `SearchDecoding`) do not declare it. They run one
+independent search per candidate on the row's unpadded prompt (with beam proposals and no sampling, the search runs
+once and is returned as every candidate). Each search returns the highest-scoring sequence among those it stopped
+extending (finished, or kept in the last iteration). Their segments are clamped so that no continuation exceeds
+`max_new_tokens`. The phased drivers (`BudgetForcing`, `RoutedDecoding`, and `PhasedDecoding`)
 apply the call's `max_new_tokens` as one ceiling per candidate across all phases, with fixed text (including routed
 prefixes and canned responses) counted against it and appended whole. A candidate that reaches the ceiling skips the
 rest of its plan (finish reason `"length"`). Since each candidate of a phased driver generates as its own sequence,

@@ -13,6 +13,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from steerability.algorithms.core.execution.payloads import LoRAArtifact
 from steerability.algorithms.structural_control.wrappers.trl.dpotrainer import DPO
+from steerability.algorithms.structural_control.wrappers.trl.utils.preference_schema import (
+    standardize_preference_dataset,
+)
 
 TINY_MODEL = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
@@ -43,13 +46,14 @@ def test_chat_prompt_dpo_trains_and_freezes_to_load_lora(tmp_path, loss_kwargs):
     if tokenizer.chat_template is None:
         tokenizer.chat_template = CHATML_TEMPLATE
 
+    dataset = Dataset.from_list(
+        [
+            {"prompt": "Is the sky blue?", "chosen": "ANSWER: yes", "rejected": "ANSWER: no"},
+            {"prompt": "Is grass red?", "chosen": "ANSWER: no", "rejected": "ANSWER: yes"},
+        ]
+    )
     control = DPO(
-        train_dataset=Dataset.from_list(
-            [
-                {"prompt": "Is the sky blue?", "chosen": "ANSWER: yes", "rejected": "ANSWER: no"},
-                {"prompt": "Is grass red?", "chosen": "ANSWER: no", "rejected": "ANSWER: yes"},
-            ]
-        ),
+        train_dataset=dataset,
         prompt_format="chat_prompt",
         output_dir=str(tmp_path / "adapter"),
         use_peft=True,
@@ -60,11 +64,16 @@ def test_chat_prompt_dpo_trains_and_freezes_to_load_lora(tmp_path, loss_kwargs):
         training_args={"max_steps": 1, "use_cpu": True, "bf16": False, "fp16": False},
         **loss_kwargs,
     )
+    fit_identity = control.fit_identity()
     trained = control.steer(model, tokenizer=tokenizer)
     assert trained is not None
 
+    # steer() leaves the configured dataset and the fit identity unchanged
+    assert control.train_dataset is dataset
+    assert control.fit_identity() == fit_identity
+
     # standardized prompts are chat-rendered and token-prefix their prompt + chosen concatenation
-    row = control.train_dataset[0]
+    row = standardize_preference_dataset(dataset, prompt_format="chat_prompt", tokenizer=tokenizer)[0]
     assert row["prompt"] != "Is the sky blue?"
     prompt_ids = tokenizer(row["prompt"], add_special_tokens=False)["input_ids"]
     joint_ids = tokenizer(row["prompt"] + row["chosen"], add_special_tokens=False)["input_ids"]

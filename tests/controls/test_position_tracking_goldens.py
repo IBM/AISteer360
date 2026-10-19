@@ -44,7 +44,7 @@ def _make_iti():
     return ITI(
         steering_vector=sv,
         selected_heads=[(1, 0), (1, 1), (2, 3)],
-        alpha=1.0,
+        alpha=0.05,  # small enough that the generations depend on the prompt length
         token_scope="after_prompt",
     )
 
@@ -73,7 +73,8 @@ def _make_act_add():
 
 def _make_caa():
     g = torch.Generator().manual_seed(11)
-    sv = SteeringVector(model_type="llama", directions={2: 4 * torch.randn(1, HIDDEN, generator=g)})
+    # small enough that the generations depend on the prompt length
+    sv = SteeringVector(model_type="llama", directions={2: 0.03 * torch.randn(1, HIDDEN, generator=g)})
     return CAA(steering_vector=sv, layer_id=2, multiplier=1.0, token_scope="after_prompt")
 
 
@@ -86,15 +87,21 @@ CONTROL_FACTORIES = {
 
 # recorded token-id sequences (control_name, prompt_len) -> list[int]
 GOLDENS: dict[tuple[str, int], list[int]] = {
-    ("iti", 1): [29, 55, 55, 55, 55, 55, 55, 55],
-    ("iti", 4): [29, 55, 55, 55, 55, 55, 55, 55],
+    ("iti", 1): [29, 66, 97, 28, 45, 2, 99, 41],
+    ("iti", 4): [29, 66, 70, 91, 10, 82, 10, 11],
     ("angular", 1): [29, 66, 97, 29, 66, 97, 29, 66],
     ("angular", 4): [29, 66, 70, 14, 66, 70, 14, 66],
     ("act_add", 1): [29, 45, 27, 33, 29, 66, 97, 38],
     ("act_add", 4): [29, 66, 70, 91, 10, 82, 10, 95],
-    ("caa", 1): [29, 22, 22, 22, 22, 22, 22, 22],
-    ("caa", 4): [29, 22, 22, 22, 22, 22, 22, 22],
+    ("caa", 1): [29, 66, 60, 25, 22, 45, 60, 71],
+    ("caa", 4): [29, 66, 60, 95, 23, 60, 71, 2],
 }
+
+
+@pytest.mark.parametrize("control_name", list(CONTROL_FACTORIES))
+def test_goldens_depend_on_the_prompt_length(control_name):
+    """A golden that is the same at both prompt lengths cannot detect a position-tracking change."""
+    assert GOLDENS[(control_name, 1)] != GOLDENS[(control_name, 4)]
 
 
 def _strip_clock_from_hooks(control) -> None:

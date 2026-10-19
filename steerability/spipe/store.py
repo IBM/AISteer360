@@ -6,8 +6,10 @@ from `state_control/common/lowering.py`, byte-compatible with the vLLM-Hook plug
 and `"tree"` (a directory copied verbatim under `payload/`, id a SHA-256 over the sorted
 relative paths and per-file digests). Every artifact directory carries an `artifact.json`
 sidecar duplicating its manifest record plus type-specific reconstruction metadata, which
-keeps a detached artifact directory self-describing. Writes are idempotent and reads verify the
-content hash.
+keeps a detached artifact directory self-describing. The sidecar is the commit marker, written
+last and atomically (to a temporary file that then replaces `artifact.json`). An artifact
+directory without a sidecar is an interrupted write, and the next write of the same artifact
+replaces it. Writes are idempotent and reads verify the content hash.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import hashlib
 import io
 import json
 import logging
+import os
 import pickle
 import pickletools
 import re
@@ -230,8 +233,8 @@ class ArtifactRecord:
         artifact_class: `"direction"`, `"calibrated"`, or `"opaque"`.
         source: Fit-source class name, or None for recipe-supplied artifacts.
         fit_digest: 12-hex-character digest of the producing fit identity, or None.
-        provenance: Producing-side fingerprints (`backend_spec_hash`, `model_fingerprint`,
-            `tokenizer_fingerprint`), each possibly None.
+        provenance: Producing-side identity (`backend_spec_hash`, `model_fingerprint`,
+            `model_ref`, `tokenizer_fingerprint`), each possibly None.
         type_meta: Type-specific reconstruction metadata (sidecar only, excluded from the
             manifest record).
     """
@@ -257,6 +260,7 @@ class ArtifactRecord:
             "provenance": {
                 "backend_spec_hash": self.provenance.get("backend_spec_hash"),
                 "model_fingerprint": self.provenance.get("model_fingerprint"),
+                "model_ref": self.provenance.get("model_ref"),
                 "tokenizer_fingerprint": self.provenance.get("tokenizer_fingerprint"),
             },
         }
@@ -374,8 +378,11 @@ class ArtifactStore:
         )
 
     def _write_sidecar(self, directory: Path, record: ArtifactRecord) -> None:
-        with open(directory / SIDECAR_FILE, "w", encoding="utf-8") as handle:
+        # write the commit marker to a temporary file and move it into place in one step
+        temporary = directory / f"{SIDECAR_FILE}.tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
             json.dump(record.sidecar_entry(), handle, sort_keys=True, indent=2)
+        os.replace(temporary, directory / SIDECAR_FILE)
 
     def put_tensors(self, tensors: Mapping[str, torch.Tensor], record_fields: dict) -> ArtifactRecord:
         """Write a tensor payload as a `"tensors"` artifact, idempotently.
@@ -391,7 +398,9 @@ class ArtifactStore:
         artifact_id, data = tensors_payload(tensors)
         record = ArtifactRecord(id=artifact_id, encoding="tensors", **record_fields)
         directory = self.root / _dir_name(artifact_id)
-        if not (directory / TENSOR_FILE).exists():
+        if not (directory / SIDECAR_FILE).exists():
+            # a directory without a sidecar is an interrupted write
+            shutil.rmtree(directory, ignore_errors=True)
             directory.mkdir(parents=True, exist_ok=True)
             (directory / TENSOR_FILE).write_bytes(data)
             self._write_sidecar(directory, record)
@@ -414,7 +423,9 @@ class ArtifactStore:
         artifact_id = tree_id_for(source)
         record = ArtifactRecord(id=artifact_id, encoding="tree", **record_fields)
         directory = self.root / _dir_name(artifact_id)
-        if not (directory / PAYLOAD_DIR).exists():
+        if not (directory / SIDECAR_FILE).exists():
+            # a directory without a sidecar is an interrupted write
+            shutil.rmtree(directory, ignore_errors=True)
             directory.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source, directory / PAYLOAD_DIR, symlinks=False)
             self._write_sidecar(directory, record)

@@ -12,7 +12,11 @@ class PASTAArgs(BaseArgs):
 
     substrings: list[str | list[str]] | None = field(
         default=None,
-        metadata={"help": "List of substrings or groups of substrings to steer attention toward or away from."}
+        metadata={"help": (
+            "Default spans: a list of substrings (one group, batch size 1) or of substring groups (one "
+            "group per row) to steer attention toward or away from, overridden per call by "
+            "runtime_kwargs['substrings']."
+        )}
     )
     head_config: "dict[int, list[int]] | list[int] | HeadProfile" = field(
         default_factory=lambda: [0, 1],

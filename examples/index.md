@@ -190,7 +190,7 @@ Studies provide in-depth comparisons of steering methods on a given use case. No
 
     ---
 
-    This notebook compares the probe-based routing from the [routed decoding recipe](./notebooks/recipes/routed_decoding/routed_decoding.ipynb) against two prompting baselines that desribe the same referral policy, i.e., the full policy in a system prompt and a prompted classifier.
+    This notebook compares the probe-based routing from the [routed decoding recipe](./notebooks/recipes/routed_decoding/routed_decoding.ipynb) against two prompting baselines that describe the same referral policy, i.e., the full policy in a system prompt and a prompted classifier.
 
     [:octicons-arrow-right-24: See the study](./notebooks/studies/routing_vs_prompting.ipynb)
 

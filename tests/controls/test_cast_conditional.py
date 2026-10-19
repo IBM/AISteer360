@@ -101,6 +101,61 @@ class TestConfigMatrix:
                 search=ConditionSearchSpec(auto_find=False),
             ))
 
+    def test_layers_without_threshold_raises_under_auto_find(self):
+        with pytest.raises(ValueError, match="without condition_vector_threshold"):
+            CASTArgs(**self._base(
+                condition_vector=_steering_vector(2, [1]),
+                condition_layer_ids=[1],
+            ))
+
+    def test_threshold_without_layers_raises_under_auto_find(self):
+        with pytest.raises(ValueError, match="without condition_layer_ids"):
+            CASTArgs(**self._base(
+                condition_vector=_steering_vector(2, [1]),
+                condition_vector_threshold=0.1,
+            ))
+
+    def test_vector_without_layers_or_search_data_raises_under_auto_find(self):
+        with pytest.raises(ValueError, match="condition_vector given without condition_layer_ids"):
+            CASTArgs(**self._base(condition_vector=_steering_vector(2, [1])))
+
+    def test_vector_with_search_data_is_valid(self):
+        args = CASTArgs(**self._base(
+            condition_vector=_steering_vector(2, [1]),
+            condition_data={"positives": ["a"], "negatives": ["b"]},
+        ))
+        assert args.condition_layer_ids is None
+
+    def test_gate_source_with_vector_and_no_search_data_raises(self):
+        from steerability.algorithms.state_control.common.sources import ConditionPointSearch
+
+        with pytest.raises(ValueError, match="without a condition point"):
+            ConditionPointSearch(condition_vector=_steering_vector(2, [1]))
+
+    def test_gate_source_with_layers_and_no_threshold_raises(self):
+        from steerability.algorithms.state_control.common.sources import ConditionPointSearch
+
+        with pytest.raises(ValueError, match="given together"):
+            ConditionPointSearch(condition_vector=_steering_vector(2, [1]), layer_ids=[1])
+
+    def test_gate_source_without_a_resolved_point_raises_at_resolve(self):
+        from steerability.algorithms.state_control.common.sources import ConditionPointSearch
+
+        source = ConditionPointSearch(
+            condition_vector=_steering_vector(2, [1]), layer_ids=[1], threshold=0.1,
+        )
+        # an empty layer list bypasses the construction checks and resolves no condition point
+        source.layer_ids = []
+        with pytest.raises(ValueError, match="no condition point resolved"):
+            source.resolve_gate(None, wordlevel_tokenizer())
+
+    def test_gate_source_without_a_condition_resolves_to_none(self):
+        from steerability.algorithms.state_control.common.sources import ConditionPointSearch
+
+        source = ConditionPointSearch()
+        assert source.resolve_gate(None, wordlevel_tokenizer()) is None
+        assert source.resolved_point is None
+
     def test_valid_manual_point(self):
         args = CASTArgs(**self._base(
             condition_vector=_steering_vector(2, [1]),

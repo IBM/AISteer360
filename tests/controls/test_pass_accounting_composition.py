@@ -71,7 +71,7 @@ class _RecordingStateControl(StateControl):
         ids = input_ids if isinstance(input_ids, torch.Tensor) else input_ids["input_ids"]
         if ids.ndim == 1:
             ids = ids.unsqueeze(0)
-        self.runtime.reset(compute_prompt_lens(ids, None))
+        self.runtime.reset(compute_prompt_lens(ids))
         if self.gate is not None:
             self.gate.reset(self.runtime.num_logical_rows)
 

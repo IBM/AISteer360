@@ -44,7 +44,10 @@ class AngularSteering(InterventionControl):
     over the artifact's covered layers, at the `"norm_input"` site by default or the decoder
     layer output when `intervention_point="layer_output"` (the only placement with an
     intervention-spec form, since the mid-layer boundary exists only inside the in-process
-    forward pass).
+    forward pass). The plane is fit at `train_spec.location` (layer outputs by default). At the
+    `"norm_input"` site, the rotation applies to the stream entering each layer and to the
+    mid-layer stream. The artifact-location check does not apply at this site, since the stream
+    entering layer `l` is the output of layer `l - 1`.
 
     Reference:
 

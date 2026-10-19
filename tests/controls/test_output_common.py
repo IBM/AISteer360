@@ -460,6 +460,97 @@ class TestSearchDriver:
         assert requested == [4]
         assert out.tolist() == [[0, 3, 4, 6, pad, pad, pad]]
 
+    def test_tied_scores_return_the_last_iteration_sequence(self):
+        tokenizer = wordlevel_tokenizer()
+        driver = SearchDriver(
+            scorer=lambda p, c, params: [0.0] * len(c), segment_len=2, num_candidates=1, keep_k=1,
+            max_iterations=2, propose_mode="sample",
+        )
+        driver.tokenizer = tokenizer
+        requested = []
+
+        def fake_generate(**kwargs):
+            requested.append(kwargs["max_new_tokens"])
+            inp = kwargs["input_ids"]
+            full = torch.cat([inp, torch.full((inp.size(0), kwargs["max_new_tokens"]), 5)], dim=1)
+            return full.repeat_interleave(kwargs.get("num_return_sequences", 1), dim=0)
+
+        out = driver.decode(
+            input_ids=torch.tensor([[0, 3, 4]]),
+            attention_mask=None,
+            model=None,
+            logits_processors=LogitsProcessorList(),
+            stopping_criteria=StoppingCriteriaList(),
+            runtime_kwargs=None,
+            session=ScriptedSession(fake_generate, tokenizer=tokenizer),
+            max_new_tokens=4,
+        )
+        # both segments score the same, and the sequence after the last segment is returned
+        assert requested == [2, 2]
+        assert out.tolist() == [[0, 3, 4, 5, 5, 5, 5]]
+
+    def _search_from_a_finished_first_segment(self, last_iteration_score):
+        tokenizer = wordlevel_tokenizer()
+        scores = {"sat": 2.0, "on on": 1.0, "on on mat mat": last_iteration_score}
+        driver = SearchDriver(
+            scorer=lambda p, c, params: [scores[text] for text in c], segment_len=2, num_candidates=2,
+            keep_k=2, max_iterations=2, propose_mode="sample",
+        )
+        driver.tokenizer = tokenizer
+
+        def fake_generate(**kwargs):
+            # from the prompt, "sat" ends in the eos id 1 and "on on" is unfinished; "on on" continues to "mat mat"
+            if kwargs["input_ids"].size(1) == 3:
+                return torch.tensor([[0, 3, 4, 5, 1], [0, 3, 4, 6, 6]])
+            return torch.tensor([[0, 3, 4, 6, 6, 7, 7]] * 2)
+
+        return driver.decode(
+            input_ids=torch.tensor([[0, 3, 4]]),
+            attention_mask=None,
+            model=None,
+            logits_processors=LogitsProcessorList(),
+            stopping_criteria=StoppingCriteriaList(),
+            runtime_kwargs=None,
+            session=ScriptedSession(fake_generate, tokenizer=tokenizer),
+            max_new_tokens=6,
+        )
+
+    def test_finished_sequence_wins_a_tie_with_the_last_iteration(self):
+        out = self._search_from_a_finished_first_segment(last_iteration_score=2.0)
+        assert out.tolist() == [[0, 3, 4, 5, 1]]
+
+    def test_last_iteration_sequence_wins_on_a_higher_score(self):
+        out = self._search_from_a_finished_first_segment(last_iteration_score=3.0)
+        assert out.tolist() == [[0, 3, 4, 6, 6, 7, 7]]
+
+    def test_prompt_tokens_equal_to_the_pad_id_are_not_treated_as_padding(self):
+        tokenizer = wordlevel_tokenizer()
+        driver = SearchDriver(
+            scorer=lambda p, c, params: [0.0] * len(c), segment_len=2, num_candidates=1, keep_k=1,
+            max_iterations=1, propose_mode="sample",
+        )
+        driver.tokenizer = tokenizer
+        masks = []
+
+        def fake_generate(**kwargs):
+            masks.append(kwargs["attention_mask"].tolist())
+            inp = kwargs["input_ids"]
+            return torch.cat([inp, torch.full((inp.size(0), 2), 5)], dim=1)
+
+        # the last prompt token is the pad id 2
+        out = driver.decode(
+            input_ids=torch.tensor([[0, 3, 2]]),
+            attention_mask=None,
+            model=None,
+            logits_processors=LogitsProcessorList(),
+            stopping_criteria=StoppingCriteriaList(),
+            runtime_kwargs=None,
+            session=ScriptedSession(fake_generate, tokenizer=tokenizer),
+            max_new_tokens=2,
+        )
+        assert masks == [[[1, 1, 1]]]
+        assert out.tolist() == [[0, 3, 2, 5, 5]]
+
     @pytest.mark.parametrize("eos_offset, expected_reason", [(5, "length"), (3, "eos")])
     def test_rows_stay_within_the_budget_when_pad_equals_eos(self, eos_offset, expected_reason):
         from steerability.algorithms.core.steering_pipeline import SteeringPipeline
@@ -506,12 +597,14 @@ class TestSearchDriver:
 
 
 class TestFrontier:
-    def test_keeps_top_k_and_best_so_far(self):
+    def test_keeps_top_k_and_the_best_finished_beam(self):
         beams = torch.tensor([[1, 2, 3], [1, 2, 4], [1, 2, 5]])
-        frontier = Frontier(keep_k=2, eos_token_id=None, input_length=2, max_new_tokens=None)
+        frontier = Frontier(keep_k=2, eos_token_id=5, input_length=2, max_new_tokens=None)
         step = frontier.keep(beams, [0.1, 0.9, 0.5])
         assert step.kept_ids.size(0) == 2
-        assert frontier.best_score == pytest.approx(0.9)
+        # the top kept beam is unfinished, so the best-so-far is the finished beam that ends in eos
+        assert frontier.best_score == pytest.approx(0.5)
+        assert torch.equal(frontier.best_ids, beams[2])
 
 
 # PhasedDriver
@@ -873,7 +966,7 @@ class TestSASAWvPathCompatibility:
 
         model, tokenizer = self._model_and_tokenizer()
         probe = Probe(
-            model_type="test", location="layer_output", pooling="last",
+            model_type="llama", location="layer_output", pooling="last",
             layer_ids=[1], weights={1: torch.randn(16)}, bias=0.25,
         )
         save_dir = tmp_path / "probe_dir"
@@ -937,7 +1030,7 @@ class TestSASAWvPathCompatibility:
         ]
         for index, (fields, match) in enumerate(cases):
             probe = Probe(
-                model_type="test", bias=0.0,
+                model_type="llama", bias=0.0,
                 weights={lid: torch.randn(16) for lid in fields["layer_ids"]}, **fields,
             )
             save_dir = tmp_path / f"probe_{index}"

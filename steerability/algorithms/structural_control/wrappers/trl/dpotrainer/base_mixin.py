@@ -50,18 +50,19 @@ class DPOTrainerMixin(TRLMixin, StructuralControl):
         # resolve or load model/tokenizer
         model, self.tokenizer = self._resolve_model_tokenizer(model, self.tokenizer)
 
-        # clean
+        # standardize copies; the configured datasets stay as the caller gave them
+        train_dataset = eval_dataset = None
         if self.train_dataset is not None:
-            self.train_dataset = standardize_preference_dataset(
+            train_dataset = standardize_preference_dataset(
                 self.train_dataset, prompt_format=self.prompt_format, tokenizer=self.tokenizer,
             )
         if self.eval_dataset is not None:
-            self.eval_dataset = standardize_preference_dataset(
+            eval_dataset = standardize_preference_dataset(
                 self.eval_dataset, prompt_format=self.prompt_format, tokenizer=self.tokenizer,
             )
 
         # compose config kwargs (optional DPO fields); an explicit training_args entry wins
-        config_kwargs = dict(self.training_args)
+        config_kwargs = self._config_kwargs(self.training_args)
         if self.precompute_ref_log_probs is not None:
             config_kwargs.setdefault("precompute_ref_log_probs", self.precompute_ref_log_probs)
         if self.disable_dropout is not None:
@@ -76,13 +77,13 @@ class DPOTrainerMixin(TRLMixin, StructuralControl):
             ref_model = None  # TRL constructs frozen ref from base weights
 
         # train if a dataset is provided
-        if self.train_dataset is not None:
+        if train_dataset is not None:
             trainer = DPOTrainer(
                 model=model,
                 ref_model=ref_model,
                 args=training_config,
-                train_dataset=self.train_dataset,
-                eval_dataset=self.eval_dataset,
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
                 processing_class=self.tokenizer,
                 peft_config=peft_config,
             )

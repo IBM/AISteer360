@@ -1,6 +1,6 @@
 """Steering-plane estimator: per-layer 2D bases for angular steering."""
 import logging
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import torch
 from sklearn.decomposition import PCA
@@ -11,6 +11,9 @@ from steerability.algorithms.state_control.common.estimators.base import BaseEst
 from steerability.algorithms.state_control.common.estimators.mean_difference import MeanDifferenceEstimator
 from steerability.algorithms.state_control.common.fit_specs import VectorTrainSpec
 from steerability.algorithms.state_control.common.steering_vector import SteeringVector
+
+if TYPE_CHECKING:
+    from steerability.algorithms.core.execution.backend import SteeringSession
 
 logger = logging.getLogger(__name__)
 
@@ -46,20 +49,22 @@ class SteeringPlaneEstimator(BaseEstimator[SteeringVector]):
         data: ContrastivePairs,
         spec: VectorTrainSpec,
         on_progress: Callable[[int, int], None] | None = None,
-        session=None,
+        session: "SteeringSession | None" = None,
     ) -> SteeringVector:
         """Fit the per-layer steering planes.
 
         Args:
-            model: Model to extract hidden states from.
+            model: Model to extract hidden states from, or None to extract through `session`.
             tokenizer: Tokenizer for encoding the contrastive pairs.
             data: The positive/negative text pairs.
             spec: Training configuration (method, accumulate, batch_size, prompt_format).
             on_progress: Optional `(completed, total)` callback forwarded to the underlying
                 mean-difference extraction.
+            session: A `SteeringSession` serving hidden-state capture when `model` is None.
 
         Returns:
-            SteeringVector with a `[2, H]` orthonormal basis per usable layer.
+            SteeringVector with a `[2, H]` orthonormal basis per usable layer, recording
+            `spec.location` as `meta["location"]`.
 
         Raises:
             ValueError: If fewer than two layers have usable feature directions, or if no plane

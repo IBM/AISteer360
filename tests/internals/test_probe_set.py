@@ -199,7 +199,7 @@ class TestCoexistence:
         baseline = probes.read(model, ids).scores["p"].clone()
 
         runtime = TransformHookRuntime(hook_point="layer_output")
-        runtime.reset(compute_prompt_lens(ids, None))
+        runtime.reset(compute_prompt_lens(ids))
         readout_calls: list[tuple] = []
 
         def readout(pooled, layer_id):

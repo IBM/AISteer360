@@ -7,6 +7,7 @@ from statistics import mean
 from typing import Any
 
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from steerability.algorithms.core.execution.access import ModelAccess
 from steerability.algorithms.core.execution.session_utils import SessionLM
@@ -62,8 +63,10 @@ class GEPA(InputControl):
     with the instruction as its system message. Memory:
     `TextMemory(slots={"instruction": best_instruction})`.
 
-    `reflection_lm` is optional and defaults to the task model. A separate, stronger reflection
-    LM can help when the task model is small, but is not required.
+    The reflection LM is optional and defaults to the task model. It is given either loaded
+    (`reflection_lm` with `reflection_tokenizer`) or by reference (`reflection_lm_name_or_path`,
+    loaded at `steer()`). Only the reference form can be saved in a `.spipe` recipe. A separate,
+    stronger reflection LM can help when the task model is small, but is not required.
 
     Reference:
 
@@ -84,6 +87,7 @@ class GEPA(InputControl):
     gen_kwargs: dict | None = None
     reflection_lm: Any = None
     reflection_tokenizer: Any = None
+    reflection_lm_name_or_path: str | None = None
     budget: int = 300
     minibatch_size: int = 3
     pareto_set_size: int = 30
@@ -98,8 +102,14 @@ class GEPA(InputControl):
     _formatter: SystemPromptFormatter | None = None
 
     def export_state(self) -> dict:
-        """The optimized instruction memory under the `"memory"` key (after `steer()`)."""
-        return {"memory": self.memory} if self.memory is not None else {}
+        """The optimized instruction memory under the `"memory"` key (after `steer()`).
+
+        Returns nothing when the recipe already contains the memory (`memory=`), since the recipe
+        is then its frozen form.
+        """
+        if self.args.memory is not None or self.memory is None:
+            return {}
+        return {"memory": self.memory}
 
     def frozen_form(self, state: dict) -> tuple[str, dict]:
         """A same-class frozen form: the recipe args with `memory=` set to the optimized
@@ -146,10 +156,7 @@ class GEPA(InputControl):
         rng = random.Random(self.seed) if self.seed is not None else random.Random()
         task_lm = SessionLM(session) if session is not None else model
 
-        if self.reflection_lm is None:
-            logger.info("GEPA: no `reflection_lm` supplied; reflection falls back to the task model.")
-        reflection_lm = self.reflection_lm if self.reflection_lm is not None else task_lm
-        reflection_tok = self.reflection_tokenizer if self.reflection_tokenizer is not None else tokenizer
+        reflection_lm, reflection_tok = self._resolve_reflection(task_lm, tokenizer)
         proposer = LLMMetaPromptProposer(
             llm=reflection_lm,
             tokenizer=reflection_tok,
@@ -233,6 +240,25 @@ class GEPA(InputControl):
         best = pool.candidates[pool.best_index()]
         self.memory = TextMemory(slots={"instruction": best})
         self._formatter = SystemPromptFormatter(mode="prepend")
+
+    def _resolve_reflection(self, task_lm, tokenizer):
+        """Return the reflection LLM and its tokenizer.
+
+        A loaded `reflection_lm` is used with `reflection_tokenizer`. A
+        `reflection_lm_name_or_path` is loaded with `AutoModelForCausalLM` (`device_map="auto"`)
+        and `AutoTokenizer`, with the pad token set to the eos token when the tokenizer has none.
+        Without either, reflection runs on the task model and tokenizer.
+        """
+        if self.reflection_lm is not None:
+            return self.reflection_lm, self.reflection_tokenizer
+        if self.reflection_lm_name_or_path is None:
+            logger.info("GEPA: no reflection model supplied; reflection falls back to the task model.")
+            return task_lm, tokenizer
+        reflection_lm = AutoModelForCausalLM.from_pretrained(self.reflection_lm_name_or_path, device_map="auto")
+        reflection_tok = AutoTokenizer.from_pretrained(self.reflection_lm_name_or_path)
+        if reflection_tok.pad_token_id is None and reflection_tok.eos_token_id is not None:
+            reflection_tok.pad_token = reflection_tok.eos_token
+        return reflection_lm, reflection_tok
 
     def _run(
         self,

@@ -143,7 +143,8 @@ class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
                 available.
 
         Returns:
-            SteeringVector with one direction per layer.
+            SteeringVector with one direction per layer, recording `spec.location` as
+            `meta["location"]`.
         """
         device = next(model.parameters()).device if model is not None else torch.device("cpu")
         if model is not None:
@@ -231,7 +232,8 @@ class ContrastiveDirectionEstimator(BaseEstimator[SteeringVector]):
             explained_variances[layer_id] = variance
 
         logger.debug("Finished fitting contrastive directions")
-        meta = artifact_provenance_meta(model, tokenizer) if model is not None else session_meta
+        meta = artifact_provenance_meta(model, tokenizer) if model is not None else dict(session_meta)
+        meta["location"] = spec.location
         return SteeringVector(
             model_type=model_type,
             directions=directions,

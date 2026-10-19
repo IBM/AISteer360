@@ -30,7 +30,7 @@ from steerability.algorithms.core.execution.payloads import (
 )
 from steerability.algorithms.core.execution.spec import BackendSpec
 from steerability.algorithms.core.execution.staging import split_artifacts
-from steerability.algorithms.core.internals.fingerprint import is_absent_chat_template_fingerprint
+from steerability.algorithms.core.internals.fingerprint import config_digest_dict, is_absent_chat_template_fingerprint
 from steerability.algorithms.core.internals.model_layout import config_head_geometry, text_config
 from steerability.backends.vllm.capabilities import _intersect_with_discovery, _reconcile_discovery, _vllm_capabilities
 from steerability.backends.vllm.environment import engine_boot_environment, engine_environment
@@ -96,8 +96,9 @@ def _config_layout(model_ref: str, trust_remote_code: bool = False) -> ModelFact
     """A client-side `ModelFacts` from the model config, or None when the config cannot be loaded.
 
     A loaded config lacking a structural fact (`hidden_size`, `num_hidden_layers`) raises
-    `AttributeError`. The fingerprint hashes the config JSON (volatile name/version fields
-    removed), so it identifies the architecture and configuration rather than the weights.
+    `AttributeError`. The fingerprint hashes the config fields that `model_fingerprint` hashes
+    (`config_digest_dict`, i.e., the diff dict without `transformers_version`). It identifies the
+    architecture and configuration rather than the weights.
     """
     from transformers import AutoConfig
 
@@ -109,12 +110,8 @@ def _config_layout(model_ref: str, trust_remote_code: bool = False) -> ModelFact
     hidden_size = facts.hidden_size
     num_heads, head_dim = config_head_geometry(facts)
     dtype = getattr(config, "dtype", None)
-    config_dict = {
-        key: value for key, value in config.to_dict().items()
-        if key not in ("_name_or_path", "transformers_version")
-    }
     digest = hashlib.sha256(
-        json.dumps(config_dict, sort_keys=True, default=str).encode("utf-8")
+        json.dumps(config_digest_dict(config), sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()[:16]
     return ModelFacts(
         num_layers=facts.num_hidden_layers,
@@ -125,6 +122,7 @@ def _config_layout(model_ref: str, trust_remote_code: bool = False) -> ModelFact
         model_fingerprint=digest,
         model_type=getattr(config, "model_type", None),
         model_ref=model_ref,
+        fingerprint_grade="config",
     )
 
 

@@ -24,11 +24,6 @@ class TestCheapConstruction:
         assert pipeline.model is not None
         assert pipeline.tokenizer is not None
 
-    def test_lazy_init_is_inert(self):
-        with_flag = SteeringPipeline(model_name_or_path=TINY_MODEL, lazy_init=True)
-        without_flag = SteeringPipeline(model_name_or_path=TINY_MODEL)
-        assert with_flag.model is None and without_flag.model is None
-
 
 class TestInjection:
     def test_preloaded_objects_are_reused(self):

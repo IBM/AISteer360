@@ -308,7 +308,7 @@ class InterventionControl(StateControl):
 
         layout = self._resolve_module_layout(kwargs.get("model"))
         pad_token_id = getattr(self.tokenizer, "pad_token_id", None) if self.tokenizer is not None else None
-        prompt_lens = compute_prompt_lens(ids, pad_token_id)
+        prompt_lens = compute_prompt_lens(ids)
 
         if attention_mask is not None:
             mask = attention_mask if isinstance(attention_mask, torch.Tensor) else torch.as_tensor(attention_mask)

@@ -64,6 +64,31 @@ class TestSensitivity:
         b = tiny_llama(num_layers=2)
         assert model_fingerprint(a) != model_fingerprint(b)
 
+    def test_transformers_version_does_not_change_digest(self, saved_model_dir):
+        model = LlamaForCausalLM.from_pretrained(saved_model_dir)
+        before = model_fingerprint(model)
+        model.config.transformers_version = "0.0.1"
+        assert model_fingerprint(model) == before
+
+    @pytest.mark.parametrize("projection", ["q_proj", "v_proj"])
+    def test_first_layer_attention_projection_edit_changes_digest(self, saved_model_dir, projection):
+        """Layer 0 contains the sampled instance of each attention projection kind."""
+        model = LlamaForCausalLM.from_pretrained(saved_model_dir)
+        before = model_fingerprint(model)
+        weight = getattr(model.model.layers[0].self_attn, projection).weight
+        with torch.no_grad():
+            weight.view(-1)[0] += 1.0
+        assert model_fingerprint(model) != before
+
+    def test_edit_outside_the_sampled_layer_of_a_kind_is_not_detected(self, saved_model_dir):
+        """The sample covers the first layer of each parameter kind. An edit confined to a later
+        layer leaves the digest unchanged."""
+        model = LlamaForCausalLM.from_pretrained(saved_model_dir)
+        before = model_fingerprint(model)
+        with torch.no_grad():
+            model.model.layers[1].self_attn.q_proj.weight.view(-1)[0] += 1.0
+        assert model_fingerprint(model) == before
+
 
 class TestAbsentChatTemplateFingerprint:
     def test_recipe_digests_of_missing_and_empty_templates_are_absent(self):

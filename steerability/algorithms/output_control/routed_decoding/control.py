@@ -71,7 +71,6 @@ class RoutedDecoding(PhasedDriver):
 
     Args = RoutedDecodingArgs
 
-    supports_batching: bool = True
     same_model_forwards: bool = True
 
     RUNTIME_KWARGS_SCHEMA = [
@@ -79,7 +78,7 @@ class RoutedDecoding(PhasedDriver):
             "name": "canned_responses",
             "type": "dict[str, str]",
             "scope": "call",
-            "description": "Per-call override of Respond/Prefix text, keyed by route name.",
+            "help": "Per-call override of Respond/Prefix text, keyed by route name.",
         },
     ]
 
@@ -203,10 +202,11 @@ class RoutedDecoding(PhasedDriver):
 
         A `ProbeSetFit` is fitted on the model or session the pipeline provides (its
         `StatsSpec`, when present, is estimated first). A fitted `ProbeSet` is checked
-        against the pipeline's model instead. With a loaded model or an in-process session,
-        a probe whose recorded `model_fingerprint` differs from the model's raises
-        `ValueError`. On other backends, a probe whose recorded `model_ref` differs from the
-        session layout's raises `ValueError`. Probes with no recorded value are exempt, and
+        against the pipeline's model instead. With a loaded model or a session layout whose
+        fingerprint is weights-grade (in process), a probe whose recorded `model_fingerprint`
+        differs from the model's raises `ValueError`. With a config-grade layout (an engine
+        backend), a probe whose recorded `model_ref` differs from the session layout's raises
+        `ValueError`. Probes with no recorded value are exempt, and
         `allow_model_mismatch=True` disables both checks. The probe set's `model_type` must
         also match the model's. On backends without a loaded model, it is compared with the
         layout's `model_type` when both are known. `allow_model_mismatch` does not disable
@@ -231,6 +231,8 @@ class RoutedDecoding(PhasedDriver):
         layout = None
         if model is None and session is not None:
             layout = session.layout
+        # a weights-grade layout describes a model in process; a config-grade one an engine's model
+        weights_grade = layout is not None and layout.fingerprint_grade == "weights"
 
         if isinstance(self.probes, ProbeSetFit):
             self.probes = self.probes.fit(model, self.tokenizer, session=session)
@@ -238,7 +240,7 @@ class RoutedDecoding(PhasedDriver):
             live_fingerprint = None
             if model is not None:
                 live_fingerprint = model_fingerprint(model)
-            elif layout is not None and getattr(session, "in_process", False):
+            elif weights_grade:
                 live_fingerprint = layout.model_fingerprint
             if live_fingerprint is not None:
                 mismatched = [
@@ -264,7 +266,7 @@ class RoutedDecoding(PhasedDriver):
                         "allow_model_mismatch=True."
                     )
 
-        if model is not None or (layout is not None and getattr(session, "in_process", False)):
+        if model is not None or weights_grade:
             live_model_type = (
                 getattr(model.config, "model_type", "unknown") if model is not None
                 else (layout.model_type or "unknown")
