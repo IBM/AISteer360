@@ -387,6 +387,7 @@ class TestHeadProfileResultRoundTrip:
         result.save(path)
         loaded = HeadProfileResult.load(path)
 
+        assert path.read_text().endswith("}\n")
         assert loaded.head_config == result.head_config
         assert loaded.selected == result.selected
         assert torch.equal(loaded.lift.isnan(), result.lift.isnan())

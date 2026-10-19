@@ -703,7 +703,7 @@ class HeadProfileResult:
             "alpha": self.alpha,
             "scale_position": self.scale_position,
         }
-        Path(path).write_text(json.dumps(payload, indent=2))
+        Path(path).write_text(json.dumps(payload, indent=2) + "\n")
 
     @classmethod
     def load(cls, path: str | Path) -> "HeadProfileResult":
