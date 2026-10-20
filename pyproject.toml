@@ -114,6 +114,9 @@ conflicts = [
     [{ extra = "merging" }, { extra = "all" }],
     [{ extra = "merging" }, { extra = "vllm" }],
 ]
+# aiohttp is a transitive dependency; releases before 3.14.4 have unbounded memory/CPU use
+# (GHSA-2g87-pp6c-29x5)
+constraint-dependencies = ["aiohttp>=3.14.4"]
 
 [tool.uv.build-backend]
 module-root = ""
